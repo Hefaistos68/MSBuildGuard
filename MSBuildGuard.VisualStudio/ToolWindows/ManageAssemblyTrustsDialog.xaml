@@ -21,7 +21,7 @@
         <TextBlock Grid.Row="0" Text="Manage Assembly Trusts" FontSize="16" FontWeight="Bold" Margin="0,0,0,4"/>
         <TextBlock Grid.Row="1" Text="Trusted assemblies have all findings automatically approved. Trusts are pinned to specific versions." TextWrapping="Wrap" Margin="0,0,0,12" Foreground="#666666"/>
 
-        <DataGrid Grid.Row="2" x:Name="TrustedAssembliesGrid" AutoGenerateColumns="False" Margin="0,0,0,12" CanUserSortColumns="False" CanUserReorderColumns="False">
+        <DataGrid Grid.Row="2" x:Name="TrustedAssembliesGrid" AutoGenerateColumns="False" Margin="0,0,0,12" CanUserSortColumns="False" CanUserReorderColumns="False" CanUserAddRows="False">
             <DataGrid.Columns>
                 <DataGridTextColumn Header="Assembly Name" Binding="{Binding Name}" Width="250" IsReadOnly="True"/>
                 <DataGridTextColumn Header="Version" Binding="{Binding Version}" Width="100" IsReadOnly="True"/>

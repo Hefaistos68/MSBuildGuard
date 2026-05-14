@@ -16,6 +16,7 @@ namespace MSBuildGuard.VisualStudio.Models
 	{
 		private string targetPath = "No scan loaded";
 		private int riskScore;
+		private int trustedRiskScore;
 		private string recommendedAction = "Unknown";
 		private int filesScanned;
 		private int findingsCount;
@@ -94,7 +95,39 @@ namespace MSBuildGuard.VisualStudio.Models
 				{
 					this.OnPropertyChanged(nameof(this.RiskIndicator));
 					this.OnPropertyChanged(nameof(this.RiskIndicatorBrush));
+					this.OnPropertyChanged(nameof(this.RiskScoreDisplay));
 				}
+			}
+		}
+
+		/// <summary>
+		/// Gets or sets risk score contributed by trusted findings.
+		/// </summary>
+		public int TrustedRiskScore
+		{
+			get
+			{
+				return this.trustedRiskScore;
+			}
+			set
+			{
+				if (this.SetProperty(ref this.trustedRiskScore, value))
+				{
+					this.OnPropertyChanged(nameof(this.RiskScoreDisplay));
+				}
+			}
+		}
+
+		/// <summary>
+		/// Gets the formatted risk score text with trusted-risk contribution.
+		/// </summary>
+		public string RiskScoreDisplay
+		{
+			get
+			{
+				return this.TrustedRiskScore > 0
+					? $"{this.RiskScore} (+{this.TrustedRiskScore} trusted)"
+					: this.RiskScore.ToString();
 			}
 		}
 

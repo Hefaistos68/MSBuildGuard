@@ -48,6 +48,10 @@
 				<ColumnDefinition Width="Auto" />
 				<ColumnDefinition Width="Auto" />
 			</Grid.ColumnDefinitions>
+			<Grid.RowDefinitions>
+				<RowDefinition Height="Auto" />
+				<RowDefinition Height="Auto" />
+			</Grid.RowDefinitions>
 
 			<StackPanel Orientation="Vertical">
 				<StackPanel Orientation="Horizontal">
@@ -60,7 +64,7 @@
 							   Foreground="{Binding Summary.RiskIndicatorBrush}"
 							   FontSize="13"
 							   Margin="0,0,6,0" />
-					<TextBlock Text="{Binding Summary.RiskScore}" Foreground="{Binding Summary.RiskIndicatorBrush}" />
+					<TextBlock Text="{Binding Summary.RiskScoreDisplay}" Foreground="{Binding Summary.RiskIndicatorBrush}" />
 				</StackPanel>
 				<StackPanel Orientation="Horizontal" Margin="0,2,0,0">
 					<TextBlock Text="Action:" FontWeight="Bold" Width="80" />
@@ -83,6 +87,17 @@
 					HorizontalAlignment="Right"
 					IsEnabled="{Binding Summary.HasTargetLoaded}"
 					Click="OnEditPolicyClick" Height="30" VerticalAlignment="Top" />
+
+			<CheckBox Grid.Row="1"
+					  Grid.Column="1"
+					  Grid.ColumnSpan="2"
+					  Content="only untrusted issues"
+					  Margin="10,8,8,0"
+					  HorizontalAlignment="Right"
+					  VerticalAlignment="Center"
+					  IsChecked="{Binding OnlyUntrustedIssues, Mode=TwoWay}"
+					  Checked="OnOnlyUntrustedIssuesCheckedChanged"
+					  Unchecked="OnOnlyUntrustedIssuesCheckedChanged" />
 		</Grid>
 
 		<DataGrid Grid.Row="2"
@@ -115,7 +130,7 @@
 				<DataGridTextColumn Header="File" Binding="{Binding FilePathDisplay}" Width="2*" />
 				<DataGridTextColumn Header="Line" Binding="{Binding Line}" Width="70" />
 				<DataGridTextColumn Header="Policy" Binding="{Binding PolicyAction}" Width="120" />
-				<DataGridCheckBoxColumn Header="Trusted" Binding="{Binding IsTrusted}" Width="80" />
+				<DataGridCheckBoxColumn x:Name="TrustedColumn" Header="Trusted" Binding="{Binding IsTrusted}" Width="80" />
 				<DataGridCheckBoxColumn Header="New" Binding="{Binding IsNewComparedWithBaseline}" Width="80" />
 			</DataGrid.Columns>
 		</DataGrid>

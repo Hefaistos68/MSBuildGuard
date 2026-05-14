@@ -17,13 +17,16 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 	/// </summary>
 	public sealed class ProjectSecurityReviewViewModel : INotifyPropertyChanged
 	{
+		private readonly ObservableCollection<FindingViewModel> allFindings;
 		private FindingViewModel? selectedFinding;
+		private bool onlyUntrustedIssues;
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="ProjectSecurityReviewViewModel"/> class.
 		/// </summary>
 		public ProjectSecurityReviewViewModel()
 		{
+			this.allFindings = new ObservableCollection<FindingViewModel>();
 			this.Findings = new ObservableCollection<FindingViewModel>();
 			this.Summary  = new ScanSummaryViewModel();
 		}
@@ -90,6 +93,28 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		public string CurrentTargetPath { get; private set; } = string.Empty;
 
 		/// <summary>
+		/// Gets or sets a value indicating whether only untrusted issues should be displayed.
+		/// </summary>
+		public bool OnlyUntrustedIssues
+		{
+			get
+			{
+				return this.onlyUntrustedIssues;
+			}
+			set
+			{
+				if (this.onlyUntrustedIssues == value)
+				{
+					return;
+				}
+
+				this.onlyUntrustedIssues = value;
+				this.ApplyFindingsFilter();
+				this.OnPropertyChanged();
+			}
+		}
+
+		/// <summary>
 		/// Gets the current risk score.
 		/// </summary>
 		public int RiskScore
@@ -121,7 +146,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			var trustStoreService = new TrustStoreService();
 			var trustStore = trustStoreService.Load(trustStoreService.GetDefaultUserTrustPath());
 
-			this.Findings.Clear();
+			this.allFindings.Clear();
 
 			foreach (var finding in report.Findings)
 			{
@@ -137,7 +162,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 					? $"{finding.PackageId}@{finding.PackageVersion}"
 					: string.Empty;
 
-				this.Findings.Add(new FindingViewModel
+				this.allFindings.Add(new FindingViewModel
 				{
 					Severity                    = finding.Severity.ToString(),
 					RuleId                      = finding.Id,
@@ -154,13 +179,17 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				});
 			}
 
-			this.CurrentTargetPath         = string.IsNullOrWhiteSpace(projectPath) ? report.Target.TargetPath : projectPath;
-			this.Summary.TargetPath        = this.CurrentTargetPath;
-			this.Summary.RiskScore         = report.RiskScore;
-			this.Summary.RecommendedAction = report.RecommendedAction.ToString();
-			this.Summary.FilesScanned      = report.FilesScanned.Count;
-			this.Summary.FindingsCount     = report.Findings.Count;
-			this.Summary.HasTargetLoaded   = !string.IsNullOrWhiteSpace(this.CurrentTargetPath);
+			ComputeRiskScores(this.allFindings, out var activeRiskScore, out var trustedRiskScore);
+			this.ApplyFindingsFilter();
+
+			this.CurrentTargetPath          = string.IsNullOrWhiteSpace(projectPath) ? report.Target.TargetPath : projectPath;
+			this.Summary.TargetPath         = this.CurrentTargetPath;
+			this.Summary.RiskScore          = activeRiskScore;
+			this.Summary.TrustedRiskScore   = trustedRiskScore;
+			this.Summary.RecommendedAction  = MapRecommendedAction(activeRiskScore).ToString();
+			this.Summary.FilesScanned       = report.FilesScanned.Count;
+			this.Summary.FindingsCount      = report.Findings.Count;
+			this.Summary.HasTargetLoaded    = !string.IsNullOrWhiteSpace(this.CurrentTargetPath);
 		}
 
 		/// <summary>
@@ -168,15 +197,17 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		/// </summary>
 		public void LoadEmpty()
 		{
+			this.allFindings.Clear();
 			this.Findings.Clear();
 			this.SelectedFinding           = null;
-			this.CurrentTargetPath         = string.Empty;
-			this.Summary.TargetPath        = "No scan loaded";
-			this.Summary.RiskScore         = 0;
-			this.Summary.RecommendedAction = "Unknown";
-			this.Summary.FilesScanned      = 0;
-			this.Summary.FindingsCount     = 0;
-			this.Summary.HasTargetLoaded   = false;
+			this.CurrentTargetPath          = string.Empty;
+			this.Summary.TargetPath         = "No scan loaded";
+			this.Summary.RiskScore          = 0;
+			this.Summary.TrustedRiskScore   = 0;
+			this.Summary.RecommendedAction  = "Unknown";
+			this.Summary.FilesScanned       = 0;
+			this.Summary.FindingsCount      = 0;
+			this.Summary.HasTargetLoaded    = false;
 		}
 
 		/// <summary>
@@ -285,6 +316,106 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			{
 				await package.RescanProjectSecurityReviewAsync();
 			}
+		}
+
+		/// <summary>
+		/// Applies the current trusted-item visibility filter to the displayed findings list.
+		/// </summary>
+		private void ApplyFindingsFilter()
+		{
+			this.Findings.Clear();
+
+			foreach (var finding in this.allFindings)
+			{
+				if (this.onlyUntrustedIssues && finding.IsTrusted)
+				{
+					continue;
+				}
+
+				this.Findings.Add(finding);
+			}
+
+			if (this.SelectedFinding != null && !this.Findings.Contains(this.SelectedFinding))
+			{
+				this.SelectedFinding = null;
+			}
+		}
+
+		/// <summary>
+		/// Computes active and trusted risk totals from findings.
+		/// </summary>
+		/// <param name="findings">Findings to aggregate.</param>
+		/// <param name="activeRiskScore">Calculated active risk score.</param>
+		/// <param name="trustedRiskScore">Calculated trusted risk score.</param>
+		private static void ComputeRiskScores(ObservableCollection<FindingViewModel> findings, out int activeRiskScore, out int trustedRiskScore)
+		{
+			activeRiskScore = 0;
+			trustedRiskScore = 0;
+
+			foreach (var finding in findings)
+			{
+				var risk = GetSeverityRisk(finding.Severity);
+
+				if (finding.IsTrusted)
+				{
+					trustedRiskScore += risk;
+					continue;
+				}
+
+				activeRiskScore += risk;
+			}
+		}
+
+		/// <summary>
+		/// Maps severity text to weighted risk score.
+		/// </summary>
+		/// <param name="severityText">Severity text value.</param>
+		/// <returns>Weighted risk contribution.</returns>
+		private static int GetSeverityRisk(string severityText)
+		{
+			if (!System.Enum.TryParse<FindingSeverity>(severityText, out var severity))
+			{
+				return 0;
+			}
+
+			switch (severity)
+			{
+				case FindingSeverity.Low:
+					return 5;
+				case FindingSeverity.Medium:
+					return 20;
+				case FindingSeverity.High:
+					return 50;
+				case FindingSeverity.Critical:
+					return 100;
+				default:
+					return 0;
+			}
+		}
+
+		/// <summary>
+		/// Maps an aggregate active risk score to recommended action.
+		/// </summary>
+		/// <param name="riskScore">The active risk score.</param>
+		/// <returns>Recommended action.</returns>
+		private static RecommendedAction MapRecommendedAction(int riskScore)
+		{
+			if (riskScore >= 100)
+			{
+				return Core.RecommendedAction.Block;
+			}
+
+			if (riskScore >= 50)
+			{
+				return Core.RecommendedAction.RequireApproval;
+			}
+
+			if (riskScore >= 20)
+			{
+				return Core.RecommendedAction.Warn;
+			}
+
+			return Core.RecommendedAction.Allow;
 		}
 
 		/// <summary>

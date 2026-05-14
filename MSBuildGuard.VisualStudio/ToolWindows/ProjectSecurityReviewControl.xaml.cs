@@ -20,6 +20,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		{
 			this.InitializeComponent();
 			this.DataContext = new ProjectSecurityReviewViewModel();
+			this.UpdateTrustedColumnVisibility();
 		}
 
 		/// <summary>
@@ -34,6 +35,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				viewModel.LoadReport(projectPath, report);
 				this.DataContext = null;
 				this.DataContext = viewModel;
+				this.UpdateTrustedColumnVisibility();
 			}
 		}
 
@@ -47,6 +49,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				viewModel.LoadEmpty();
 				this.DataContext = null;
 				this.DataContext = viewModel;
+				this.UpdateTrustedColumnVisibility();
 			}
 		}
 
@@ -144,6 +147,21 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				await new VisualStudioTrustDecisionService().TrustAssemblyAsync(finding, "Trusted from Project Security Review");
 				await package.RescanProjectSecurityReviewAsync();
 			}).FileAndForget(nameof(ProjectSecurityReviewControl));
+		}
+
+		private void OnOnlyUntrustedIssuesCheckedChanged(object sender, RoutedEventArgs e)
+		{
+			this.UpdateTrustedColumnVisibility();
+		}
+
+		private void UpdateTrustedColumnVisibility()
+		{
+			if (this.DataContext is not ProjectSecurityReviewViewModel viewModel)
+			{
+				return;
+			}
+
+			TrustedColumn.Visibility = viewModel.OnlyUntrustedIssues ? Visibility.Collapsed : Visibility.Visible;
 		}
 	}
 }

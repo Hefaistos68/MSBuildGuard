@@ -31,8 +31,14 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		/// <summary>Backing field for <see cref="SelectedFinding"/>.</summary>
 		private FindingViewModel? selectedFinding;
 
-		/// <summary>Solution-level risk score cached from the last loaded report.</summary>
+		/// <summary>Backing field for <see cref="OnlyUntrustedIssues"/>.</summary>
+		private bool onlyUntrustedIssues;
+
+		/// <summary>Solution-level active risk score cached from the last loaded report.</summary>
 		private int solutionRiskScore;
+
+		/// <summary>Solution-level trusted risk score cached from the last loaded report.</summary>
+		private int solutionTrustedRiskScore;
 
 		/// <summary>Solution-level recommended action cached from the last loaded report.</summary>
 		private string solutionRecommendedAction = string.Empty;
@@ -115,6 +121,28 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		}
 
 		/// <summary>
+		/// Gets or sets a value indicating whether only untrusted issues should be displayed.
+		/// </summary>
+		public bool OnlyUntrustedIssues
+		{
+			get
+			{
+				return this.onlyUntrustedIssues;
+			}
+			set
+			{
+				if (this.onlyUntrustedIssues == value)
+				{
+					return;
+				}
+
+				this.onlyUntrustedIssues = value;
+				this.ApplyFilter();
+				this.OnPropertyChanged();
+			}
+		}
+
+		/// <summary>
 		/// Gets the reasoning text for the currently selected finding.
 		/// </summary>
 		public string ReasoningText
@@ -171,12 +199,16 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				});
 			}
 
+			ComputeRiskScores(this.allFindings, out var solutionActiveRiskScore, out var solutionTrustedRiskScore);
+
 			this.BuildProjectOptions(solutionPath, report, previousSelectedPath, loadedProjectPaths);
-			this.solutionRiskScore         = report.RiskScore;
-			this.solutionRecommendedAction = report.RecommendedAction.ToString();
+			this.solutionRiskScore         = solutionActiveRiskScore;
+			this.solutionTrustedRiskScore  = solutionTrustedRiskScore;
+			this.solutionRecommendedAction = MapRecommendedAction(solutionActiveRiskScore).ToString();
 			this.Summary.TargetPath        = solutionPath;
-			this.Summary.RiskScore         = report.RiskScore;
-			this.Summary.RecommendedAction = report.RecommendedAction.ToString();
+			this.Summary.RiskScore         = solutionActiveRiskScore;
+			this.Summary.TrustedRiskScore  = solutionTrustedRiskScore;
+			this.Summary.RecommendedAction = this.solutionRecommendedAction;
 			this.Summary.FilesScanned      = report.FilesScanned.Count;
 			this.Summary.FindingsCount     = report.Findings.Count;
 			this.Summary.HasTargetLoaded   = !string.IsNullOrWhiteSpace(solutionPath);
@@ -193,13 +225,17 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			this.ProjectOptions.Clear();
 			this.selectedProject          = null;
 			this.SelectedFinding          = null;
-			this.CurrentTargetPath        = string.Empty;
-			this.Summary.TargetPath       = "No scan loaded";
-			this.Summary.RiskScore        = 0;
-			this.Summary.RecommendedAction = "Unknown";
-			this.Summary.FilesScanned     = 0;
-			this.Summary.FindingsCount    = 0;
-			this.Summary.HasTargetLoaded  = false;
+			this.CurrentTargetPath         = string.Empty;
+			this.solutionRiskScore          = 0;
+			this.solutionTrustedRiskScore   = 0;
+			this.solutionRecommendedAction  = "Unknown";
+			this.Summary.TargetPath         = "No scan loaded";
+			this.Summary.RiskScore          = 0;
+			this.Summary.TrustedRiskScore   = 0;
+			this.Summary.RecommendedAction  = "Unknown";
+			this.Summary.FilesScanned       = 0;
+			this.Summary.FindingsCount      = 0;
+			this.Summary.HasTargetLoaded    = false;
 			this.OnPropertyChanged(nameof(this.SelectedProject));
 		}
 
@@ -296,11 +332,17 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			{
 				foreach (var finding in this.allFindings)
 				{
+					if (this.onlyUntrustedIssues && finding.IsTrusted)
+					{
+						continue;
+					}
+
 					this.Findings.Add(finding);
 				}
 
 				this.Summary.TargetPath        = this.CurrentTargetPath;
 				this.Summary.RiskScore         = this.solutionRiskScore;
+				this.Summary.TrustedRiskScore  = this.solutionTrustedRiskScore;
 				this.Summary.RecommendedAction = this.solutionRecommendedAction;
 				this.Summary.FindingsCount     = this.Findings.Count;
 				return;
@@ -311,10 +353,17 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 
 			foreach (var finding in this.allFindings)
 			{
-				if (BelongsToProject(finding, selectedProjectPath, projectDirectory))
+				if (!BelongsToProject(finding, selectedProjectPath, projectDirectory))
 				{
-					this.Findings.Add(finding);
+					continue;
 				}
+
+				if (this.onlyUntrustedIssues && finding.IsTrusted)
+				{
+					continue;
+				}
+
+				this.Findings.Add(finding);
 			}
 
 			if (this.Findings.Count == 0)
@@ -332,38 +381,65 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				});
 			}
 
-			var projectRiskScore = ComputeRiskScore(this.Findings);
+			ComputeRiskScores(this.Findings, out var projectRiskScore, out var projectTrustedRiskScore);
 			this.Summary.TargetPath        = selectedProjectPath;
 			this.Summary.RiskScore         = projectRiskScore;
+			this.Summary.TrustedRiskScore  = projectTrustedRiskScore;
 			this.Summary.RecommendedAction = MapRecommendedAction(projectRiskScore).ToString();
 			this.Summary.FindingsCount     = this.Findings.Count;
 		}
 
 		/// <summary>
-		/// Computes an aggregate risk score from a set of findings using the same severity
-		/// weights as the Core scanner: Low=5, Medium=20, High=50, Critical=100.
+		/// Computes active and trusted risk totals from findings using severity weights
+		/// Low=5, Medium=20, High=50, Critical=100.
 		/// </summary>
 		/// <param name="findings">The findings to score.</param>
-		/// <returns>The aggregate risk score.</returns>
-		private static int ComputeRiskScore(IEnumerable<FindingViewModel> findings)
+		/// <param name="activeRiskScore">Calculated active risk score.</param>
+		/// <param name="trustedRiskScore">Calculated trusted risk score.</param>
+		private static void ComputeRiskScores(IEnumerable<FindingViewModel> findings, out int activeRiskScore, out int trustedRiskScore)
 		{
-			var score = 0;
+			activeRiskScore = 0;
+			trustedRiskScore = 0;
 
-			foreach (var f in findings)
+			foreach (var finding in findings)
 			{
-				if (Enum.TryParse<FindingSeverity>(f.Severity, out var severity))
+				var risk = GetSeverityRisk(finding.Severity);
+
+				if (finding.IsTrusted)
 				{
-					switch (severity)
-					{
-						case FindingSeverity.Low:      score +=   5; break;
-						case FindingSeverity.Medium:   score +=  20; break;
-						case FindingSeverity.High:     score +=  50; break;
-						case FindingSeverity.Critical: score += 100; break;
-					}
+					trustedRiskScore += risk;
+					continue;
 				}
+
+				activeRiskScore += risk;
+			}
+		}
+
+		/// <summary>
+		/// Maps severity text to weighted risk contribution.
+		/// </summary>
+		/// <param name="severityText">Severity text value.</param>
+		/// <returns>Weighted risk contribution.</returns>
+		private static int GetSeverityRisk(string severityText)
+		{
+			if (!Enum.TryParse<FindingSeverity>(severityText, out var severity))
+			{
+				return 0;
 			}
 
-			return score;
+			switch (severity)
+			{
+				case FindingSeverity.Low:
+					return 5;
+				case FindingSeverity.Medium:
+					return 20;
+				case FindingSeverity.High:
+					return 50;
+				case FindingSeverity.Critical:
+					return 100;
+				default:
+					return 0;
+			}
 		}
 
 		/// <summary>
@@ -374,9 +450,21 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		/// <returns>The recommended action for the score band.</returns>
 		private static RecommendedAction MapRecommendedAction(int riskScore)
 		{
-			if (riskScore >= 100) return RecommendedAction.Block;
-			if (riskScore >=  50) return RecommendedAction.RequireApproval;
-			if (riskScore >=  20) return RecommendedAction.Warn;
+			if (riskScore >= 100)
+			{
+				return RecommendedAction.Block;
+			}
+
+			if (riskScore >= 50)
+			{
+				return RecommendedAction.RequireApproval;
+			}
+
+			if (riskScore >= 20)
+			{
+				return RecommendedAction.Warn;
+			}
+
 			return RecommendedAction.Allow;
 		}
 
