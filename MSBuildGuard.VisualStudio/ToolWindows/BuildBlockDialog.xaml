@@ -1,0 +1,112 @@
+<Window x:Class="MSBuildGuard.VisualStudio.ToolWindows.BuildBlockDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="MSBuild Guard — Build Blocked"
+        Width="720"
+        Height="480"
+        MinWidth="480"
+        MinHeight="320"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResizeWithGrip"
+        Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+            <TextBlock Text="⛔"
+                       FontSize="34"
+                       Foreground="OrangeRed"
+                       Margin="0,0,12,0"
+                       VerticalAlignment="Top" />
+
+            <StackPanel Orientation="Vertical">
+                <TextBlock Text="Build Blocked by Security Policy"
+                           FontSize="18"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource {x:Static SystemColors.ControlTextBrushKey}}" />
+                <TextBlock Text="The current security scan requires action before the build can proceed."
+                           Margin="0,4,0,0"
+                           Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}" />
+            </StackPanel>
+        </StackPanel>
+
+        <!-- Summary -->
+        <Grid Grid.Row="1" Margin="0,0,0,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <TextBlock Text="Target:" FontWeight="Bold" Width="110" />
+            <TextBlock Grid.Column="1"
+                       Text="{Binding TargetPathDisplay}"
+                       ToolTip="{Binding TargetPathDisplay}"
+                       TextTrimming="CharacterEllipsis"
+                       Grid.ColumnSpan="3" />
+
+            <TextBlock Grid.Row="1" Text="Risk Score:" FontWeight="Bold" Width="110" Margin="0,4,0,0" />
+            <TextBlock Grid.Row="1" Grid.Column="1"
+                       Text="{Binding RiskScore}"
+                       Margin="0,4,0,0" />
+            <TextBlock Grid.Row="1" Grid.Column="2"
+                       Text="Action Required:"
+                       FontWeight="Bold"
+                       Margin="24,4,8,0" />
+            <TextBlock Grid.Row="1" Grid.Column="3"
+                       Text="{Binding RecommendedAction}"
+                       Foreground="OrangeRed"
+                       FontWeight="SemiBold"
+                       Margin="0,4,0,0" />
+        </Grid>
+
+        <!-- Findings grid -->
+        <DataGrid Grid.Row="2"
+                  ItemsSource="{Binding Findings}"
+                  AutoGenerateColumns="False"
+                  IsReadOnly="True"
+                  GridLinesVisibility="Horizontal"
+                  HeadersVisibility="Column"
+                  SelectionMode="Single"
+                  CanUserAddRows="False"
+                  CanUserDeleteRows="False"
+                  CanUserReorderColumns="False"
+                  BorderThickness="1"
+                  BorderBrush="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Rule"     Binding="{Binding RuleId}"   Width="90" />
+                <DataGridTextColumn Header="Title"    Binding="{Binding Title}"    Width="*" />
+                <DataGridTextColumn Header="Severity" Binding="{Binding Severity}" Width="80" />
+                <DataGridTextColumn Header="Action"   Binding="{Binding Action}"   Width="110" />
+                <DataGridTextColumn Header="File"     Binding="{Binding FilePath}" Width="160" />
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <!-- Buttons -->
+        <StackPanel Grid.Row="3"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right"
+                    Margin="0,12,0,0">
+            <Button Content="Proceed Anyway"
+                    Width="130"
+                    Margin="0,0,10,0"
+                    Click="OnProceedClick" />
+            <Button Content="Cancel Build"
+                    Width="110"
+                    IsDefault="True"
+                    IsCancel="True"
+                    Click="OnCancelClick" />
+        </StackPanel>
+    </Grid>
+</Window>

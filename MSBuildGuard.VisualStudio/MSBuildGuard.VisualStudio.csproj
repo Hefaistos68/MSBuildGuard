@@ -1,0 +1,94 @@
+<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
+
+	<PropertyGroup>
+		<TargetFramework>net472</TargetFramework>
+		<GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+		<Nullable>enable</Nullable>
+		<LangVersion>latest</LangVersion>
+		<NoWarn>$(NoWarn);VSSDK006;VSSDK007</NoWarn>
+		<LangVersion>latest</LangVersion>
+		<EnforceCodeStyleInBuild>True</EnforceCodeStyleInBuild>
+		<AnalysisLevel>latest-recommended</AnalysisLevel>
+		<Platforms>AnyCPU</Platforms>
+		<PlatformTarget>AnyCPU</PlatformTarget>
+	</PropertyGroup>
+
+	<PropertyGroup>
+		<UseWpf>true</UseWpf>
+		<UseWindowsForms>true</UseWindowsForms>
+		<IsVsixProject>true</IsVsixProject>
+		<VSSDKBuildToolsAutoSetup>true</VSSDKBuildToolsAutoSetup>
+		<CreateVsixContainer>true</CreateVsixContainer>
+		<GeneratePkgDefFile>true</GeneratePkgDefFile>
+		<DeployExtension>true</DeployExtension>
+		<UseCodebase>true</UseCodebase>
+		<IncludeAssemblyInVSIXContainer>true</IncludeAssemblyInVSIXContainer>
+		<CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+		<IncludeDebugSymbolsInVSIXContainer>true</IncludeDebugSymbolsInVSIXContainer>
+		<IncludeDebugSymbolsInLocalVSIXDeployment>true</IncludeDebugSymbolsInLocalVSIXDeployment>
+		<CopyBuildOutputToOutputDirectory>true</CopyBuildOutputToOutputDirectory>
+		<CopyOutputSymbolsToOutputDirectory>true</CopyOutputSymbolsToOutputDirectory>
+		<NeutralLanguage>en-US</NeutralLanguage>
+		<StartAction>Program</StartAction>
+		<StartProgram Condition="'$(DevEnvDir)' != ''">$(DevEnvDir)devenv.exe</StartProgram>
+		<StartArguments>/rootsuffix Exp /log</StartArguments>
+	</PropertyGroup>
+
+	<PropertyGroup>
+		<AssemblyName>MSBuildguard.VisualStudio</AssemblyName>
+		<RootNamespace>MSBuildGuard.VisualStudio</RootNamespace>
+		<Product>MSBuildGuard</Product>
+		<Title>MSBuildGuard</Title>
+		<Version>0.0.1.1</Version>
+		<FileVersion>0.0.1.1</FileVersion>
+		<SignAssembly>False</SignAssembly>
+		<Authors>Hefaistos68</Authors>
+		<Company>Hefaistos68.dev</Company>
+		<Copyright>2026 Hefaistos68</Copyright>
+	</PropertyGroup>
+
+	<ItemGroup>
+	  <None Remove="ToolWindows\AppShieldGreen-24x24.png" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.VisualStudio.ComponentModelHost" Version="17.14.106" />
+		<PackageReference Include="Microsoft.VisualStudio.SDK" Version="17.14.40265" ExcludeAssets="runtime" NoWarn="NU1608" />
+		<PackageReference Include="Microsoft.VSSDK.BuildTools" Version="18.5.40034" PrivateAssets="all" />
+		<PackageReference Include="NuGet.VisualStudio" Version="17.14.0" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<Reference Include="System.Design" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\MSBuildGuard.Core\MSBuildGuard.Core.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<VSCTCompile Include="Menus.vsct">
+			<ResourceName>Menus.ctmenu</ResourceName>
+		</VSCTCompile>
+	</ItemGroup>
+
+	<ItemGroup>
+		<None Include="source.extension.vsixmanifest">
+			<SubType>Designer</SubType>
+		</None>
+		<Content Include="Resources\ProjectSecurityShield.png">
+			<CopyToOutputDirectory>Never</CopyToOutputDirectory>
+		</Content>
+		<Content Include="Resources\ProjectSecurityShieldOrange.png">
+			<CopyToOutputDirectory>Never</CopyToOutputDirectory>
+		</Content>
+		<Content Include="Resources\ProjectSecurityShieldRed.png">
+			<CopyToOutputDirectory>Never</CopyToOutputDirectory>
+		</Content>
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Resource Include="ToolWindows\AppShieldGreen-24x24.png" />
+	</ItemGroup>
+
+</Project>
