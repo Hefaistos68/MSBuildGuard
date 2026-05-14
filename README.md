@@ -2,12 +2,11 @@
 
 **MSBuild Guard** is a security analysis tool for .NET projects that detects risky or untrusted MSBuild configurations — including imported `.targets`, `.props`, NuGet package assets, wildcard imports, and more — before they can execute arbitrary code on your machine.
 
-It integrates into your daily workflow through three complementary surfaces:
+It integrates into your workflow through two complementary surfaces:
 
 | Module | Description |
 |---|---|
-| **CLI** | Cross-platform command-line scanner for local use, CI/CD, and Git hooks |
-| **Windows Explorer Extension** | Right-click context menu and icon overlay integration for shell-level scanning |
+| **Scanning Library** | .NET Standard 2.1 library for MSBuild analysis and policy evaluation |
 | **Visual Studio Extension (VSIX)** | Inline security review panel inside Visual Studio 2026+ |
 
 ---
@@ -32,14 +31,8 @@ MSBuild Guard scans these files before execution and:
 ```
 MSBuildGuard.sln
 ├── MSBuildGuard.Core               # Shared scanning engine and models
-├── MSBuildGuard.CLI                # Command-line interface
-├── MSBuildGuard.ShellExtension     # Windows Explorer shell extension (COM, x64)
-├── MSBuildGuard.ShellBroker        # Out-of-process broker for the shell extension
-├── MSBuildGuard.ShellInstaller     # WiX installer for the shell extension
-├── MSBuildGuard.VisualStudio       # Visual Studio 2026 extension (VSIX)
-├── MSBuildGuard.Core.Tests
-├── MSBuildGuard.CLI.Tests
-└── MSBuildGuard.ShellBroker.Tests
+├── MSBuildGuard.Core.Tests         # Unit tests for the scanning engine
+└── MSBuildGuard.VisualStudio       # Visual Studio 2026 extension (VSIX)
 ```
 
 ---
@@ -89,12 +82,17 @@ Features:
 
 - [Visual Studio 2026](https://visualstudio.microsoft.com/) with the **Visual Studio extension development** workload
 - [.NET 10 SDK](https://dotnet.microsoft.com/download)
-- [WiX Toolset v4](https://wixtoolset.org/) (for the installer project only)
+
+### Build the entire solution
+
+```powershell
+dotnet build MSBuildGuard-public.slnx -c Release
+```
 
 ### Build only the VSIX
 
 ```powershell
-msbuild MSBuildGuard.VisualStudio\MSBuildGuard.VisualStudio.csproj /p:Configuration=Release
+dotnet build MSBuildGuard.VisualStudio\MSBuildGuard.VisualStudio.csproj -c Release
 ```
 
 The `.vsix` file is emitted to `MSBuildGuard.VisualStudio\bin\Release\`.
@@ -102,7 +100,7 @@ The `.vsix` file is emitted to `MSBuildGuard.VisualStudio\bin\Release\`.
 ### Run the tests
 
 ```powershell
-dotnet test MSBuildGuard.sln --configuration Release
+dotnet test MSBuildGuard-public.slnx -c Release
 ```
 
 ---
@@ -112,8 +110,9 @@ dotnet test MSBuildGuard.sln --configuration Release
 The repository includes a GitHub Actions workflow (`.github/workflows/build-vsix.yml`) that:
 
 1. Restores NuGet packages
-2. Builds the VSIX in Release configuration
-3. Uploads the `.vsix` as a build artifact
+2. Builds the solution in Release configuration
+3. Runs all tests
+4. Uploads the `.vsix` as a build artifact
 
 See [.github/workflows/build-vsix.yml](.github/workflows/build-vsix.yml) for details.
 
@@ -126,7 +125,7 @@ Contributions are welcome for non-commercial use cases. Please follow these guid
 1. **Fork** the repository and create a feature branch from `master`.
 2. Follow the existing code style (C# 14, block-scoped namespaces, XML doc comments on all public/internal members).
 3. Add or update unit tests for every changed or new class. Tests use **NUnit**, **Moq**, and **Shouldly**.
-4. Ensure `msbuild MSBuildGuard.sln /p:Configuration=Release` succeeds with no warnings before opening a pull request.
+4. Ensure `dotnet build MSBuildGuard-public.slnx -c Release` succeeds with no warnings before opening a pull request.
 5. Open a pull request with a clear description of the change and its motivation.
 
 > By contributing you agree that your contribution is licensed under the same [PolyForm Noncommercial License 1.0.0](LICENSE) as the rest of the project.
@@ -148,104 +147,80 @@ See [LICENSE](LICENSE) for the full license text.
 
 ---
 
-## Module documentation
+## Detection Rules
 
-Module-specific documentation is split into dedicated files:
+MSBuild Guard currently detects the following risky patterns in MSBuild files:
 
-- [Visual Studio extension documentation](documentation/VisualStudioExtension.md)
-
----
-
-## Detection rules
-
-The first implementation tracks the following rule IDs:
-
-| Id | Rule | Default severity | Default action |
-|---|---|---:|---|
-| MBG000 | No issues detected | None | Trusted |
-| MBG001 | `UsingTask` contains inline `Code` | Medium | Require approval |
-| MBG002 | `TaskFactory="RoslynCodeTaskFactory"` or `CodeTaskFactory` | Medium | Require approval |
-| MBG003 | `InitialTargets` present or changed from baseline | High | Require approval |
-| MBG004 | Early lifecycle hooks (`BeforeBuild`, `PrepareForBuild`, `BeforeTargets` on early targets) | Medium | Warn |
-| MBG005 | `Exec` invokes shell, PowerShell, script host, or command interpreter | High | Block unless approved by policy |
-| MBG006 | Inline code references process creation APIs | High | Block unless approved by policy |
-| MBG007 | Inline code references reflection, dynamic loading, or native interop | High | Require approval or block |
-| MBG008 | Inline code contains large base64/byte arrays/encoded blobs | High | Block unless approved by policy |
-| MBG009 | Import path resolves to user-writable, temporary, remote, or traversal path | High | Require approval |
-| MBG010 | New `.props` or `.targets` appears compared with baseline | Medium | Require approval |
-| MBG011 | Project/build file has Mark-of-the-Web | Medium | Require approval |
-| MBG012 | Parse errors or unsupported constructs prevent full analysis | Medium | Warn or block in strict mode |
+| ID | Rule | Default Severity | Description |
+|---|---|---|---|
+| MBG000 | No issues detected | None | Clean scan result |
+| MBG001 | `UsingTask` contains inline `Code` | Medium | Task executes inline C# code directly |
+| MBG002 | `TaskFactory` using `RoslynCodeTaskFactory` or `CodeTaskFactory` | Medium | Task factory can dynamically compile and execute code |
+| MBG003 | `InitialTargets` present or changed from baseline | High | Targets run before normal build pipeline; high code execution risk |
+| MBG004 | Early lifecycle hooks (`BeforeBuild`, `PrepareForBuild`, `BeforeTargets` on early targets) | Medium | Code executes in early phases before user awareness |
+| MBG005 | `Exec` task invokes shell, PowerShell, script host, or command interpreter | High | Direct shell/process invocation for arbitrary commands |
+| MBG006 | Inline code references process creation APIs | High | Code can spawn child processes for command execution |
+| MBG007 | Inline code references reflection, dynamic loading, or native interop | High | Code can load external assemblies or invoke native code |
+| MBG008 | Inline code contains large base64/byte arrays/encoded blobs | High | Suspicious encoded payloads that may hide malicious logic |
+| MBG009 | Import path resolves to user-writable, temporary, remote, or traversal path | High | Import target may be hijackable or from untrusted source |
+| MBG010 | New `.props` or `.targets` file appears compared with baseline | Medium | New build configuration not previously approved |
+| MBG011 | Project/build file has Mark-of-the-Web | Medium | File downloaded from internet and may have origin restrictions |
+| MBG012 | Parse errors or unsupported constructs prevent full analysis | Medium | Incomplete scan; hidden logic may not be detected |
 
 ---
 
-## Results model and interpretation
+## Results Model and Interpretation
 
-Scan output includes:
+### Risk Scoring
 
-- Per-file findings with location and evidence
-- Severity and confidence
-- Suggested policy action
-- Risk score and recommended action
-- Baseline comparison context (new/changed/drifted findings)
+Each finding is assigned a base score indicating its severity level:
 
-### Risk score baseline values
+| Level | Score |
+|---|---|
+| Info | 0 |
+| Low | 5 |
+| Medium | 20 |
+| High | 50 |
+| Critical | 100 |
 
-- Info: `0`
-- Low: `5`
-- Medium: `20`
-- High: `50`
-- Critical: `100`
+### Score Modifiers
 
-### Score modifiers
+Base scores are adjusted by:
 
-- `+30` if file has Mark-of-the-Web
-- `+20` if finding appears in a file imported by multiple projects
-- `+25` if finding is new versus baseline
-- `-30` if finding fingerprint is explicitly approved in trust store
-- `-20` if repository remote+commit match a trusted baseline state
+- **+30** — File has Mark-of-the-Web (downloaded from internet)
+- **+20** — Finding appears in a file imported by multiple projects (wider blast radius)
+- **+25** — Finding is new versus the trusted baseline (unapproved change)
+- **−30** — Finding fingerprint is explicitly approved in the trust store
+- **−20** — Repository remote and commit match a trusted baseline state
 
-### Recommended action thresholds
+### Recommended Action Thresholds
 
-- `0-19`: Allow
-- `20-49`: Warn
-- `50-99`: RequireApproval
-- `100+`: Block
+Policy evaluator uses final score to determine action:
+
+| Score Range | Recommended Action |
+|---|---|
+| 0–19 | **Allow** — permit build to continue |
+| 20–49 | **Warn** — log warning, continue build |
+| 50–99 | **Require Approval** — block until explicitly approved |
+| 100+ | **Block** — prevent build/load |
 
 ---
 
-## Policies, trust, and baselines
+## Policies, Trust, and Baselines
 
-MSBuild Guard uses a layered governance model to keep decisions deterministic and auditable.
+MSBuild Guard uses a layered governance model to keep decisions deterministic and auditable:
 
-### Recommended paths
+### Policy
 
-- Repository policy: `.msbuildguard/policy.json`
-- Repository baseline: `.msbuildguard/baseline.json`
-- User trust store: `%LOCALAPPDATA%/MSBuildGuard/trust.json`
-- Machine policy: `%PROGRAMDATA%/MSBuildGuard/policy.json`
+Policy files control how findings are interpreted and enforced. They define:
 
-### Policy precedence
+- **Minimum action by severity** — floor action for each severity level (cannot be weakened by lower-priority policies)
+- **Per-rule overrides** — custom action for specific rules (e.g., treat MBG005 as `Block` instead of `Warn`)
+- **Mode** — behavior in automation (`warn` vs. `block` on violations)
+- **Baseline requirement** — whether a trusted baseline must exist to proceed
+- **Path filters** — `include` / `exclude` patterns to scope analysis
 
-Effective policy merge order (highest priority first):
-
-1. Machine policy
-2. Repository policy
-3. User settings
-4. Built-in defaults
-
-Lower layers cannot weaken stricter machine policy requirements.
-
-### Policy details
-
-Policy controls how findings are interpreted and enforced:
-
-- `minimumActionBySeverity`: baseline action floor by severity
-- `rules`: per-rule action overrides
-- `baselineRequired`: require baseline to proceed
-- `include` / `exclude`: path filtering
-- `mode`: warn/block behavior in automation workflows
-
-Example policy skeleton:
+Example policy:
 
 ```json
 {
@@ -260,70 +235,76 @@ Example policy skeleton:
     "Info": "Allow"
   },
   "rules": {
-    "MBG005": { "action": "Block" }
+    "MBG005": { "action": "Block" },
+    "MBG009": { "action": "RequireApproval" }
   },
-  "include": ["**/*.csproj", "**/*.targets"],
+  "include": ["**/*.csproj", "**/*.targets", "**/*.props"],
   "exclude": ["bin/**", "obj/**", ".git/**"]
 }
 ```
 
-### Baseline details
+### Baseline
 
-Baselines store an approved snapshot of normalized findings and file states for drift detection.
+Baselines record an approved snapshot of normalized findings and file states for drift detection. Use baselines to:
 
-Use baselines to:
-
-- Detect newly introduced risky behavior
+- Detect newly introduced risky behavior (score modifier +25)
 - Separate known-approved legacy risk from new risk
-- Gate CI and hooks on unapproved changes
+- Gate CI/CD and pre-commit hooks on unapproved changes
 
 Typical baseline workflow:
 
-1. `msbuildguard baseline create . --output .msbuildguard/baseline.json`
-2. Review and store baseline under source control policy
-3. Compare with `msbuildguard baseline compare . --baseline .msbuildguard/baseline.json`
-4. Update baseline only after explicit review/approval
+1. Create baseline after security review: `MSBuildGuardScanner.CreateBaseline(solution, output)`
+2. Store baseline under source control policy (e.g., `.msbuildguard/baseline.json`)
+3. Compare future scans: `MSBuildGuardScanner.CompareAgainstBaseline(solution, baseline)`
+4. Update baseline only after explicit security review and approval
 
-### Trust details
+### Trust Store
 
-Trust decisions allow approved exceptions without disabling rules globally.
+Trust decisions allow approved exceptions without disabling rules globally. Common trust scopes:
 
-Common trust scopes:
+- **Finding** — one fingerprinted finding
+- **File** — specific file content hash
+- **Repository** — repository state (remote + commit)
 
-- `finding`: one fingerprinted finding
-- `file`: specific file content hash
-- `repo`: repository state
+Trust decisions must include explicit reason text and are auditable:
 
-Trust decisions should include explicit reason text and are intended to be auditable.
+```json
+{
+  "trustedFindings": [
+    {
+      "fingerprint": "...",
+      "reason": "Reviewed by security team on 2024-01-15",
+      "expiresAt": "2025-01-15"
+    }
+  ]
+}
+```
 
-Typical trust workflow:
+### Policy Precedence
 
-1. Review finding evidence and source
-2. Add trust decision: `msbuildguard trust add <subject> --scope finding --reason "Reviewed and approved"`
-3. Re-run scan with `--trust` store configured
-4. Re-evaluate trust when file content or dependency provenance changes
+Effective policy merge order (highest priority first):
 
-### End-to-end governance flow
+1. **Machine policy** — `%PROGRAMDATA%\MSBuildGuard\policy.json`
+2. **Solution policy** — `.msbuildguard\policy.json` in repository root
+3. **User settings** — Visual Studio options or user config
+4. **Built-in defaults** — safe, permissive baseline
 
-1. Initialize policy: `msbuildguard policy init .`
-2. Create baseline: `msbuildguard baseline create . --output .msbuildguard/baseline.json`
-3. Run gated scan with policy+baseline+trust
-4. Fail automation on blocking result or required approval state
-5. Record trust decisions only for reviewed, justified exceptions
+Lower-priority layers cannot weaken stricter machine policy requirements.
+
+### End-to-End Governance Flow
+
+1. **Initialize policy** — set organization minimum actions and rule overrides
+2. **Create baseline** — capture current approved state
+3. **Configure trust store** — pre-approve known-safe findings
+4. **Run gated scan** — evaluate against policy + baseline + trust
+5. **Act on results** — block/warn/allow based on final score
+6. **Update trust** — record justified exceptions with audit trail
+7. **Baseline refresh** — update baseline only after explicit review
 
 ---
 
-## CI usage
+## Module documentation
 
-Typical CI invocation:
+Module-specific documentation is split into dedicated files:
 
-```text
-msbuildguard scan . --format sarif --output artifacts/msbuildguard.sarif --policy .msbuildguard/policy.json --baseline .msbuildguard/baseline.json
-```
-
-Use command exit code to fail/pass pipeline gates.
-
-## Notes
-
-- For detailed command syntax and examples, use [CLI documentation](documentation/CLI.md).
-- Explorer and Visual Studio workflows are documented in their dedicated module files.
+- [Visual Studio extension documentation](documentation/VisualStudioExtension.md)
