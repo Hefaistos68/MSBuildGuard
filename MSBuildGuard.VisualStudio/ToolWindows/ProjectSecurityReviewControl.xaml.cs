@@ -128,5 +128,22 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				await package.OnPolicyChangedRescanAsync();
 			}).FileAndForget(nameof(ProjectSecurityReviewControl));
 		}
+
+		private void OnTrustAssemblyClick(object sender, RoutedEventArgs e)
+		{
+			ThreadHelper.JoinableTaskFactory.RunAsync(async delegate
+			{
+				if (this.DataContext is not ProjectSecurityReviewViewModel viewModel ||
+					viewModel.SelectedFinding is not FindingViewModel finding ||
+					!finding.CanTrustAssembly ||
+					MSBuildGuardPackage.Instance is not MSBuildGuardPackage package)
+				{
+					return;
+				}
+
+				await new VisualStudioTrustDecisionService().TrustAssemblyAsync(finding, "Trusted from Project Security Review");
+				await package.RescanProjectSecurityReviewAsync();
+			}).FileAndForget(nameof(ProjectSecurityReviewControl));
+		}
 	}
 }

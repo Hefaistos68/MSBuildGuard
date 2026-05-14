@@ -98,6 +98,35 @@ namespace MSBuildGuard.VisualStudio.Models
 		}
 
 		/// <summary>
+		/// Gets or sets the owning assembly name and version for this finding (populated for package-sourced findings).
+		/// </summary>
+		public string OwningAssembly { get; set; } = string.Empty;
+
+		/// <summary>
+		/// Gets a value indicating whether this finding can be trusted by its owning assembly.
+		/// </summary>
+		public bool CanTrustAssembly
+		{
+			get
+			{
+				return !string.Equals(this.RuleId, "MBG000", System.StringComparison.OrdinalIgnoreCase) &&
+					!string.IsNullOrWhiteSpace(this.OwningAssembly);
+			}
+		}
+
+		/// <summary>
+		/// Gets a value indicating whether this finding's owning assembly can be untrusted.
+		/// </summary>
+		public bool CanUntrustAssembly
+		{
+			get
+			{
+				return !string.Equals(this.RuleId, "MBG000", System.StringComparison.OrdinalIgnoreCase) &&
+					!string.IsNullOrWhiteSpace(this.OwningAssembly);
+			}
+		}
+
+		/// <summary>
 		/// Gets or sets a value indicating whether the finding is new relative to baseline.
 		/// </summary>
 		public bool IsNewComparedWithBaseline { get; set; }

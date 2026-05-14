@@ -47,6 +47,11 @@ namespace MSBuildGuard.VisualStudio
 		public const int OpenSolutionReviewContextCommandId = 0x0107;
 
 		/// <summary>
+		/// Manage assembly trusts command id.
+		/// </summary>
+		public const int ManageAssemblyTrustsCommandId = 0x0108;
+
+		/// <summary>
 		/// Project security review tool window id.
 		/// </summary>
 		public const int ProjectSecurityReviewToolWindowId = 0x0200;

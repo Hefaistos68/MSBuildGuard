@@ -4,6 +4,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows;
 using Microsoft.VisualStudio;
 using Microsoft.VisualStudio.ComponentModelHost;
 using Microsoft.VisualStudio.Shell;
@@ -188,6 +189,7 @@ namespace MSBuildGuard.VisualStudio
 			await Commands.TrustCurrentProjectVersionCommand.InitializeAsync(this);
 			await Commands.EditPolicyCommand.InitializeAsync(this);
 			await Commands.CreateBaselineCommand.InitializeAsync(this);
+			await Commands.ManageAssemblyTrustsCommand.InitializeAsync(this);
 
 			this.shieldStatusBarControl = new Services.ShieldStatusBarControl(this);
 			this.shieldStatusBarControl.UpdateState(this.latestScanReport);
@@ -523,6 +525,42 @@ namespace MSBuildGuard.VisualStudio
 		}
 
 		/// <summary>
+		/// Opens the Manage Assembly Trusts dialog for managing global assembly trust decisions.
+		/// </summary>
+		/// <returns>A task that completes when the dialog is closed.</returns>
+		internal async Task ShowManageAssemblyTrustsAsync()
+		{
+			await JoinableTaskFactory.SwitchToMainThreadAsync(DisposalToken);
+
+			var dialog = new ToolWindows.ManageAssemblyTrustsDialog
+			{
+				Owner = Application.Current.MainWindow,
+				WindowStartupLocation = System.Windows.WindowStartupLocation.CenterOwner
+			};
+
+			var result = dialog.ShowDialog();
+
+			if (result == true)
+			{
+				var projectWindow = await this.GetProjectSecurityReviewToolWindowAsync(create: false);
+
+				if (projectWindow?.Content is ToolWindows.ProjectSecurityReviewControl projectControl)
+				{
+					await this.RescanProjectSecurityReviewAsync();
+				}
+
+				var solutionWindow = await this.GetSolutionSecurityReviewToolWindowAsync(create: false);
+
+				if (solutionWindow?.Content is ToolWindows.SolutionSecurityReviewControl solutionControl)
+				{
+					await this.RescanSolutionSecurityReviewAsync();
+				}
+			}
+
+			await this.UiFeedbackService.WriteLineAsync("Manage Assembly Trusts dialog closed.", CancellationToken.None);
+		}
+
+		/// <summary>
 		/// Handles solution scan completion and updates related UI surfaces.
 		/// </summary>
 		/// <param name="sender">Event sender.</param>
@@ -658,13 +696,12 @@ namespace MSBuildGuard.VisualStudio
 				return;
 			}
 
-			var preferredReport = SelectPreferredReport(this.latestScanReport, report) ?? report;
-			var preferredTargetPathInput = ReferenceEquals(preferredReport, report) ? targetPath : preferredReport.Target.TargetPath;
-			var preferredTargetPath = ResolveTargetPath(preferredTargetPathInput, preferredReport);
-			this.reviewSelectionService.ProjectReviewTargetPath = preferredTargetPath;
+			// Use the most recently completed report for display, ensuring the window always shows current scan results
+			var resolvedTargetPath = ResolveTargetPath(targetPath, report);
+			this.reviewSelectionService.ProjectReviewTargetPath = resolvedTargetPath;
 
-			reviewWindow.LoadReport(preferredTargetPath, preferredReport);
-			await this.UiFeedbackService.WriteLineAsync($"Project Security Review refreshed for {preferredTargetPath}.", CancellationToken.None);
+			reviewWindow.LoadReport(resolvedTargetPath, report);
+			await this.UiFeedbackService.WriteLineAsync($"Project Security Review refreshed for {resolvedTargetPath}.", CancellationToken.None);
 		}
 
 		/// <summary>
@@ -684,13 +721,30 @@ namespace MSBuildGuard.VisualStudio
 				return;
 			}
 
-			var preferredReport = SelectPreferredReport(this.latestScanReport, report) ?? report;
-			var preferredTargetPathInput = ReferenceEquals(preferredReport, report) ? targetPath : preferredReport.Target.TargetPath;
-			var preferredTargetPath = ResolveTargetPath(preferredTargetPathInput, preferredReport);
-			this.reviewSelectionService.SolutionReviewTargetPath = preferredTargetPath;
+			// If the report is for a project (not a solution), trigger a full solution rescan
+			// to ensure the solution review shows aggregated findings from all projects
+			if (report.Target.TargetKind != Core.TargetKind.Solution)
+			{
+				var discoveredSolutionPath = await Services.SolutionDiscoveryService.GetOpenSolutionPathAsync(this);
 
-			reviewWindow.LoadReport(preferredTargetPath, preferredReport);
-			await this.UiFeedbackService.WriteLineAsync($"Solution Security Review refreshed for {preferredTargetPath}.", CancellationToken.None);
+				if (!string.IsNullOrWhiteSpace(discoveredSolutionPath) && File.Exists(discoveredSolutionPath))
+				{
+					await this.UiFeedbackService.WriteLineAsync($"Rescanning solution for Solution Security Review: {discoveredSolutionPath}", CancellationToken.None);
+					var solutionReport = await new Services.VisualStudioScannerService(this).ScanSolutionAsync(discoveredSolutionPath, DisposalToken);
+					this.UpdateLatestScanReport(solutionReport);
+					reviewWindow.LoadReport(discoveredSolutionPath, solutionReport);
+					await this.UiFeedbackService.WriteLineAsync($"Solution Security Review refreshed for {discoveredSolutionPath}.", CancellationToken.None);
+				}
+
+				return;
+			}
+
+			// Use the most recently completed report for display, ensuring the window always shows current scan results
+			var resolvedTargetPath = ResolveTargetPath(targetPath, report);
+			this.reviewSelectionService.SolutionReviewTargetPath = resolvedTargetPath;
+
+			reviewWindow.LoadReport(resolvedTargetPath, report);
+			await this.UiFeedbackService.WriteLineAsync($"Solution Security Review refreshed for {resolvedTargetPath}.", CancellationToken.None);
 		}
 
 		private static string ResolveTargetPath(string? targetPath, Core.ScanReport report)

@@ -13,7 +13,8 @@ namespace MSBuildGuard.Core.Trust
 		Repository,
 		Solution,
 		Finding,
-		Baseline
+		Baseline,
+		Assembly
 	}
 
 	/// <summary>
@@ -137,6 +138,11 @@ namespace MSBuildGuard.Core.Trust
 				if (string.Equals(this.Scope, "Finding", StringComparison.OrdinalIgnoreCase))
 				{
 					return TrustDecisionScopeKind.Finding;
+				}
+
+				if (string.Equals(this.Scope, "Assembly", StringComparison.OrdinalIgnoreCase))
+				{
+					return TrustDecisionScopeKind.Assembly;
 				}
 
 				return TrustDecisionScopeKind.Unknown;

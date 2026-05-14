@@ -73,6 +73,13 @@
         </Strings>
       </Button>
 
+      <Button guid="guidMSBuildGuardCommandSet" id="cmdidManageAssemblyTrustsCommand" priority="0x0104" type="Button">
+        <Parent guid="guidMSBuildGuardCommandSet" id="ProjectSecurityMenuGroup" />
+        <Strings>
+          <ButtonText>Manage Assembly Trusts...</ButtonText>
+        </Strings>
+      </Button>
+
       <Button guid="guidMSBuildGuardCommandSet" id="cmdidOpenSolutionSecurityReviewCommand" priority="0x0100" type="Button">
         <Parent guid="guidMSBuildGuardCommandSet" id="ProjectSecurityMenuGroup" />
         <Strings>
@@ -123,6 +130,7 @@
       <IDSymbol name="cmdidOpenSolutionSecurityReviewCommand" value="0x0105" />
       <IDSymbol name="cmdidOpenProjectReviewContextCommand" value="0x0106" />
       <IDSymbol name="cmdidOpenSolutionReviewContextCommand" value="0x0107" />
+      <IDSymbol name="cmdidManageAssemblyTrustsCommand" value="0x0108" />
     </GuidSymbol>
 
     <!-- This is the guid used for the command icons. -->

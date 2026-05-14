@@ -102,6 +102,10 @@
 					<MenuItem Header="Remove Trust"
 							  Click="OnRemoveTrustFindingClick"
 							  IsEnabled="{Binding PlacementTarget.SelectedItem.CanRemoveTrust, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+					<Separator />
+					<MenuItem Header="Trust Owning Assembly"
+							  Click="OnTrustAssemblyClick"
+							  IsEnabled="{Binding PlacementTarget.SelectedItem.CanTrustAssembly, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
 				</ContextMenu>
 			</DataGrid.ContextMenu>
 			<DataGrid.Columns>

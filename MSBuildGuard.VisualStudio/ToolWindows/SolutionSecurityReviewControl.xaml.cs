@@ -127,5 +127,22 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				await package.OnPolicyChangedRescanAsync();
 			}).FileAndForget(nameof(SolutionSecurityReviewControl));
 		}
+
+		private void OnTrustAssemblyClick(object sender, RoutedEventArgs e)
+		{
+			ThreadHelper.JoinableTaskFactory.RunAsync(async delegate
+			{
+				if (this.DataContext is not SolutionSecurityReviewViewModel viewModel ||
+					viewModel.SelectedFinding is not FindingViewModel finding ||
+					!finding.CanTrustAssembly ||
+					MSBuildGuardPackage.Instance is not MSBuildGuardPackage package)
+				{
+					return;
+				}
+
+				await new VisualStudioTrustDecisionService().TrustAssemblyAsync(finding, "Trusted from Solution Security Review");
+				await package.RescanSolutionSecurityReviewAsync();
+			}).FileAndForget(nameof(SolutionSecurityReviewControl));
+		}
 	}
 }

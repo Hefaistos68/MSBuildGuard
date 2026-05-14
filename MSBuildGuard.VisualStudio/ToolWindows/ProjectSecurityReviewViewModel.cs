@@ -1,7 +1,11 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Security.Principal;
+using System.Threading.Tasks;
+using System.Windows;
 using MSBuildGuard.Core;
 using MSBuildGuard.Core.Trust;
 using MSBuildGuard.VisualStudio.Models;
@@ -126,6 +130,13 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 					fileRecord != null &&
 					trustStoreService.IsFindingApproved(trustStore, finding.Fingerprint, fileRecord.NormalizedSha256, report.Target.TrustContext, report.PolicyProfile);
 
+				var isApprovedByAssembly = !string.IsNullOrWhiteSpace(finding.PackageId) && !string.IsNullOrWhiteSpace(finding.PackageVersion) &&
+					trustStoreService.IsFindingApprovedByAssembly(trustStore, finding.PackageId, finding.PackageVersion);
+
+				var owningAssembly = !string.IsNullOrWhiteSpace(finding.PackageId) && !string.IsNullOrWhiteSpace(finding.PackageVersion)
+					? $"{finding.PackageId}@{finding.PackageVersion}"
+					: string.Empty;
+
 				this.Findings.Add(new FindingViewModel
 				{
 					Severity                    = finding.Severity.ToString(),
@@ -135,10 +146,11 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 					Line                        = finding.StartLine,
 					Fingerprint                 = finding.Fingerprint,
 					PolicyAction                = string.Equals(finding.Id, "MBG000", System.StringComparison.OrdinalIgnoreCase) ? "Trusted" : finding.PolicyAction.ToString(),
-					IsTrusted                   = string.Equals(finding.Id, "MBG000", System.StringComparison.OrdinalIgnoreCase) || isTrusted,
+					IsTrusted                   = string.Equals(finding.Id, "MBG000", System.StringComparison.OrdinalIgnoreCase) || isTrusted || isApprovedByAssembly,
 					IsInTrustStore              = isTrusted,
 					IsNewComparedWithBaseline   = finding.IsNewComparedWithBaseline,
-					Reasoning                   = FindingViewModel.BuildReasoning(finding, isTrusted)
+					OwningAssembly              = owningAssembly,
+					Reasoning                   = FindingViewModel.BuildReasoning(finding, isTrusted || isApprovedByAssembly)
 				});
 			}
 
@@ -165,6 +177,114 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			this.Summary.FilesScanned      = 0;
 			this.Summary.FindingsCount     = 0;
 			this.Summary.HasTargetLoaded   = false;
+		}
+
+		/// <summary>
+		/// Displays the trust assembly dialog and adds the assembly to the trust store if confirmed.
+		/// </summary>
+		/// <param name="finding">The finding whose owning assembly will be trusted.</param>
+		public async Task TrustAssemblyAsync(FindingViewModel finding)
+		{
+			if (finding == null)
+			{
+				return;
+			}
+
+			var owningAssembly = finding.OwningAssembly;
+
+			if (string.IsNullOrWhiteSpace(owningAssembly))
+			{
+				return;
+			}
+
+			var parts = owningAssembly.Split('@');
+
+			if (parts.Length != 2)
+			{
+				return;
+			}
+
+			var assemblyName    = parts[0];
+			var assemblyVersion = parts[1];
+			var trustStorePath  = new TrustStoreService().GetDefaultUserTrustPath();
+			var dialog          = new TrustAssemblyDialog
+			{
+				Owner            = Application.Current.MainWindow,
+				WindowStartupLocation = System.Windows.WindowStartupLocation.CenterOwner,
+				AssemblyName     = assemblyName,
+				AssemblyVersion  = assemblyVersion,
+				AssemblyPath     = finding.FilePath
+			};
+
+			var result = dialog.ShowDialog();
+
+			if (result != true)
+			{
+				return;
+			}
+
+			var trustStoreService = new TrustStoreService();
+			var userSid           = WindowsIdentity.GetCurrent()?.User?.Value ?? "Unknown";
+			var reason            = !string.IsNullOrWhiteSpace(dialog.TrustReason)
+				? dialog.TrustReason
+				: $"Assembly trusted from Visual Studio project review on {System.DateTime.UtcNow:O}";
+
+			trustStoreService.AddAssemblyTrust(trustStorePath, assemblyName, assemblyVersion, reason, userSid);
+
+			if (MSBuildGuardPackage.Instance is MSBuildGuardPackage package)
+			{
+				await package.RescanProjectSecurityReviewAsync();
+			}
+		}
+
+		/// <summary>
+		/// Removes an assembly from the trust store.
+		/// </summary>
+		/// <param name="finding">The finding whose owning assembly will be untrusted.</param>
+		public async Task UntrustAssemblyAsync(FindingViewModel finding)
+		{
+			if (finding == null)
+			{
+				return;
+			}
+
+			var owningAssembly = finding.OwningAssembly;
+
+			if (string.IsNullOrWhiteSpace(owningAssembly))
+			{
+				return;
+			}
+
+			var parts = owningAssembly.Split('@');
+
+			if (parts.Length != 2)
+			{
+				return;
+			}
+
+			var assemblyName    = parts[0];
+			var assemblyVersion = parts[1];
+			var result          = MessageBox.Show(
+				$"Are you sure you want to remove trust for assembly '{assemblyName}' version '{assemblyVersion}'?\n\nFindings from this assembly will need to be approved individually.",
+				"Untrust Assembly",
+				MessageBoxButton.OKCancel,
+				MessageBoxImage.Question);
+
+			if (result != MessageBoxResult.OK)
+			{
+				return;
+			}
+
+			var trustStorePath    = new TrustStoreService().GetDefaultUserTrustPath();
+			var trustStoreService = new TrustStoreService();
+			var userSid           = WindowsIdentity.GetCurrent()?.User?.Value ?? "Unknown";
+
+			trustStoreService.RemoveAssemblyTrust(trustStorePath, assemblyName, assemblyVersion, "Assembly untrusted from Visual Studio project review", userSid);
+
+			if (MSBuildGuardPackage.Instance is MSBuildGuardPackage package)
+			{
+				await package.RescanProjectSecurityReviewAsync();
+			}
 		}
 
 		/// <summary>

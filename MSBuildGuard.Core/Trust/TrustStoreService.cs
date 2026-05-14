@@ -281,6 +281,154 @@ namespace MSBuildGuard.Core.Trust
 		}
 
 		/// <summary>
+		/// Determines whether an assembly (by name and version) is approved in trust store.
+		/// </summary>
+		/// <param name="store">Trust store document.</param>
+		/// <param name="assemblyName">Assembly name (e.g., package ID).</param>
+		/// <param name="assemblyVersion">Assembly version.</param>
+		/// <returns><see langword="true"/> when approved; otherwise <see langword="false"/>.</returns>
+		public bool IsAssemblyApproved(TrustStoreDocument store, string assemblyName, string assemblyVersion)
+		{
+			if (store == null)
+			{
+				throw new ArgumentNullException(nameof(store));
+			}
+
+			if (assemblyName == null)
+			{
+				throw new ArgumentNullException(nameof(assemblyName));
+			}
+
+			if (assemblyVersion == null)
+			{
+				throw new ArgumentNullException(nameof(assemblyVersion));
+			}
+
+			var assemblyHash = $"{assemblyName}@{assemblyVersion}".ToLowerInvariant();
+
+			return store.Decisions.Any(entry => entry.ScopeKind == TrustDecisionScopeKind.Assembly &&
+												string.Equals(entry.SubjectHash, assemblyHash, StringComparison.OrdinalIgnoreCase) &&
+												IsApprovalDecision(entry) &&
+												!IsExpired(entry));
+		}
+
+		/// <summary>
+		/// Adds an assembly trust decision.
+		/// </summary>
+		/// <param name="path">Trust store path.</param>
+		/// <param name="assemblyName">Assembly name (e.g., package ID).</param>
+		/// <param name="assemblyVersion">Assembly version.</param>
+		/// <param name="reason">Trust reason.</param>
+		/// <param name="userSid">Acting user identity.</param>
+		/// <param name="expiresAtUtc">Optional expiration timestamp.</param>
+		public void AddAssemblyTrust(string path, string assemblyName, string assemblyVersion, string reason, string userSid, DateTimeOffset? expiresAtUtc = null)
+		{
+			if (path == null)
+			{
+				throw new ArgumentNullException(nameof(path));
+			}
+
+			if (assemblyName == null)
+			{
+				throw new ArgumentNullException(nameof(assemblyName));
+			}
+
+			if (assemblyVersion == null)
+			{
+				throw new ArgumentNullException(nameof(assemblyVersion));
+			}
+
+			if (reason == null)
+			{
+				throw new ArgumentNullException(nameof(reason));
+			}
+
+			if (userSid == null)
+			{
+				throw new ArgumentNullException(nameof(userSid));
+			}
+
+			var assemblyHash = $"{assemblyName}@{assemblyVersion}".ToLowerInvariant();
+
+			var entry = new TrustDecisionEntry
+			{
+				DecisionId = Guid.NewGuid().ToString("N"),
+				Scope = "Assembly",
+				SubjectHash = assemblyHash,
+				Decision = "Trust",
+				Reason = reason,
+				UserSid = userSid,
+				CreatedAtUtc = DateTimeOffset.UtcNow,
+				ExpiresAtUtc = expiresAtUtc
+			};
+
+			AddDecision(path, entry);
+		}
+
+		/// <summary>
+		/// Removes assembly trust decisions that match the provided assembly name and version.
+		/// </summary>
+		/// <param name="path">Trust store path.</param>
+		/// <param name="assemblyName">Assembly name (e.g., package ID).</param>
+		/// <param name="assemblyVersion">Assembly version.</param>
+		/// <param name="reason">Revocation reason.</param>
+		/// <param name="userSid">Acting user identity.</param>
+		/// <returns>The number of removed decisions.</returns>
+		public int RemoveAssemblyTrust(string path, string assemblyName, string assemblyVersion, string reason, string userSid)
+		{
+			if (path == null)
+			{
+				throw new ArgumentNullException(nameof(path));
+			}
+
+			if (assemblyName == null)
+			{
+				throw new ArgumentNullException(nameof(assemblyName));
+			}
+
+			if (assemblyVersion == null)
+			{
+				throw new ArgumentNullException(nameof(assemblyVersion));
+			}
+
+			if (reason == null)
+			{
+				throw new ArgumentNullException(nameof(reason));
+			}
+
+			if (userSid == null)
+			{
+				throw new ArgumentNullException(nameof(userSid));
+			}
+
+			var assemblyHash = $"{assemblyName}@{assemblyVersion}".ToLowerInvariant();
+
+			return RemoveDecisionsBySubject(path, assemblyHash, reason, userSid);
+		}
+
+		/// <summary>
+		/// Determines whether a finding is approved by assembly-level trust.
+		/// </summary>
+		/// <param name="store">Trust store document.</param>
+		/// <param name="packageId">Package ID.</param>
+		/// <param name="packageVersion">Package version.</param>
+		/// <returns><see langword="true"/> when the assembly is approved; otherwise <see langword="false"/>.</returns>
+		public bool IsFindingApprovedByAssembly(TrustStoreDocument store, string packageId, string packageVersion)
+		{
+			if (store == null)
+			{
+				throw new ArgumentNullException(nameof(store));
+			}
+
+			if (string.IsNullOrWhiteSpace(packageId) || string.IsNullOrWhiteSpace(packageVersion))
+			{
+				return false;
+			}
+
+			return IsAssemblyApproved(store, packageId, packageVersion);
+		}
+
+		/// <summary>
 		/// Determines whether a finding fingerprint is approved in trust store.
 		/// </summary>
 		/// <param name="store">Trust store document.</param>

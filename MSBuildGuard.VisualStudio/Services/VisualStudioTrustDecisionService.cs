@@ -1,7 +1,10 @@
 using System;
+using System.Security.Principal;
+using System.Threading.Tasks;
 using MSBuildGuard.Core;
 using MSBuildGuard.Core.Trust;
 using MSBuildGuard.VisualStudio.Models;
+using MSBuildGuard.VisualStudio.ToolWindows;
 
 namespace MSBuildGuard.VisualStudio.Services
 {
@@ -84,6 +87,55 @@ namespace MSBuildGuard.VisualStudio.Services
 			var trustPath = this.trustStoreService.GetDefaultUserTrustPath();
 
 			return this.trustStoreService.RemoveDecisionsBySubject(trustPath, finding.Fingerprint, reason, Environment.UserName);
+		}
+
+		/// <summary>
+		/// Opens the trust assembly dialog and adds the assembly to the trust store if confirmed.
+		/// </summary>
+		/// <param name="finding">The finding whose owning assembly should be trusted.</param>
+		/// <param name="reason">Reason provided by the user.</param>
+		/// <returns>A task that completes when the dialog is closed.</returns>
+		public async Task TrustAssemblyAsync(FindingViewModel finding, string reason)
+		{
+			if (finding == null)
+			{
+				throw new ArgumentNullException(nameof(finding));
+			}
+
+			if (string.IsNullOrWhiteSpace(finding.OwningAssembly))
+			{
+				throw new InvalidOperationException("Finding does not have an owning assembly.");
+			}
+
+			var dialog = new TrustAssemblyDialog
+			{
+				AssemblyName    = finding.OwningAssembly.Split('@')[0],
+				AssemblyVersion = finding.OwningAssembly.Contains("@") ? finding.OwningAssembly.Split('@')[1] : "Unknown",
+				AssemblyPath    = finding.FilePath,
+				Owner           = System.Windows.Application.Current.MainWindow,
+				WindowStartupLocation = System.Windows.WindowStartupLocation.CenterOwner
+			};
+
+			var result = dialog.ShowDialog();
+
+			if (result == true)
+			{
+				var trustPath = this.trustStoreService.GetDefaultUserTrustPath();
+				var userSid  = WindowsIdentity.GetCurrent()?.User?.Value ?? "Unknown";
+
+				this.trustStoreService.AddDecision(
+					trustPath,
+					new TrustDecisionEntry
+					{
+						DecisionId  = Guid.NewGuid().ToString("D"),
+						Scope       = "Assembly",
+						SubjectHash = finding.OwningAssembly,
+						Decision    = "Trust",
+						Reason      = reason,
+						UserSid     = userSid,
+						CreatedAtUtc = DateTimeOffset.UtcNow
+					});
+			}
 		}
 	}
 }
