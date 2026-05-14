@@ -361,6 +361,9 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
-/.github
-/ContextDiff.VSCode/dist/worker
+
+/.github/agents/
+/.github/skills/
+/.github/instructions/
+
 /.msbuildguard

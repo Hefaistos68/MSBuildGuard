@@ -1,0 +1,44 @@
+name: Build VSIX
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build VSIX
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Restore NuGet packages
+        run: nuget restore MSBuildGuard-public.slnx
+
+      - name: Build VSIX
+        run: |
+          msbuild MSBuildGuard.VisualStudio\MSBuildGuard.VisualStudio.csproj `
+            /p:Configuration=Release `
+            /p:DeployExtension=false `
+            /p:ZipPackageCompressionLevel=normal `
+            /v:minimal
+
+      - name: Upload VSIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MSBuildGuard-VSIX
+          path: MSBuildGuard.VisualStudio\bin\Release\*.vsix
+          if-no-files-found: error
+          retention-days: 30
