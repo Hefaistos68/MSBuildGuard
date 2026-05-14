@@ -77,7 +77,7 @@ Visual Studio integration is best-effort pre-build protection in IDE workflows.
 
 Screenshots (click to enlarge):
 
-![Solution Security Review tool window](./images/solution-security-review.jpg)
-![Policy Editor](./images/policy-editor.jpg)
-![Build enforcement blocker dialog](./images/build-blocker.jpg)
+![Solution Security Review tool window](images/Solution-Security-Review.jpg)
+![Policy Editor](images/Policy-Editor.jpg)
+![Build enforcement blocker dialog](images/Build-Blocker.jpg)
 
