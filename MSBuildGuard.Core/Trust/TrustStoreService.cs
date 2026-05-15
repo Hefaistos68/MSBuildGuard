@@ -425,17 +425,21 @@ namespace MSBuildGuard.Core.Trust
 			/// Adds a signer-level trust decision that approves all assemblies bearing the same certificate signer.
 			/// </summary>
 			/// <param name="path">Trust store path.</param>
-			/// <param name="signerSubject">Certificate Subject DN — used as the canonical trust key.</param>
+			/// <param name="signerThumbprint">Certificate thumbprint — used as the canonical trust key when available.</param>
+			/// <param name="signerSubject">Certificate Subject DN.</param>
 			/// <param name="signerDisplayName">Human-readable signer name.</param>
 			/// <param name="issuer">Certificate issuer.</param>
+			/// <param name="serialNumber">Certificate serial number.</param>
 			/// <param name="reason">Trust reason.</param>
 			/// <param name="userSid">Acting user identity.</param>
 			/// <param name="expiresAtUtc">Optional expiration timestamp.</param>
 			public void AddSignerTrust(
 				string path,
+				string signerThumbprint,
 				string signerSubject,
 				string signerDisplayName,
 				string issuer,
+				string serialNumber,
 				string reason,
 				string userSid,
 				DateTimeOffset? expiresAtUtc = null)
@@ -443,6 +447,11 @@ namespace MSBuildGuard.Core.Trust
 				if (path == null)
 				{
 					throw new ArgumentNullException(nameof(path));
+				}
+
+				if (signerThumbprint == null)
+				{
+					throw new ArgumentNullException(nameof(signerThumbprint));
 				}
 
 				if (signerSubject == null)
@@ -460,19 +469,23 @@ namespace MSBuildGuard.Core.Trust
 					throw new ArgumentNullException(nameof(userSid));
 				}
 
+				var signerKey = GetSignerTrustKey(signerThumbprint, signerSubject, issuer, serialNumber);
+
 				var entry = new TrustDecisionEntry
 				{
-					DecisionId      = Guid.NewGuid().ToString("N"),
-					Scope           = "Signer",
-					SubjectHash     = signerSubject,
-					AssemblySigner  = signerDisplayName ?? string.Empty,
-					AssemblyIssuer  = issuer ?? string.Empty,
-					AssemblySubject = signerSubject,
-					Decision        = "Trust",
-					Reason          = reason,
-					UserSid         = userSid,
-					CreatedAtUtc    = DateTimeOffset.UtcNow,
-					ExpiresAtUtc    = expiresAtUtc
+					DecisionId           = Guid.NewGuid().ToString("N"),
+					Scope                = "Signer",
+					SubjectHash          = signerKey,
+					AssemblySigner       = signerDisplayName ?? string.Empty,
+					AssemblyIssuer       = issuer ?? string.Empty,
+					AssemblySubject      = signerSubject,
+					AssemblyThumbprint   = signerThumbprint ?? string.Empty,
+					AssemblySerialNumber = serialNumber ?? string.Empty,
+					Decision             = "Trust",
+					Reason               = reason,
+					UserSid              = userSid,
+					CreatedAtUtc         = DateTimeOffset.UtcNow,
+					ExpiresAtUtc         = expiresAtUtc
 				};
 
 				AddDecision(path, entry);
@@ -482,30 +495,35 @@ namespace MSBuildGuard.Core.Trust
 			/// Determines whether the given certificate signer is trusted in the store.
 			/// </summary>
 			/// <param name="store">Trust store document.</param>
-			/// <param name="signerSubject">Certificate Subject DN to look up.</param>
+			/// <param name="signerThumbprint">Certificate thumbprint.</param>
+			/// <param name="signerSubject">Certificate Subject DN.</param>
+			/// <param name="signerIssuer">Certificate issuer.</param>
+			/// <param name="signerSerialNumber">Certificate serial number.</param>
 			/// <returns><see langword="true"/> when the signer is trusted; otherwise <see langword="false"/>.</returns>
-			public bool IsSignerTrusted(TrustStoreDocument store, string signerSubject)
+			public bool IsSignerTrusted(TrustStoreDocument store, string signerThumbprint, string signerSubject, string signerIssuer, string signerSerialNumber)
 			{
 				if (store == null)
 				{
 					throw new ArgumentNullException(nameof(store));
 				}
 
-				if (string.IsNullOrWhiteSpace(signerSubject))
+				if (string.IsNullOrWhiteSpace(signerThumbprint) && string.IsNullOrWhiteSpace(signerSubject))
 				{
 					return false;
 				}
 
+				var signerKey = GetSignerTrustKey(signerThumbprint, signerSubject, signerIssuer, signerSerialNumber);
+
 				return store.Decisions.Any(entry =>
 					entry.ScopeKind == TrustDecisionScopeKind.Signer &&
-					string.Equals(entry.SubjectHash, signerSubject, StringComparison.OrdinalIgnoreCase) &&
 					IsApprovalDecision(entry) &&
-					!IsExpired(entry));
+					!IsExpired(entry) &&
+					string.Equals(entry.SubjectHash, signerKey, StringComparison.OrdinalIgnoreCase));
 			}
 
-		/// <summary>
-		/// Determines whether a finding is approved by assembly-level trust.
-		/// </summary>
+			/// <summary>
+			/// Determines whether a finding is approved by assembly-level trust.
+			/// </summary>
 		/// <param name="store">Trust store document.</param>
 		/// <param name="packageId">Package ID.</param>
 		/// <param name="packageVersion">Package version.</param>
@@ -673,6 +691,47 @@ namespace MSBuildGuard.Core.Trust
 		}
 
 		/// <summary>
+		/// Builds the canonical signer trust key.
+		/// </summary>
+		/// <param name="thumbprint">Certificate thumbprint.</param>
+		/// <param name="subject">Certificate subject DN.</param>
+		/// <param name="issuer">Certificate issuer.</param>
+		/// <param name="serialNumber">Certificate serial number.</param>
+		/// <returns>A canonical signer identity string.</returns>
+		private static string GetSignerTrustKey(string thumbprint, string subject, string issuer, string serialNumber)
+		{
+			if (!string.IsNullOrWhiteSpace(thumbprint))
+			{
+				return NormalizeThumbprint(thumbprint);
+			}
+
+			return $"{NormalizeIdentityPart(subject)}|{NormalizeIdentityPart(issuer)}|{NormalizeIdentityPart(serialNumber)}";
+		}
+
+		/// <summary>
+		/// Determines whether a legacy signer entry matches using the old Subject-only storage.
+		/// </summary>
+		/// <param name="entry">The trust entry.</param>
+		/// <param name="signerSubject">Certificate Subject DN.</param>
+		/// <param name="signerIssuer">Certificate issuer.</param>
+		/// <param name="signerSerialNumber">Certificate serial number.</param>
+		/// <returns><see langword="true"/> when a legacy entry matches; otherwise <see langword="false"/>.</returns>
+		private static bool IsLegacySignerMatch(TrustDecisionEntry entry, string signerSubject, string signerIssuer, string signerSerialNumber)
+		{
+			if (string.IsNullOrWhiteSpace(signerSubject))
+			{
+				return false;
+			}
+
+			return string.Equals(entry.SubjectHash, signerSubject, StringComparison.OrdinalIgnoreCase) &&
+				string.IsNullOrWhiteSpace(entry.AssemblyThumbprint) &&
+				string.IsNullOrWhiteSpace(entry.AssemblySerialNumber) &&
+				(string.IsNullOrWhiteSpace(entry.AssemblyIssuer) || string.Equals(entry.AssemblyIssuer, signerIssuer, StringComparison.OrdinalIgnoreCase)) &&
+				(string.IsNullOrWhiteSpace(entry.AssemblySubject) || string.Equals(entry.AssemblySubject, signerSubject, StringComparison.OrdinalIgnoreCase)) &&
+				(string.IsNullOrWhiteSpace(signerSerialNumber) || string.IsNullOrWhiteSpace(entry.AssemblySerialNumber) || string.Equals(entry.AssemblySerialNumber, signerSerialNumber, StringComparison.OrdinalIgnoreCase));
+		}
+
+		/// <summary>
 		/// Determines whether a trust entry represents an approval decision.
 		/// </summary>
 		/// <param name="entry">The trust entry.</param>
@@ -682,6 +741,26 @@ namespace MSBuildGuard.Core.Trust
 			return entry.DecisionKind == TrustDecisionKind.Trust ||
 				   entry.DecisionKind == TrustDecisionKind.TrustUntilChanged ||
 				   entry.DecisionKind == TrustDecisionKind.DismissFinding;
+		}
+
+		/// <summary>
+		/// Normalizes thumbprints for comparison.
+		/// </summary>
+		/// <param name="value">Thumbprint value.</param>
+		/// <returns>Normalized thumbprint.</returns>
+		private static string NormalizeThumbprint(string value)
+		{
+			return new string(value.Where(ch => !char.IsWhiteSpace(ch) && ch != ':').ToArray()).ToUpperInvariant();
+		}
+
+		/// <summary>
+		/// Normalizes identity text for comparison.
+		/// </summary>
+		/// <param name="value">Identity value.</param>
+		/// <returns>Normalized identity text.</returns>
+		private static string NormalizeIdentityPart(string value)
+		{
+			return string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim().ToUpperInvariant();
 		}
 
 		/// <summary>

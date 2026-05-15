@@ -399,7 +399,7 @@ namespace MSBuildGuard.VisualStudio
 			}
 
 			var solutionPathToScan = solutionPath!;
-			var report             = await new Services.VisualStudioScannerService(this).ScanSolutionAsync(solutionPathToScan, DisposalToken);
+			var report = await new Services.VisualStudioScannerService(this).ScanSolutionAsync(solutionPathToScan, DisposalToken);
 
 			this.UpdateLatestScanReport(report);
 			await this.RefreshSolutionSecurityReviewIfOpenAsync(solutionPathToScan, report);
@@ -453,36 +453,36 @@ namespace MSBuildGuard.VisualStudio
 			}
 
 			await this.UiFeedbackService.WriteLineAsync("Manage Assembly Trusts dialog closed.", CancellationToken.None);
-			}
+		}
 
-			/// <summary>
-			/// Opens the Manage Signer Trusts dialog for managing trusted certificate signers.
-			/// </summary>
-			/// <returns>A task that completes when the dialog is closed.</returns>
-			internal async Task ShowManageSignerTrustsAsync()
+		/// <summary>
+		/// Opens the Manage Signer Trusts dialog for managing trusted certificate signers.
+		/// </summary>
+		/// <returns>A task that completes when the dialog is closed.</returns>
+		internal async Task ShowManageSignerTrustsAsync()
+		{
+			await JoinableTaskFactory.SwitchToMainThreadAsync(DisposalToken);
+
+			var dialog = new ToolWindows.ManageSignerTrustsDialog
 			{
-				await JoinableTaskFactory.SwitchToMainThreadAsync(DisposalToken);
+				Owner = Application.Current.MainWindow,
+				WindowStartupLocation = System.Windows.WindowStartupLocation.CenterOwner
+			};
 
-				var dialog = new ToolWindows.ManageSignerTrustsDialog
+			var result = dialog.ShowDialog();
+
+			if (result == true)
+			{
+				var solutionWindow = await this.GetSolutionSecurityReviewToolWindowAsync(create: false);
+
+				if (solutionWindow?.Content is ToolWindows.SolutionSecurityReviewControl)
 				{
-					Owner                 = Application.Current.MainWindow,
-					WindowStartupLocation = System.Windows.WindowStartupLocation.CenterOwner
-				};
-
-				var result = dialog.ShowDialog();
-
-				if (result == true)
-				{
-					var solutionWindow = await this.GetSolutionSecurityReviewToolWindowAsync(create: false);
-
-					if (solutionWindow?.Content is ToolWindows.SolutionSecurityReviewControl)
-					{
-						await this.RescanSolutionSecurityReviewAsync();
-					}
+					await this.RescanSolutionSecurityReviewAsync();
 				}
-
-				await this.UiFeedbackService.WriteLineAsync("Manage Signer Trusts dialog closed.", CancellationToken.None);
 			}
+
+			await this.UiFeedbackService.WriteLineAsync("Manage Signer Trusts dialog closed.", CancellationToken.None);
+		}
 
 		/// <summary>
 		/// Handles solution scan completion and updates related UI surfaces.

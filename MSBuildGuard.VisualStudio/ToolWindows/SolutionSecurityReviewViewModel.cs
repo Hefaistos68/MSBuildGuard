@@ -171,7 +171,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			// Cache resolved signatures per package to avoid redundant disk reads when multiple
 			// findings originate from the same package.
 			var hasSignerTrusts = trustStore.Decisions.Any(d => d.ScopeKind == MSBuildGuard.Core.Trust.TrustDecisionScopeKind.Signer);
-			var signatureCache = new System.Collections.Generic.Dictionary<string, Services.AssemblySignatureService>(StringComparer.OrdinalIgnoreCase);
+			var signatureCache = new Dictionary<string, AssemblySignatureInfo>(StringComparer.OrdinalIgnoreCase);
 
 			foreach (var finding in report.Findings)
 			{
@@ -189,18 +189,16 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				{
 					var cacheKey = $"{finding.PackageId}@{finding.PackageVersion}";
 
-					if (!signatureCache.TryGetValue(cacheKey, out var sigService))
+					if (!signatureCache.TryGetValue(cacheKey, out var signature))
 					{
-						sigService = new Services.AssemblySignatureService();
-						signatureCache[cacheKey] = sigService;
+						var dllPath = Services.AssemblySignatureService.ResolveAssemblyFilePathFromPackageId(finding.PackageId, finding.PackageVersion);
+						signature = new Services.AssemblySignatureService().ReadSignature(dllPath);
+						signatureCache[cacheKey] = signature;
 					}
 
-					var dllPath = Services.AssemblySignatureService.ResolveAssemblyFilePathFromPackageId(finding.PackageId, finding.PackageVersion);
-					var sig = sigService.ReadSignature(dllPath);
-
-					if (sig.IsSigned && !string.IsNullOrWhiteSpace(sig.Subject))
+					if (signature.IsSignatureValid && (!string.IsNullOrWhiteSpace(signature.Thumbprint) || !string.IsNullOrWhiteSpace(signature.Subject)))
 					{
-						isApprovedBySigner = trustStoreService.IsSignerTrusted(trustStore, sig.Subject);
+						isApprovedBySigner = trustStoreService.IsSignerTrusted(trustStore, signature.Thumbprint, signature.Subject, signature.Issuer, signature.SerialNumber);
 					}
 				}
 

@@ -103,14 +103,15 @@ namespace MSBuildGuard.VisualStudio.Services
 					}
 				}
 
-				if (!RiskEvaluationService.RequiresBuildBlock(report!))
-					{
-						return VSConstants.S_OK;
-					}
+				var viewModel = new MSBuildGuard.VisualStudio.ToolWindows.BuildBlockDialogViewModel(report!);
 
-					var viewModel = new MSBuildGuard.VisualStudio.ToolWindows.BuildBlockDialogViewModel(report!);
-					var dialog = new MSBuildGuard.VisualStudio.ToolWindows.BuildBlockDialog(viewModel);
-					var serviceProvider = (IServiceProvider)this.package;
+				if (!RiskEvaluationService.RequiresBuildBlock(viewModel))
+				{
+					return VSConstants.S_OK;
+				}
+
+				var dialog = new MSBuildGuard.VisualStudio.ToolWindows.BuildBlockDialog(viewModel);
+				var serviceProvider = (IServiceProvider)this.package;
 					var uiShell = serviceProvider.GetService(typeof(SVsUIShell)) as IVsUIShell;
 					IntPtr ownerHandle = IntPtr.Zero;
 

@@ -23,6 +23,12 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		/// <summary>Resolved certificate issuer; set after Window_Loaded.</summary>
 		private string resolvedIssuer = string.Empty;
 
+		/// <summary>Resolved certificate thumbprint; set after Window_Loaded.</summary>
+		private string resolvedThumbprint = string.Empty;
+
+		/// <summary>Resolved certificate serial number; set after Window_Loaded.</summary>
+		private string resolvedSerialNumber = string.Empty;
+
 		/// <summary>
 		/// Gets or sets the assembly name.
 		/// </summary>
@@ -60,16 +66,31 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			this.resolvedSignerSubject = signature.Subject;
 			this.resolvedSignerName    = signature.Signer;
 			this.resolvedIssuer        = signature.Issuer;
+			this.resolvedThumbprint    = signature.Thumbprint;
+			this.resolvedSerialNumber  = signature.SerialNumber;
 
-			AssemblySignerTextBlock.Text  = string.IsNullOrWhiteSpace(signature.Signer) ? "Not available" : signature.Signer;
-			AssemblyIssuerTextBlock.Text  = string.IsNullOrWhiteSpace(signature.Issuer) ? "Not available" : signature.Issuer;
-			AssemblySubjectTextBlock.Text = string.IsNullOrWhiteSpace(signature.Subject) ? "Not available" : signature.Subject;
+			AssemblySignerTextBlock.Text  = signature.HasEmbeddedSignature ? (string.IsNullOrWhiteSpace(signature.Signer) ? "Not available" : signature.Signer) : "No embedded signature";
+			AssemblyIssuerTextBlock.Text  = signature.HasEmbeddedSignature ? (string.IsNullOrWhiteSpace(signature.Issuer) ? "Not available" : signature.Issuer) : "Not available";
+			AssemblySubjectTextBlock.Text = signature.HasEmbeddedSignature ? (string.IsNullOrWhiteSpace(signature.Subject) ? "Not available" : signature.Subject) : "Not available";
 
 			OpenPropertiesButton.IsEnabled = !string.IsNullOrWhiteSpace(this.AssemblyPath) &&
 				System.IO.File.Exists(this.AssemblyPath);
 
-			// "Trust this Signer" is only meaningful when the assembly is Authenticode-signed.
-			TrustSignerButton.IsEnabled = signature.IsSigned && !string.IsNullOrWhiteSpace(signature.Subject);
+			var hasAssemblyIdentity = !string.IsNullOrWhiteSpace(this.AssemblyName) && !string.IsNullOrWhiteSpace(this.AssemblyVersion);
+			var trustStoreService = new TrustStoreService();
+			var trustPath = trustStoreService.GetDefaultUserTrustPath();
+			var trustStore = trustStoreService.Load(trustPath);
+			var isSignerTrusted = signature.IsSignatureValid &&
+				!string.IsNullOrWhiteSpace(signature.Subject) &&
+				trustStoreService.IsSignerTrusted(trustStore, this.resolvedThumbprint, this.resolvedSignerSubject, this.resolvedIssuer, this.resolvedSerialNumber);
+			var isAssemblyTrusted = hasAssemblyIdentity &&
+				trustStoreService.IsAssemblyApproved(trustStore, this.AssemblyName, this.AssemblyVersion);
+
+			// Trust actions are only meaningful when the Authenticode signature verifies successfully.
+			TrustSignerButton.IsEnabled = signature.IsSignatureValid && !string.IsNullOrWhiteSpace(signature.Subject) && !isSignerTrusted;
+			TrustSignerButton.Content = isSignerTrusted ? "Signer Trusted ✓" : "Trust Signer";
+			TrustAssemblyButton.IsEnabled = hasAssemblyIdentity && signature.IsSignatureValid && !isAssemblyTrusted;
+			TrustAssemblyButton.Content = isAssemblyTrusted ? "Assembly Trusted ✓" : "Trust Assembly";
 		}
 
 		/// <summary>
@@ -115,14 +136,61 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 
 			trustStoreService.AddSignerTrust(
 				trustPath,
+				this.resolvedThumbprint,
 				this.resolvedSignerSubject,
 				this.resolvedSignerName,
 				this.resolvedIssuer,
+				this.resolvedSerialNumber,
 				reason,
 				userSid);
 
 			TrustSignerButton.IsEnabled = false;
 			TrustSignerButton.Content   = "Signer Trusted ✓";
+		}
+
+		/// <summary>
+		/// Adds an assembly-level trust entry using the same trust flow as the Solution Security Review.
+		/// </summary>
+		private void TrustAssemblyButton_Click(object sender, RoutedEventArgs e)
+		{
+			if (string.IsNullOrWhiteSpace(this.AssemblyName) || string.IsNullOrWhiteSpace(this.AssemblyVersion) || string.IsNullOrWhiteSpace(this.AssemblyPath))
+			{
+				return;
+			}
+
+			var trustDialog = new TrustAssemblyDialog
+			{
+				AssemblyName    = this.AssemblyName,
+				AssemblyVersion = this.AssemblyVersion,
+				AssemblyPath    = this.AssemblyPath,
+				AssemblySigner  = this.resolvedSignerName,
+				AssemblyIssuer  = this.resolvedIssuer,
+				AssemblySubject = this.resolvedSignerSubject,
+				Owner           = this,
+				WindowStartupLocation = WindowStartupLocation.CenterOwner
+			};
+
+			if (trustDialog.ShowDialog() != true)
+			{
+				return;
+			}
+
+			var trustStoreService = new TrustStoreService();
+			var trustPath = trustStoreService.GetDefaultUserTrustPath();
+			var userSid = WindowsIdentity.GetCurrent()?.User?.Value ?? "Unknown";
+
+			trustStoreService.AddAssemblyTrust(
+				trustPath,
+				this.AssemblyName,
+				this.AssemblyVersion,
+				trustDialog.TrustReason,
+				userSid,
+				this.resolvedSignerName,
+				this.resolvedIssuer,
+				this.resolvedSignerSubject);
+
+			TrustAssemblyButton.IsEnabled = false;
+			TrustAssemblyButton.Content = "Assembly Trusted ✓";
 		}
 
 		/// <summary>

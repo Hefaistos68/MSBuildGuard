@@ -116,9 +116,9 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 					var dllPath = AssemblySignatureService.ResolveAssemblyFilePathFromPackageId(finding.PackageId, finding.PackageVersion);
 					var sig = sigService.ReadSignature(dllPath);
 
-					if (sig.IsSigned && !string.IsNullOrWhiteSpace(sig.Subject))
+					if (sig.IsSignatureValid && (!string.IsNullOrWhiteSpace(sig.Thumbprint) || !string.IsNullOrWhiteSpace(sig.Subject)))
 					{
-						isApprovedBySigner = trustStoreService.IsSignerTrusted(trustStore, sig.Subject);
+						isApprovedBySigner = trustStoreService.IsSignerTrusted(trustStore, sig.Thumbprint, sig.Subject, sig.Issuer, sig.SerialNumber);
 					}
 				}
 

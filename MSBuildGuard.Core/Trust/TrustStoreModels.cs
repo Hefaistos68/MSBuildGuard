@@ -178,6 +178,16 @@ namespace MSBuildGuard.Core.Trust
 		public string AssemblySubject { get; set; } = string.Empty;
 
 		/// <summary>
+		/// Gets or sets the assembly certificate thumbprint when known.
+		/// </summary>
+		public string AssemblyThumbprint { get; set; } = string.Empty;
+
+		/// <summary>
+		/// Gets or sets the assembly certificate serial number when known.
+		/// </summary>
+		public string AssemblySerialNumber { get; set; } = string.Empty;
+
+		/// <summary>
 		/// Gets or sets repository remote.
 		/// </summary>
 		public string RepositoryRemote { get; set; } = string.Empty;

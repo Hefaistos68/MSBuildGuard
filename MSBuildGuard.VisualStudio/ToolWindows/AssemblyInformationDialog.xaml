@@ -52,8 +52,9 @@
         </Border>
 
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button x:Name="TrustSignerButton" Content="Trust this Signer" Padding="16,8" Margin="0,0,8,0" IsEnabled="False" Click="TrustSignerButton_Click"/>
-            <Button x:Name="OpenPropertiesButton" Content="Open File Properties" Padding="16,8" Margin="0,0,8,0" Click="OpenPropertiesButton_Click"/>
+            <Button x:Name="TrustSignerButton" Content="Trust Signer" Padding="16,8" Margin="0,0,8,0" IsEnabled="False" Click="TrustSignerButton_Click"/>
+            <Button x:Name="TrustAssemblyButton" Content="Trust Assembly" Padding="16,8" Margin="0,0,8,0" IsEnabled="False" Click="TrustAssemblyButton_Click"/>
+            <Button x:Name="OpenPropertiesButton" Content="Properties..." Padding="16,8" Margin="0,0,8,0" Click="OpenPropertiesButton_Click"/>
             <Button x:Name="CloseButton" Content="Close" Padding="16,8" IsCancel="True" Click="CloseButton_Click"/>
         </StackPanel>
     </StackPanel>

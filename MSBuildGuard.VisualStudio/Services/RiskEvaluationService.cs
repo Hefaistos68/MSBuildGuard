@@ -1,4 +1,5 @@
 using MSBuildGuard.Core;
+using MSBuildGuard.VisualStudio.ToolWindows;
 
 namespace MSBuildGuard.VisualStudio.Services
 {
@@ -20,6 +21,21 @@ namespace MSBuildGuard.VisualStudio.Services
 			}
 
 			return report.RecommendedAction == RecommendedAction.Warn || report.RecommendedAction == RecommendedAction.RequireApproval || report.RecommendedAction == RecommendedAction.Block;
+		}
+
+		/// <summary>
+		/// Determines whether the provided trust-aware build-block view model still requires blocking.
+		/// </summary>
+		/// <param name="viewModel">The trust-aware build-block view model to evaluate.</param>
+		/// <returns>A value indicating whether build should be blocked.</returns>
+		public static bool RequiresBuildBlock(BuildBlockDialogViewModel viewModel)
+		{
+			if (viewModel == null)
+			{
+				return false;
+			}
+
+			return viewModel.RiskScore >= 50;
 		}
 
 		/// <summary>

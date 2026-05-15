@@ -53,7 +53,7 @@
         <TextBox x:Name="ReasonTextBox" Height="60" TextWrapping="Wrap" AcceptsReturn="True" Margin="0,0,0,16" Padding="8"/>
 
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,0">
-            <Button x:Name="TrustButton" Content="Trust Assembly" Padding="16,8" Background="#2ECC71" Foreground="White" Margin="0,0,8,0" Click="TrustButton_Click"/>
+            <Button x:Name="TrustButton" Content="Trust Assembly" Padding="16,8" Background="#2ECC71" Foreground="White" Margin="0,0,8,0" IsEnabled="False" Click="TrustButton_Click"/>
             <Button x:Name="CancelButton" Content="Cancel" Padding="16,8" Margin="0,0,0,0" Click="CancelButton_Click" IsCancel="True"/>
         </StackPanel>
     </StackPanel>
