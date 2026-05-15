@@ -126,12 +126,22 @@
 							  IsEnabled="{Binding PlacementTarget.SelectedItem.CanRemoveTrust, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
 					<Separator />
 					<MenuItem Header="Trust Owning Assembly"
-							  Click="OnTrustAssemblyClick"
-							  IsEnabled="{Binding PlacementTarget.SelectedItem.CanTrustAssembly, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+								  Click="OnTrustAssemblyClick"
+								  IsEnabled="{Binding PlacementTarget.SelectedItem.CanTrustAssembly, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+						<Separator />
+						<MenuItem Header="Assembly Information..."
+								  Click="OnAssemblyInformationClick"
+								  IsEnabled="{Binding PlacementTarget.SelectedItem.CanTrustAssembly, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
 				</ContextMenu>
 			</DataGrid.ContextMenu>
 			<DataGrid.Columns>
-				<DataGridTextColumn Header="Severity" Binding="{Binding Severity}" Width="90" />
+				<DataGridTemplateColumn Header="Severity" Width="90">
+					<DataGridTemplateColumn.CellTemplate>
+						<DataTemplate>
+							<Image Source="{Binding SeverityIconPath}" Width="16" Height="16" ToolTip="{Binding Severity}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+						</DataTemplate>
+					</DataGridTemplateColumn.CellTemplate>
+				</DataGridTemplateColumn>
 				<DataGridTextColumn Header="Rule" Binding="{Binding RuleId}" Width="90" />
 				<DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="2*" />
 				<DataGridTextColumn Header="File" Binding="{Binding FilePathDisplay}" Width="2*" />

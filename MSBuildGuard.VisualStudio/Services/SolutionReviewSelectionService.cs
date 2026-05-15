@@ -1,5 +1,3 @@
-using System;
-
 namespace MSBuildGuard.VisualStudio.Services
 {
 	/// <summary>
@@ -7,23 +5,7 @@ namespace MSBuildGuard.VisualStudio.Services
 	/// </summary>
 	internal sealed class SolutionReviewSelectionService
 	{
-		private string? projectReviewTargetPath;
 		private string? solutionReviewTargetPath;
-
-		/// <summary>
-		/// Gets or sets the last loaded Project Security Review target path.
-		/// </summary>
-		public string? ProjectReviewTargetPath
-		{
-			get
-			{
-				return this.projectReviewTargetPath;
-			}
-			set
-			{
-				this.projectReviewTargetPath = value;
-			}
-		}
 
 		/// <summary>
 		/// Gets or sets the last loaded Solution Security Review target path.

@@ -86,7 +86,8 @@ namespace MSBuildGuard.VisualStudio.Services
 		private void OnBeforeOpenProject(object? sender, BeforeOpenProjectEventArgs e)
 		{
 			_ = this.package.UiFeedbackService.WriteLineAsync($"Project opening: {e.Filename}", CancellationToken.None);
-			_ = this.QueueScanAsync(e.Filename, this.package.DisposalToken);
+			_ = this.package.UiFeedbackService.WriteLineAsync("[Flow] OnBeforeOpenProject -> QueueScanAsync target='<open-solution>', forceRescan=true", CancellationToken.None);
+			_ = this.QueueScanAsync(null, this.package.DisposalToken, true);
 		}
 
 		private void OnAfterCloseSolution(object? sender, EventArgs e)
@@ -99,8 +100,9 @@ namespace MSBuildGuard.VisualStudio.Services
 			_ = this.package.OnSolutionUnloadedAsync();
 		}
 
-		private async Task QueueScanAsync(string? targetPath, CancellationToken cancellationToken)
+		private async Task QueueScanAsync(string? targetPath, CancellationToken cancellationToken, bool forceRescan = false)
 		{
+			await this.package.UiFeedbackService.WriteLineAsync($"[Flow] QueueScanAsync entered with target='{targetPath ?? string.Empty}', forceRescan={forceRescan}", CancellationToken.None);
 			await this.scanGate.WaitAsync(cancellationToken).ConfigureAwait(false);
 
 			try
@@ -108,6 +110,7 @@ namespace MSBuildGuard.VisualStudio.Services
 				if (string.IsNullOrWhiteSpace(targetPath))
 				{
 					targetPath = await SolutionDiscoveryService.GetOpenSolutionPathAsync(this.package).ConfigureAwait(false);
+					await this.package.UiFeedbackService.WriteLineAsync($"[Flow] QueueScanAsync resolved open solution target='{targetPath ?? string.Empty}'", CancellationToken.None);
 				}
 
 				if (string.IsNullOrWhiteSpace(targetPath) || !File.Exists(targetPath))
@@ -120,8 +123,9 @@ namespace MSBuildGuard.VisualStudio.Services
 
 				lock (this.syncRoot)
 				{
-					if (string.Equals(scanPath, this.lastScannedSolutionPath, StringComparison.OrdinalIgnoreCase))
+					if (!forceRescan && string.Equals(scanPath, this.lastScannedSolutionPath, StringComparison.OrdinalIgnoreCase))
 					{
+						_ = this.package.UiFeedbackService.WriteLineAsync($"[Flow] QueueScanAsync skipped duplicate target='{scanPath}'", CancellationToken.None);
 						return;
 					}
 
@@ -130,8 +134,10 @@ namespace MSBuildGuard.VisualStudio.Services
 
 				await this.package.UiFeedbackService.WriteLineAsync($"Queued scan: {scanPath}", CancellationToken.None);
 				var report = await this.scannerService.ScanSolutionAsync(scanPath, cancellationToken).ConfigureAwait(false);
+				await this.package.UiFeedbackService.WriteLineAsync($"[Flow] QueueScanAsync completed scan target='{scanPath}', findings={report.Findings.Count}, kind={report.Target.TargetKind}", CancellationToken.None);
 
 				this.ScanCompleted?.Invoke(this, report);
+				await this.package.UiFeedbackService.WriteLineAsync("[Flow] QueueScanAsync raised ScanCompleted event", CancellationToken.None);
 			}
 			catch (OperationCanceledException)
 			{

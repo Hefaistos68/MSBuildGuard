@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
+﻿<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
 
 	<PropertyGroup>
 		<TargetFramework>net472</TargetFramework>
@@ -39,8 +39,8 @@
 		<RootNamespace>MSBuildGuard.VisualStudio</RootNamespace>
 		<Product>MSBuildGuard</Product>
 		<Title>MSBuildGuard</Title>
-		<Version>0.0.1.2</Version>
-		<FileVersion>0.0.1.2</FileVersion>
+		<Version>0.0.1.4</Version>
+		<FileVersion>0.0.1.4</FileVersion>
 		<SignAssembly>False</SignAssembly>
 		<Authors>Hefaistos68</Authors>
 		<Company>Hefaistos68.dev</Company>
@@ -76,15 +76,9 @@
 		<None Include="source.extension.vsixmanifest">
 			<SubType>Designer</SubType>
 		</None>
-		<Content Include="Resources\ProjectSecurityShield.png">
-			<CopyToOutputDirectory>Never</CopyToOutputDirectory>
-		</Content>
-		<Content Include="Resources\ProjectSecurityShieldOrange.png">
-			<CopyToOutputDirectory>Never</CopyToOutputDirectory>
-		</Content>
-		<Content Include="Resources\ProjectSecurityShieldRed.png">
-			<CopyToOutputDirectory>Never</CopyToOutputDirectory>
-		</Content>
+		<Resource Include="Resources\ProjectSecurityShield.png" />
+		<Resource Include="Resources\ProjectSecurityShieldOrange.png" />
+		<Resource Include="Resources\ProjectSecurityShieldRed.png" />
 	</ItemGroup>
 
 	<ItemGroup>

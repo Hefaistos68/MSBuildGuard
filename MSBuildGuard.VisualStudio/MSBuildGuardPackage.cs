@@ -19,7 +19,6 @@ namespace MSBuildGuard.VisualStudio
 	[PackageRegistration(UseManagedResourcesOnly = true, AllowsBackgroundLoading = true)]
 	[InstalledProductRegistration("MSBuild Guard for Visual Studio", "Project Security Review integration", "1.0")]
 	[ProvideAutoLoad(VSConstants.UICONTEXT.ShellInitialized_string, PackageAutoLoadFlags.BackgroundLoad)]
-	[ProvideToolWindow(typeof(ToolWindows.ProjectSecurityReviewToolWindow), Style = VsDockStyle.MDI)]
 	[ProvideToolWindow(typeof(ToolWindows.SolutionSecurityReviewToolWindow), Style = VsDockStyle.MDI)]
 	[ProvideToolWindow(typeof(ToolWindows.PolicyEditorToolWindow), Style = VsDockStyle.MDI)]
 	[ProvideOptionPage(typeof(Options.MSBuildGuardOptionsPage), "MSBuild Guard", "General", 0, 0, true)]
@@ -137,17 +136,9 @@ namespace MSBuildGuard.VisualStudio
 		{
 			await this.UiFeedbackService.WriteLineAsync("Solution unloaded. Clearing scan and review state.", CancellationToken.None);
 			this.latestScanReport = null;
-			this.reviewSelectionService.ProjectReviewTargetPath = null;
 			this.reviewSelectionService.SolutionReviewTargetPath = null;
 
 			await JoinableTaskFactory.SwitchToMainThreadAsync(DisposalToken);
-
-			var projectWindow = await this.GetProjectSecurityReviewToolWindowAsync(create: false);
-
-			if (projectWindow != null)
-			{
-				projectWindow.ClearReport();
-			}
 
 			var solutionWindow = await this.GetSolutionSecurityReviewToolWindowAsync(create: false);
 
@@ -184,12 +175,12 @@ namespace MSBuildGuard.VisualStudio
 
 			await this.UiFeedbackService.WriteLineAsync("MSBuild Guard package initialized.", cancellationToken);
 			await Commands.ScanSolutionCommand.InitializeAsync(this);
-			await Commands.OpenProjectSecurityReviewCommand.InitializeAsync(this);
 			await Commands.OpenSolutionSecurityReviewCommand.InitializeAsync(this);
 			await Commands.TrustCurrentProjectVersionCommand.InitializeAsync(this);
 			await Commands.EditPolicyCommand.InitializeAsync(this);
 			await Commands.CreateBaselineCommand.InitializeAsync(this);
 			await Commands.ManageAssemblyTrustsCommand.InitializeAsync(this);
+			await Commands.ManageSignerTrustsCommand.InitializeAsync(this);
 
 			this.shieldStatusBarControl = new Services.ShieldStatusBarControl(this);
 			this.shieldStatusBarControl.UpdateState(this.latestScanReport);
@@ -293,67 +284,6 @@ namespace MSBuildGuard.VisualStudio
 		}
 
 		/// <summary>
-		/// Opens the Project Security Review tool window and loads a scan report.
-		/// </summary>
-		/// <param name="targetPath">Optional target path for the loaded report context.</param>
-		/// <param name="report">Optional precomputed report; when null, a solution scan is executed.</param>
-		/// <returns>A task that completes when the window has been updated.</returns>
-		internal async Task ShowProjectSecurityReviewAsync(string? targetPath, Core.ScanReport? report)
-		{
-			await JoinableTaskFactory.SwitchToMainThreadAsync(DisposalToken);
-
-			if (!Services.SolutionDiscoveryService.HasOpenSolution())
-			{
-				var existingWindow = await this.GetProjectSecurityReviewToolWindowAsync(create: false);
-
-				if (existingWindow != null)
-				{
-					existingWindow.ClearReport();
-				}
-
-				await this.UiFeedbackService.WriteLineAsync("Project Security Review is unavailable because no solution is loaded.", CancellationToken.None);
-				return;
-			}
-
-			await this.UiFeedbackService.WriteLineAsync("Opening Project Security Review tool window.", CancellationToken.None);
-
-			var reviewWindow = await this.GetProjectSecurityReviewToolWindowAsync(create: true);
-
-			if (reviewWindow == null)
-			{
-				throw new NotSupportedException("Cannot create Project Security Review tool window.");
-			}
-
-			if (report == null)
-			{
-				report = this.latestScanReport;
-			}
-
-			if (report == null)
-			{
-				var solutionPath = await Services.SolutionDiscoveryService.GetOpenSolutionPathAsync(this);
-
-				if (string.IsNullOrWhiteSpace(solutionPath) || !File.Exists(solutionPath))
-				{
-					await this.UiFeedbackService.WriteLineAsync("Project Security Review tool window opened without an available solution scan.", CancellationToken.None);
-					return;
-				}
-
-				var solutionPathToScan = solutionPath!;
-
-				await this.UiFeedbackService.WriteLineAsync($"Scanning current solution for Project Security Review: {solutionPathToScan}", CancellationToken.None);
-				report = await new Services.VisualStudioScannerService(this).ScanSolutionAsync(solutionPathToScan, DisposalToken);
-				targetPath = solutionPathToScan;
-				this.UpdateLatestScanReport(report);
-			}
-
-			var resolvedTargetPath = ResolveTargetPath(targetPath, report);
-			this.reviewSelectionService.ProjectReviewTargetPath = resolvedTargetPath;
-			await this.UiFeedbackService.WriteLineAsync($"Loaded Project Security Review report for {resolvedTargetPath}.", CancellationToken.None);
-			reviewWindow.LoadReport(resolvedTargetPath, report);
-		}
-
-		/// <summary>
 		/// Opens the Solution Security Review tool window and loads a solution scan report.
 		/// </summary>
 		/// <param name="solutionPath">Optional solution path for loaded context.</param>
@@ -390,6 +320,12 @@ namespace MSBuildGuard.VisualStudio
 				report = this.latestScanReport;
 			}
 
+			if (report != null && report.Target.TargetKind != Core.TargetKind.Solution)
+			{
+				await this.UiFeedbackService.WriteLineAsync($"[Flow] ShowSolutionSecurityReviewAsync ignored non-solution report target='{report.Target.TargetPath}', kind={report.Target.TargetKind}.", CancellationToken.None);
+				report = null;
+			}
+
 			if (report == null)
 			{
 				var discoveredSolutionPath = await Services.SolutionDiscoveryService.GetOpenSolutionPathAsync(this);
@@ -412,39 +348,6 @@ namespace MSBuildGuard.VisualStudio
 			this.reviewSelectionService.SolutionReviewTargetPath = resolvedTargetPath;
 			await this.UiFeedbackService.WriteLineAsync($"Loaded Solution Security Review report for {resolvedTargetPath}.", CancellationToken.None);
 			reviewWindow.LoadReport(resolvedTargetPath, report);
-		}
-
-		/// <summary>
-		/// Rescans the current target for Project Security Review.
-		/// </summary>
-		/// <returns>A task that completes when rescan and refresh operations finish.</returns>
-		internal async Task RescanProjectSecurityReviewAsync()
-		{
-			if (!Services.SolutionDiscoveryService.HasOpenSolution())
-			{
-				await this.UiFeedbackService.WriteLineAsync("Project rescan skipped because no solution is loaded.", CancellationToken.None);
-				return;
-			}
-
-			var targetPath = this.reviewSelectionService.ProjectReviewTargetPath;
-
-			if (string.IsNullOrWhiteSpace(targetPath) || !File.Exists(targetPath))
-			{
-				targetPath = await Services.SolutionDiscoveryService.GetOpenSolutionPathAsync(this).ConfigureAwait(false);
-			}
-
-			if (string.IsNullOrWhiteSpace(targetPath) || !File.Exists(targetPath))
-			{
-				await this.UiFeedbackService.WriteLineAsync("Project rescan skipped because no valid scan target was available.", CancellationToken.None);
-				return;
-			}
-
-			var scanPath = targetPath!;
-			await this.UiFeedbackService.WriteLineAsync($"Rescanning Project Security Review target: {scanPath}", CancellationToken.None);
-			var report = await new Services.VisualStudioScannerService(this).ScanSolutionAsync(scanPath, DisposalToken);
-
-			this.UpdateLatestScanReport(report);
-			await this.ShowProjectSecurityReviewAsync(scanPath, report);
 		}
 
 		/// <summary>
@@ -496,10 +399,9 @@ namespace MSBuildGuard.VisualStudio
 			}
 
 			var solutionPathToScan = solutionPath!;
-			var report             = await new Services.VisualStudioScannerService(this).ScanSolutionAsync(solutionPathToScan, DisposalToken);
+			var report = await new Services.VisualStudioScannerService(this).ScanSolutionAsync(solutionPathToScan, DisposalToken);
 
 			this.UpdateLatestScanReport(report);
-			await this.RefreshProjectSecurityReviewIfOpenAsync(solutionPathToScan, report);
 			await this.RefreshSolutionSecurityReviewIfOpenAsync(solutionPathToScan, report);
 		}
 
@@ -542,13 +444,6 @@ namespace MSBuildGuard.VisualStudio
 
 			if (result == true)
 			{
-				var projectWindow = await this.GetProjectSecurityReviewToolWindowAsync(create: false);
-
-				if (projectWindow?.Content is ToolWindows.ProjectSecurityReviewControl projectControl)
-				{
-					await this.RescanProjectSecurityReviewAsync();
-				}
-
 				var solutionWindow = await this.GetSolutionSecurityReviewToolWindowAsync(create: false);
 
 				if (solutionWindow?.Content is ToolWindows.SolutionSecurityReviewControl solutionControl)
@@ -558,6 +453,35 @@ namespace MSBuildGuard.VisualStudio
 			}
 
 			await this.UiFeedbackService.WriteLineAsync("Manage Assembly Trusts dialog closed.", CancellationToken.None);
+		}
+
+		/// <summary>
+		/// Opens the Manage Signer Trusts dialog for managing trusted certificate signers.
+		/// </summary>
+		/// <returns>A task that completes when the dialog is closed.</returns>
+		internal async Task ShowManageSignerTrustsAsync()
+		{
+			await JoinableTaskFactory.SwitchToMainThreadAsync(DisposalToken);
+
+			var dialog = new ToolWindows.ManageSignerTrustsDialog
+			{
+				Owner = Application.Current.MainWindow,
+				WindowStartupLocation = System.Windows.WindowStartupLocation.CenterOwner
+			};
+
+			var result = dialog.ShowDialog();
+
+			if (result == true)
+			{
+				var solutionWindow = await this.GetSolutionSecurityReviewToolWindowAsync(create: false);
+
+				if (solutionWindow?.Content is ToolWindows.SolutionSecurityReviewControl)
+				{
+					await this.RescanSolutionSecurityReviewAsync();
+				}
+			}
+
+			await this.UiFeedbackService.WriteLineAsync("Manage Signer Trusts dialog closed.", CancellationToken.None);
 		}
 
 		/// <summary>
@@ -571,6 +495,7 @@ namespace MSBuildGuard.VisualStudio
 			_ = this.JoinableTaskFactory.RunAsync(async delegate
 			{
 				await this.UiFeedbackService.WriteLineAsync($"Solution scan completed: {e.Target.TargetPath}", CancellationToken.None);
+				await this.UiFeedbackService.WriteLineAsync($"[Flow] OnSolutionScanCompleted targetKind={e.Target.TargetKind}, findings={e.Findings.Count}", CancellationToken.None);
 				await this.JoinableTaskFactory.SwitchToMainThreadAsync(this.DisposalToken);
 
 				var options = this.GetOptionsPage();
@@ -579,22 +504,17 @@ namespace MSBuildGuard.VisualStudio
 				{
 					if (!this.isInitialized)
 					{
-						await this.UiFeedbackService.WriteLineAsync("Project Security Review will be retried after package initialization completes.", CancellationToken.None);
-						_ = this.RetryProjectSecurityReviewAsync(e);
+						await this.UiFeedbackService.WriteLineAsync("Solution Security Review will be retried after package initialization completes.", CancellationToken.None);
+						_ = this.RetrySolutionSecurityReviewAsync(e);
 						return;
 					}
 
-					await this.UiFeedbackService.WriteLineAsync("Opening Project Security Review because the scan requires user attention.", CancellationToken.None);
-					await this.ShowProjectSecurityReviewAsync(e.Target.TargetPath, e);
+					await this.UiFeedbackService.WriteLineAsync("Opening Solution Security Review because the scan requires user attention.", CancellationToken.None);
+					await this.ShowSolutionSecurityReviewAsync(e.Target.TargetPath, e);
 				}
-				else
+				else if (Services.RiskEvaluationService.RequiresUserAttention(e) && !options.AutoOpenSecurityReviewOnOpen)
 				{
-					if (Services.RiskEvaluationService.RequiresUserAttention(e) && !options.AutoOpenSecurityReviewOnOpen)
-					{
-						await this.UiFeedbackService.WriteLineAsync("Project Security Review auto-open is disabled by options.", CancellationToken.None);
-					}
-
-					await this.RefreshProjectSecurityReviewIfOpenAsync(e.Target.TargetPath, e);
+					await this.UiFeedbackService.WriteLineAsync("Solution Security Review auto-open is disabled by options.", CancellationToken.None);
 				}
 
 				await this.RefreshSolutionSecurityReviewIfOpenAsync(e.Target.TargetPath, e);
@@ -602,11 +522,11 @@ namespace MSBuildGuard.VisualStudio
 		}
 
 		/// <summary>
-		/// Retries opening the Project Security Review window when initialization is delayed.
+		/// Retries opening the Solution Security Review window when initialization is delayed.
 		/// </summary>
 		/// <param name="report">The scan report that requires user attention.</param>
 		/// <returns>A task that completes when retry processing finishes.</returns>
-		private async Task RetryProjectSecurityReviewAsync(Core.ScanReport report)
+		private async Task RetrySolutionSecurityReviewAsync(Core.ScanReport report)
 		{
 			for (var attempt = 1; attempt <= 3; attempt++)
 			{
@@ -631,33 +551,14 @@ namespace MSBuildGuard.VisualStudio
 
 				await this.JoinableTaskFactory.RunAsync(async delegate
 				{
-					await this.UiFeedbackService.WriteLineAsync($"Opening Project Security Review after retry {attempt} because the scan requires user attention.", CancellationToken.None);
-					await this.ShowProjectSecurityReviewAsync(report.Target.TargetPath, report);
+					await this.UiFeedbackService.WriteLineAsync($"Opening Solution Security Review after retry {attempt} because the scan requires user attention.", CancellationToken.None);
+					await this.ShowSolutionSecurityReviewAsync(report.Target.TargetPath, report);
 				});
 
 				return;
 			}
 
-			await this.UiFeedbackService.WriteLineAsync("Opening Project Security Review failed.", CancellationToken.None);
-		}
-
-		/// <summary>
-		/// Gets the Project Security Review tool window instance.
-		/// </summary>
-		/// <param name="create"><c>true</c> to create the window when missing; otherwise <c>false</c>.</param>
-		/// <returns>The tool window when available; otherwise <c>null</c>.</returns>
-		private async Task<ToolWindows.ProjectSecurityReviewToolWindow?> GetProjectSecurityReviewToolWindowAsync(bool create)
-		{
-			await JoinableTaskFactory.SwitchToMainThreadAsync(DisposalToken);
-
-			var window = await ShowToolWindowAsync(typeof(ToolWindows.ProjectSecurityReviewToolWindow), 0, create, DisposalToken);
-
-			if (window is not ToolWindows.ProjectSecurityReviewToolWindow reviewWindow || reviewWindow.Frame == null)
-			{
-				return null;
-			}
-
-			return reviewWindow;
+			await this.UiFeedbackService.WriteLineAsync("Opening Solution Security Review failed.", CancellationToken.None);
 		}
 
 		/// <summary>
@@ -680,31 +581,6 @@ namespace MSBuildGuard.VisualStudio
 		}
 
 		/// <summary>
-		/// Refreshes Project Security Review content when the tool window is already open.
-		/// </summary>
-		/// <param name="targetPath">The scanned target path.</param>
-		/// <param name="report">The scan report to load.</param>
-		/// <returns>A task that completes when refresh processing finishes.</returns>
-		private async Task RefreshProjectSecurityReviewIfOpenAsync(string targetPath, Core.ScanReport report)
-		{
-			await JoinableTaskFactory.SwitchToMainThreadAsync(DisposalToken);
-
-			var reviewWindow = await this.GetProjectSecurityReviewToolWindowAsync(create: false);
-
-			if (reviewWindow == null)
-			{
-				return;
-			}
-
-			// Use the most recently completed report for display, ensuring the window always shows current scan results
-			var resolvedTargetPath = ResolveTargetPath(targetPath, report);
-			this.reviewSelectionService.ProjectReviewTargetPath = resolvedTargetPath;
-
-			reviewWindow.LoadReport(resolvedTargetPath, report);
-			await this.UiFeedbackService.WriteLineAsync($"Project Security Review refreshed for {resolvedTargetPath}.", CancellationToken.None);
-		}
-
-		/// <summary>
 		/// Refreshes Solution Security Review content when the tool window is already open.
 		/// </summary>
 		/// <param name="targetPath">The scanned target path.</param>
@@ -718,13 +594,16 @@ namespace MSBuildGuard.VisualStudio
 
 			if (reviewWindow == null)
 			{
+				await this.UiFeedbackService.WriteLineAsync("[Flow] RefreshSolutionSecurityReviewIfOpenAsync skipped because window is not open.", CancellationToken.None);
 				return;
 			}
 
+			await this.UiFeedbackService.WriteLineAsync($"[Flow] RefreshSolutionSecurityReviewIfOpenAsync received report target='{report.Target.TargetPath}', kind={report.Target.TargetKind}, findings={report.Findings.Count}", CancellationToken.None);
 			// If the report is for a project (not a solution), trigger a full solution rescan
 			// to ensure the solution review shows aggregated findings from all projects
 			if (report.Target.TargetKind != Core.TargetKind.Solution)
 			{
+				await this.UiFeedbackService.WriteLineAsync("[Flow] RefreshSolutionSecurityReviewIfOpenAsync received non-solution report; requesting solution-wide rescan.", CancellationToken.None);
 				var discoveredSolutionPath = await Services.SolutionDiscoveryService.GetOpenSolutionPathAsync(this);
 
 				if (!string.IsNullOrWhiteSpace(discoveredSolutionPath) && File.Exists(discoveredSolutionPath))
@@ -743,6 +622,7 @@ namespace MSBuildGuard.VisualStudio
 			var resolvedTargetPath = ResolveTargetPath(targetPath, report);
 			this.reviewSelectionService.SolutionReviewTargetPath = resolvedTargetPath;
 
+			await this.UiFeedbackService.WriteLineAsync($"[Flow] RefreshSolutionSecurityReviewIfOpenAsync loading window with resolvedTarget='{resolvedTargetPath}'.", CancellationToken.None);
 			reviewWindow.LoadReport(resolvedTargetPath, report);
 			await this.UiFeedbackService.WriteLineAsync($"Solution Security Review refreshed for {resolvedTargetPath}.", CancellationToken.None);
 		}
@@ -774,45 +654,7 @@ namespace MSBuildGuard.VisualStudio
 				return candidate;
 			}
 
-			var currentRank = GetRecommendedActionRank(current.RecommendedAction);
-			var candidateRank = GetRecommendedActionRank(candidate.RecommendedAction);
-
-			if (candidateRank > currentRank)
-			{
-				return candidate;
-			}
-
-			if (candidateRank < currentRank)
-			{
-				return current;
-			}
-
-			if (candidate.RiskScore > current.RiskScore)
-			{
-				return candidate;
-			}
-
-			if (candidate.RiskScore < current.RiskScore)
-			{
-				return current;
-			}
-
 			return candidate.CompletedAtUtc >= current.CompletedAtUtc ? candidate : current;
-		}
-
-		private static int GetRecommendedActionRank(Core.RecommendedAction action)
-		{
-			switch (action)
-			{
-				case Core.RecommendedAction.Block:
-					return 3;
-				case Core.RecommendedAction.RequireApproval:
-					return 2;
-				case Core.RecommendedAction.Warn:
-					return 1;
-				default:
-					return 0;
-			}
 		}
 	}
 }

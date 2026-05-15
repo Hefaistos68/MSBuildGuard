@@ -631,9 +631,44 @@ namespace MSBuildGuard.Core.Scanning
             }
 
             var content = _fileSystem.ReadAllText(solutionPath);
-            var lines = content.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
             var basePath = Path.GetDirectoryName(solutionPath) ?? string.Empty;
             var files = new List<string>();
+
+            if (string.Equals(Path.GetExtension(solutionPath), ".slnx", StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    var document = XDocument.Parse(content);
+                    var projectNodes = document.Descendants().Where(element => string.Equals(element.Name.LocalName, "Project", StringComparison.OrdinalIgnoreCase));
+
+                    foreach (var projectNode in projectNodes)
+                    {
+                        var projectPath = projectNode.Attribute("Path")?.Value;
+
+                        if (string.IsNullOrWhiteSpace(projectPath))
+                        {
+                            continue;
+                        }
+
+                        if (Path.IsPathRooted(projectPath))
+                        {
+                            files.Add(Path.GetFullPath(projectPath));
+
+                            continue;
+                        }
+
+                        files.Add(Path.GetFullPath(Path.Combine(basePath, projectPath)));
+                    }
+
+                    return files;
+                }
+                catch
+                {
+                    return files;
+                }
+            }
+
+            var lines = content.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
 
             foreach (var line in lines)
             {

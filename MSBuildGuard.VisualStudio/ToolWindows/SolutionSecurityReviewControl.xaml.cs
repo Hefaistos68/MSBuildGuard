@@ -37,6 +37,11 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				var loadedProjectPaths = SolutionExplorerProjectDiscoveryService.GetLoadedProjectPaths();
 				viewModel.LoadReport(solutionPath, report, loadedProjectPaths);
 				this.UpdateTrustedColumnVisibility();
+
+				if (MSBuildGuardPackage.Instance is MSBuildGuardPackage package)
+				{
+					_ = package.UiFeedbackService.WriteLineAsync($"[Flow] SolutionSecurityReviewControl.LoadReport target='{solutionPath}', findings={report.Findings.Count}, loadedProjects={loadedProjectPaths.Count}", package.DisposalToken);
+				}
 			}
 		}
 
@@ -146,6 +151,29 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				await new VisualStudioTrustDecisionService().TrustAssemblyAsync(finding, "Trusted from Solution Security Review");
 				await package.RescanSolutionSecurityReviewAsync();
 			}).FileAndForget(nameof(SolutionSecurityReviewControl));
+		}
+
+		private void OnAssemblyInformationClick(object sender, RoutedEventArgs e)
+		{
+			if (this.DataContext is not SolutionSecurityReviewViewModel viewModel ||
+				viewModel.SelectedFinding is not FindingViewModel finding ||
+				!finding.CanTrustAssembly)
+			{
+				return;
+			}
+
+			var parts = finding.OwningAssembly.Split('@');
+
+			var dialog = new AssemblyInformationDialog
+			{
+				AssemblyName    = parts[0],
+				AssemblyVersion = parts.Length > 1 ? parts[1] : "Unknown",
+				AssemblyPath    = AssemblySignatureService.ResolveAssemblyFilePath(finding.FilePath),
+				Owner           = System.Windows.Application.Current.MainWindow,
+				WindowStartupLocation = System.Windows.WindowStartupLocation.CenterOwner
+			};
+
+			dialog.ShowDialog();
 		}
 
 		private void OnOnlyUntrustedIssuesCheckedChanged(object sender, RoutedEventArgs e)

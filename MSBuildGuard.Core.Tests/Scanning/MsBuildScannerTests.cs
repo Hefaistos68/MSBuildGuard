@@ -129,6 +129,38 @@ namespace MSBuildGuard.Core.Scanning
         }
 
         /// <summary>
+        /// Verifies SLNX solution entries are expanded so contained projects are scanned.
+        /// </summary>
+        [Test]
+        public void Scan_ShouldExpandSlnxProjectEntries_WhenTargetIsSlnxSolution()
+        {
+            var rootPath = Path.Combine(Path.GetTempPath(), $"msbuildguard-{Guid.NewGuid():N}");
+            Directory.CreateDirectory(rootPath);
+
+            var solutionPath = Path.Combine(rootPath, "test.slnx");
+            var firstProjectPath = Path.Combine(rootPath, "App1.csproj");
+            var secondProjectPath = Path.Combine(rootPath, "App2.csproj");
+            var sharedTargetsPath = Path.Combine(rootPath, "shared.targets");
+
+            File.WriteAllText(solutionPath, "<Solution><Project Path='App1.csproj' /><Project Path='App2.csproj' /></Solution>");
+            File.WriteAllText(firstProjectPath, "<Project><Import Project='shared.targets' /></Project>");
+            File.WriteAllText(secondProjectPath, "<Project><Import Project='shared.targets' /></Project>");
+            File.WriteAllText(sharedTargetsPath, "<Project><Target Name='Shared' BeforeTargets='BeforeBuild' /></Project>");
+
+            var scanner = new MsBuildScanner();
+
+            var report = scanner.Scan(solutionPath);
+            var scannedProjectPaths = report.FilesScanned
+                .Where(file => file.FileKind == MsBuildFileKind.Project)
+                .Select(file => file.Path)
+                .ToList();
+
+            scannedProjectPaths.Any(path => string.Equals(path, firstProjectPath, StringComparison.OrdinalIgnoreCase)).ShouldBeTrue();
+            scannedProjectPaths.Any(path => string.Equals(path, secondProjectPath, StringComparison.OrdinalIgnoreCase)).ShouldBeTrue();
+            report.FilesScanned.Any(file => string.Equals(file.Path, sharedTargetsPath, StringComparison.OrdinalIgnoreCase)).ShouldBeTrue();
+        }
+
+        /// <summary>
         /// Verifies repeated identical inline code blocks are analyzed consistently during a single scan.
         /// </summary>
         [Test]

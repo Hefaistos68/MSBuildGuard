@@ -110,8 +110,8 @@ namespace MSBuildGuard.VisualStudio.Services
 			var dialog = new TrustAssemblyDialog
 			{
 				AssemblyName    = finding.OwningAssembly.Split('@')[0],
-				AssemblyVersion = finding.OwningAssembly.Contains("@") ? finding.OwningAssembly.Split('@')[1] : "Unknown",
-				AssemblyPath    = finding.FilePath,
+					AssemblyVersion = finding.OwningAssembly.Contains("@") ? finding.OwningAssembly.Split('@')[1] : "Unknown",
+					AssemblyPath    = AssemblySignatureService.ResolveAssemblyFilePath(finding.FilePath),
 				Owner           = System.Windows.Application.Current.MainWindow,
 				WindowStartupLocation = System.Windows.WindowStartupLocation.CenterOwner
 			};
