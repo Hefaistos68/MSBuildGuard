@@ -16,6 +16,34 @@ namespace MSBuildGuard.VisualStudio.Models
 		public string Severity { get; set; } = string.Empty;
 
 		/// <summary>
+		/// Gets the shield icon path associated with the current severity.
+		/// </summary>
+		public string SeverityIconPath
+		{
+			get
+			{
+				if (!System.Enum.TryParse<FindingSeverity>(this.Severity, out var severity))
+				{
+					return "/MSBuildguard.VisualStudio;component/ToolWindows/AppShieldGreen-24x24.png";
+				}
+
+				switch (severity)
+				{
+					case FindingSeverity.Low:
+						return "/MSBuildguard.VisualStudio;component/ToolWindows/AppShieldGreen-24x24.png";
+					case FindingSeverity.Medium:
+						return "/MSBuildguard.VisualStudio;component/Resources/ProjectSecurityShield.png";
+					case FindingSeverity.High:
+						return "/MSBuildguard.VisualStudio;component/Resources/ProjectSecurityShieldOrange.png";
+					case FindingSeverity.Critical:
+						return "/MSBuildguard.VisualStudio;component/Resources/ProjectSecurityShieldRed.png";
+					default:
+						return "/MSBuildguard.VisualStudio;component/ToolWindows/AppShieldGreen-24x24.png";
+				}
+			}
+		}
+
+		/// <summary>
 		/// Gets or sets the rule identifier.
 		/// </summary>
 		public string RuleId { get; set; } = string.Empty;
@@ -187,11 +215,13 @@ namespace MSBuildGuard.VisualStudio.Models
 
 			if (!string.IsNullOrWhiteSpace(finding.FilePath))
 			{
+				sb.AppendLine();
 				sb.AppendLine($"Location: {PathRedactionService.RedactPath(finding.FilePath)}, line {finding.StartLine}");
 			}
 
 			if (!string.IsNullOrWhiteSpace(finding.PackageId))
 			{
+				sb.AppendLine();
 				sb.AppendLine($"Package: {finding.PackageId} {finding.PackageVersion}");
 
 				if (!string.IsNullOrWhiteSpace(finding.PackageSource))

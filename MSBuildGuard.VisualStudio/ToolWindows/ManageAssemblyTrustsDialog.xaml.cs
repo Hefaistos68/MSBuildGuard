@@ -66,16 +66,43 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				var allScopes = document.Decisions.Select(d => d.Scope).Distinct().ToList();
 
 				var assemblyTrusts = document.Decisions
-					.Where(d => d.ScopeKind == TrustDecisionScopeKind.Assembly || 
-								string.Equals(d.Scope, "Assembly", StringComparison.OrdinalIgnoreCase))
-					.GroupBy(d => d.SubjectHash)
-					.Select(g => new AssemblyTrustItem
-					{
-						Name      = ExtractAssemblyName(g.Key),
-						Version   = ExtractAssemblyVersion(g.Key),
-						Reason    = g.FirstOrDefault()?.Reason ?? string.Empty,
-						Subject   = g.Key
-					})
+						.Where(d => d.ScopeKind == TrustDecisionScopeKind.Assembly || 
+									string.Equals(d.Scope, "Assembly", StringComparison.OrdinalIgnoreCase))
+						.GroupBy(d => d.SubjectHash)
+						.Select(g =>
+						{
+							var signer      = g.Select(item => item.AssemblySigner).FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)) ?? string.Empty;
+							var issuer      = g.Select(item => item.AssemblyIssuer).FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)) ?? string.Empty;
+							var subjectName = g.Select(item => item.AssemblySubject).FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)) ?? string.Empty;
+
+							// If signature data was never saved (e.g. trust created before the fix),
+							// resolve the assembly from the NuGet cache and re-read it now.
+							if (string.IsNullOrWhiteSpace(signer) && string.IsNullOrWhiteSpace(issuer))
+							{
+								var name    = ExtractAssemblyName(g.Key);
+								var version = ExtractAssemblyVersion(g.Key);
+								var dllPath = AssemblySignatureService.ResolveAssemblyFilePathFromPackageId(name, version);
+
+								if (!string.IsNullOrWhiteSpace(dllPath))
+								{
+									var sig = new AssemblySignatureService().ReadSignature(dllPath);
+									signer      = sig.Signer;
+									issuer      = sig.Issuer;
+									subjectName = sig.Subject;
+								}
+							}
+
+							return new AssemblyTrustItem
+							{
+								Name        = ExtractAssemblyName(g.Key),
+								Version     = ExtractAssemblyVersion(g.Key),
+								Signer      = signer,
+								Issuer      = issuer,
+								SubjectName = subjectName,
+								Reason      = g.FirstOrDefault()?.Reason ?? string.Empty,
+								Subject     = g.Key
+							};
+						})
 					.OrderBy(a => a.Name)
 					.ThenBy(a => a.Version)
 					.ToList();
@@ -140,6 +167,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			// Extract assembly information from the selected file
 			string assemblyName;
 			string assemblyVersion;
+			var signature = new AssemblySignatureService().ReadSignature(assemblyPath);
 
 			try
 			{
@@ -173,6 +201,9 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				AssemblyName    = assemblyName,
 				AssemblyVersion = assemblyVersion,
 				AssemblyPath    = assemblyPath,
+				AssemblySigner  = signature.Signer,
+				AssemblyIssuer  = signature.Issuer,
+				AssemblySubject = signature.Subject,
 				Owner           = this,
 				WindowStartupLocation = WindowStartupLocation.CenterOwner
 			};
@@ -198,10 +229,13 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 
 			var newTrust = new AssemblyTrustItem
 			{
-				Name    = assemblyName,
-				Version = assemblyVersion,
-				Reason  = trustDialog.TrustReason,
-				Subject = $"{assemblyName}@{assemblyVersion}"
+				Name        = assemblyName,
+				Version     = assemblyVersion,
+				Signer      = trustDialog.AssemblySigner,
+				Issuer      = trustDialog.AssemblyIssuer,
+				SubjectName = trustDialog.AssemblySubject,
+				Reason      = trustDialog.TrustReason,
+				Subject     = $"{assemblyName}@{assemblyVersion}"
 			};
 
 			trustedAssemblies.Add(newTrust);
@@ -280,13 +314,16 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				{
 					var entry = new TrustDecisionEntry
 					{
-						DecisionId  = Guid.NewGuid().ToString(),
-						Scope       = "Assembly",
-						SubjectHash = trust.Subject,
-						Decision    = "Trust",
-						Reason      = trust.Reason,
-						UserSid     = userSid,
-						CreatedAtUtc = DateTimeOffset.UtcNow
+						DecisionId      = Guid.NewGuid().ToString(),
+						Scope           = "Assembly",
+						SubjectHash     = trust.Subject,
+						AssemblySigner  = trust.Signer,
+						AssemblyIssuer  = trust.Issuer,
+						AssemblySubject = trust.SubjectName,
+						Decision        = "Trust",
+						Reason          = trust.Reason,
+						UserSid         = userSid,
+						CreatedAtUtc    = DateTimeOffset.UtcNow
 					};
 
 					document.Decisions.Add(entry);
@@ -326,6 +363,21 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		/// Gets or sets the assembly version.
 		/// </summary>
 		public string Version { get; set; } = string.Empty;
+
+		/// <summary>
+		/// Gets or sets the assembly signer.
+		/// </summary>
+		public string Signer { get; set; } = string.Empty;
+
+		/// <summary>
+		/// Gets or sets the certificate issuer.
+		/// </summary>
+		public string Issuer { get; set; } = string.Empty;
+
+		/// <summary>
+		/// Gets or sets the certificate subject.
+		/// </summary>
+		public string SubjectName { get; set; } = string.Empty;
 
 		/// <summary>
 		/// Gets or sets the trust reason.

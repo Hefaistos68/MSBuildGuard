@@ -320,8 +320,20 @@ namespace MSBuildGuard.Core.Trust
 		/// <param name="assemblyVersion">Assembly version.</param>
 		/// <param name="reason">Trust reason.</param>
 		/// <param name="userSid">Acting user identity.</param>
+		/// <param name="assemblySigner">Assembly signer display name when known.</param>
+		/// <param name="assemblyIssuer">Assembly certificate issuer when known.</param>
+		/// <param name="assemblySubject">Assembly certificate subject when known.</param>
 		/// <param name="expiresAtUtc">Optional expiration timestamp.</param>
-		public void AddAssemblyTrust(string path, string assemblyName, string assemblyVersion, string reason, string userSid, DateTimeOffset? expiresAtUtc = null)
+		public void AddAssemblyTrust(
+			string path,
+			string assemblyName,
+			string assemblyVersion,
+			string reason,
+			string userSid,
+			string assemblySigner = "",
+			string assemblyIssuer = "",
+			string assemblySubject = "",
+			DateTimeOffset? expiresAtUtc = null)
 		{
 			if (path == null)
 			{
@@ -355,6 +367,9 @@ namespace MSBuildGuard.Core.Trust
 				DecisionId = Guid.NewGuid().ToString("N"),
 				Scope = "Assembly",
 				SubjectHash = assemblyHash,
+				AssemblySigner = assemblySigner ?? string.Empty,
+				AssemblyIssuer = assemblyIssuer ?? string.Empty,
+				AssemblySubject = assemblySubject ?? string.Empty,
 				Decision = "Trust",
 				Reason = reason,
 				UserSid = userSid,
@@ -403,8 +418,90 @@ namespace MSBuildGuard.Core.Trust
 
 			var assemblyHash = $"{assemblyName}@{assemblyVersion}".ToLowerInvariant();
 
-			return RemoveDecisionsBySubject(path, assemblyHash, reason, userSid);
-		}
+				return RemoveDecisionsBySubject(path, assemblyHash, reason, userSid);
+			}
+
+			/// <summary>
+			/// Adds a signer-level trust decision that approves all assemblies bearing the same certificate signer.
+			/// </summary>
+			/// <param name="path">Trust store path.</param>
+			/// <param name="signerSubject">Certificate Subject DN — used as the canonical trust key.</param>
+			/// <param name="signerDisplayName">Human-readable signer name.</param>
+			/// <param name="issuer">Certificate issuer.</param>
+			/// <param name="reason">Trust reason.</param>
+			/// <param name="userSid">Acting user identity.</param>
+			/// <param name="expiresAtUtc">Optional expiration timestamp.</param>
+			public void AddSignerTrust(
+				string path,
+				string signerSubject,
+				string signerDisplayName,
+				string issuer,
+				string reason,
+				string userSid,
+				DateTimeOffset? expiresAtUtc = null)
+			{
+				if (path == null)
+				{
+					throw new ArgumentNullException(nameof(path));
+				}
+
+				if (signerSubject == null)
+				{
+					throw new ArgumentNullException(nameof(signerSubject));
+				}
+
+				if (reason == null)
+				{
+					throw new ArgumentNullException(nameof(reason));
+				}
+
+				if (userSid == null)
+				{
+					throw new ArgumentNullException(nameof(userSid));
+				}
+
+				var entry = new TrustDecisionEntry
+				{
+					DecisionId      = Guid.NewGuid().ToString("N"),
+					Scope           = "Signer",
+					SubjectHash     = signerSubject,
+					AssemblySigner  = signerDisplayName ?? string.Empty,
+					AssemblyIssuer  = issuer ?? string.Empty,
+					AssemblySubject = signerSubject,
+					Decision        = "Trust",
+					Reason          = reason,
+					UserSid         = userSid,
+					CreatedAtUtc    = DateTimeOffset.UtcNow,
+					ExpiresAtUtc    = expiresAtUtc
+				};
+
+				AddDecision(path, entry);
+			}
+
+			/// <summary>
+			/// Determines whether the given certificate signer is trusted in the store.
+			/// </summary>
+			/// <param name="store">Trust store document.</param>
+			/// <param name="signerSubject">Certificate Subject DN to look up.</param>
+			/// <returns><see langword="true"/> when the signer is trusted; otherwise <see langword="false"/>.</returns>
+			public bool IsSignerTrusted(TrustStoreDocument store, string signerSubject)
+			{
+				if (store == null)
+				{
+					throw new ArgumentNullException(nameof(store));
+				}
+
+				if (string.IsNullOrWhiteSpace(signerSubject))
+				{
+					return false;
+				}
+
+				return store.Decisions.Any(entry =>
+					entry.ScopeKind == TrustDecisionScopeKind.Signer &&
+					string.Equals(entry.SubjectHash, signerSubject, StringComparison.OrdinalIgnoreCase) &&
+					IsApprovalDecision(entry) &&
+					!IsExpired(entry));
+			}
 
 		/// <summary>
 		/// Determines whether a finding is approved by assembly-level trust.

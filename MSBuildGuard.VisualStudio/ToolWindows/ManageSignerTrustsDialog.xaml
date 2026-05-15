@@ -1,0 +1,43 @@
+<Window x:Class="MSBuildGuard.VisualStudio.ToolWindows.ManageSignerTrustsDialog"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             Title="Manage Signer Trusts"
+             Width="900"
+             Height="420"
+             WindowStartupLocation="CenterOwner"
+             Loaded="Window_Loaded">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="Manage Signer Trusts" FontSize="16" FontWeight="Bold" Margin="0,0,0,4"/>
+        <TextBlock Grid.Row="1" Text="Trusted signers have all findings from assemblies bearing their certificate automatically approved, regardless of assembly version." TextWrapping="Wrap" Margin="0,0,0,12" Foreground="#666666"/>
+
+        <DataGrid Grid.Row="2" x:Name="TrustedSignersGrid" AutoGenerateColumns="False" Margin="0,0,0,12" CanUserSortColumns="False" CanUserReorderColumns="False" CanUserAddRows="False">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Signer" Binding="{Binding SignerName}" Width="200" IsReadOnly="True"/>
+                <DataGridTextColumn Header="Issuer" Binding="{Binding Issuer}" Width="220" IsReadOnly="True"/>
+                <DataGridTextColumn Header="Subject (DN)" Binding="{Binding SubjectDn}" Width="2*" IsReadOnly="True"/>
+                <DataGridTextColumn Header="Reason" Binding="{Binding Reason}" Width="*" IsReadOnly="True"/>
+                <DataGridTextColumn Header="Trusted Since" Binding="{Binding CreatedAtDisplay}" Width="140" IsReadOnly="True"/>
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,0,0,12">
+            <Button x:Name="RemoveButton" Content="Remove" Padding="16,8" Click="RemoveButton_Click" IsEnabled="False"/>
+        </StackPanel>
+
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button x:Name="SaveButton" Content="Save" Padding="16,8" Background="#2ECC71" Foreground="White" Margin="0,0,8,0" Click="SaveButton_Click"/>
+            <Button x:Name="CancelButton" Content="Cancel" Padding="16,8" Click="CancelButton_Click" IsCancel="True"/>
+        </StackPanel>
+    </Grid>
+</Window>

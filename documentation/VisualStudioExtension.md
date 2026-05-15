@@ -41,12 +41,25 @@ MSBuild Guard for Visual Studio provides inline project risk visibility and trus
 
 The extension consumes shared Core scanner/policy/baseline/trust services. It is designed to avoid relying on project evaluation/build to decide whether MSBuild content is safe.
 
+## How it works
+
+1. The extension scans the open solution or project using the shared Core scanner.
+2. The scanner evaluates MSBuild content, package assets, signatures, and policy rules.
+3. Trust decisions are loaded from the local trust store and applied to findings.
+4. Assembly trust and signer trust can automatically approve related findings.
+5. The review window shows active findings, trusted findings, and the reasoning behind each decision.
+6. The build blocker uses the same trust evaluation so build enforcement matches the review view.
+7. When policy or trust changes are saved, the extension rescans and refreshes the status bar, review windows, and blocker state.
+
 ## UX surfaces
 
 - Project Security menu commands
 - Project Security Review tool window
 - Status bar shield status
 - Output window activity stream
+- Assembly Information dialog
+- Manage Assembly Trusts dialog
+- Manage Signer Trusts dialog
 
 ## Tools → Options settings
 
@@ -75,9 +88,25 @@ Visual Studio integration is best-effort pre-build protection in IDE workflows.
 
 ## Screenshots
 
-Screenshots (click to enlarge):
+
+The main review grid for the current solution, including severity, policy action, trusted status, and the reasoning panel for the selected finding.
 
 ![Solution Security Review tool window](images/Solution-Security-Review.jpg)
+
+The policy editor where machine, solution, and project scopes can be configured before saving and rescanning.
+
 ![Policy Editor](images/Policy-Editor.jpg)
+
+Shows the interactive build blocker that appears when policy requires attention, listing the findings that must be reviewed before the build can continue.
+
 ![Build enforcement blocker dialog](images/Build-Blocker.jpg)
+
+The signer trust management dialog, which lists trusted certificate subjects and lets you remove signer-level trust entries.
+
+![Signature Management](images/manage-signer-trusts.jpg)
+
+The assembly trust management dialog, which lists version-pinned assembly trust entries and lets you remove them.
+
+![Assembly Management](images/manage-assembly-trusts.jpg)
+
 

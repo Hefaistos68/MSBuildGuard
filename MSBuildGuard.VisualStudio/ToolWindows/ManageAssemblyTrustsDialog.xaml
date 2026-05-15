@@ -5,8 +5,8 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              mc:Ignorable="d"
              Title="Manage Assembly Trusts"
-             Width="600"
-             Height="400"
+             Width="980"
+             Height="500"
              WindowStartupLocation="CenterOwner"
              Loaded="Window_Loaded">
     <Grid Margin="16">
@@ -23,8 +23,11 @@
 
         <DataGrid Grid.Row="2" x:Name="TrustedAssembliesGrid" AutoGenerateColumns="False" Margin="0,0,0,12" CanUserSortColumns="False" CanUserReorderColumns="False" CanUserAddRows="False">
             <DataGrid.Columns>
-                <DataGridTextColumn Header="Assembly Name" Binding="{Binding Name}" Width="250" IsReadOnly="True"/>
-                <DataGridTextColumn Header="Version" Binding="{Binding Version}" Width="100" IsReadOnly="True"/>
+                <DataGridTextColumn Header="Assembly Name" Binding="{Binding Name}" Width="180" IsReadOnly="True"/>
+                <DataGridTextColumn Header="Version" Binding="{Binding Version}" Width="110" IsReadOnly="True"/>
+                <DataGridTextColumn Header="Signer" Binding="{Binding Signer}" Width="180" IsReadOnly="True"/>
+                <DataGridTextColumn Header="Issuer" Binding="{Binding Issuer}" Width="200" IsReadOnly="True"/>
+                <DataGridTextColumn Header="Subject" Binding="{Binding SubjectName}" Width="220" IsReadOnly="True"/>
                 <DataGridTextColumn Header="Reason" Binding="{Binding Reason}" Width="*" IsReadOnly="True"/>
             </DataGrid.Columns>
         </DataGrid>

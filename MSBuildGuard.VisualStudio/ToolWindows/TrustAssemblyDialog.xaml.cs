@@ -24,6 +24,21 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		public string AssemblyPath { get; set; } = string.Empty;
 
 		/// <summary>
+		/// Gets or sets the assembly signer display name.
+		/// </summary>
+		public string AssemblySigner { get; set; } = string.Empty;
+
+		/// <summary>
+		/// Gets or sets the assembly certificate issuer.
+		/// </summary>
+		public string AssemblyIssuer { get; set; } = string.Empty;
+
+		/// <summary>
+		/// Gets or sets the assembly certificate subject.
+		/// </summary>
+		public string AssemblySubject { get; set; } = string.Empty;
+
+		/// <summary>
 		/// Gets the trust reason text entered by the user.
 		/// </summary>
 		public string TrustReason { get; private set; } = string.Empty;
@@ -44,6 +59,19 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			AssemblyNameTextBlock.Text = this.AssemblyName;
 			AssemblyVersionTextBlock.Text = this.AssemblyVersion;
 			AssemblyPathTextBlock.Text = PathRedactionService.RedactPath(this.AssemblyPath);
+
+			if (string.IsNullOrWhiteSpace(this.AssemblySigner) && string.IsNullOrWhiteSpace(this.AssemblyIssuer) && string.IsNullOrWhiteSpace(this.AssemblySubject))
+			{
+				var signature = new AssemblySignatureService().ReadSignature(this.AssemblyPath);
+
+				this.AssemblySigner = signature.Signer;
+				this.AssemblyIssuer = signature.Issuer;
+				this.AssemblySubject = signature.Subject;
+			}
+
+			AssemblySignerTextBlock.Text = string.IsNullOrWhiteSpace(this.AssemblySigner) ? "Not available" : this.AssemblySigner;
+			AssemblyIssuerTextBlock.Text = string.IsNullOrWhiteSpace(this.AssemblyIssuer) ? "Not available" : this.AssemblyIssuer;
+			AssemblySubjectTextBlock.Text = string.IsNullOrWhiteSpace(this.AssemblySubject) ? "Not available" : this.AssemblySubject;
 		}
 
 		/// <summary>

@@ -11,6 +11,7 @@ using System.Windows;
 using MSBuildGuard.Core;
 using MSBuildGuard.Core.Trust;
 using MSBuildGuard.VisualStudio.Models;
+using MSBuildGuard.VisualStudio.Services;
 
 namespace MSBuildGuard.VisualStudio.ToolWindows
 {
@@ -167,6 +168,11 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			this.CurrentTargetPath = solutionPath;
 			this.allFindings.Clear();
 
+			// Cache resolved signatures per package to avoid redundant disk reads when multiple
+			// findings originate from the same package.
+			var hasSignerTrusts = trustStore.Decisions.Any(d => d.ScopeKind == MSBuildGuard.Core.Trust.TrustDecisionScopeKind.Signer);
+			var signatureCache = new System.Collections.Generic.Dictionary<string, Services.AssemblySignatureService>(StringComparer.OrdinalIgnoreCase);
+
 			foreach (var finding in report.Findings)
 			{
 				var fileRecord = report.FilesScanned.FirstOrDefault(item => string.Equals(item.Path, finding.FilePath, StringComparison.OrdinalIgnoreCase));
@@ -177,9 +183,32 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				var isApprovedByAssembly = !string.IsNullOrWhiteSpace(finding.PackageId) && !string.IsNullOrWhiteSpace(finding.PackageVersion) &&
 					trustStoreService.IsFindingApprovedByAssembly(trustStore, finding.PackageId, finding.PackageVersion);
 
+				var isApprovedBySigner = false;
+
+				if (hasSignerTrusts && !string.IsNullOrWhiteSpace(finding.PackageId) && !string.IsNullOrWhiteSpace(finding.PackageVersion))
+				{
+					var cacheKey = $"{finding.PackageId}@{finding.PackageVersion}";
+
+					if (!signatureCache.TryGetValue(cacheKey, out var sigService))
+					{
+						sigService = new Services.AssemblySignatureService();
+						signatureCache[cacheKey] = sigService;
+					}
+
+					var dllPath = Services.AssemblySignatureService.ResolveAssemblyFilePathFromPackageId(finding.PackageId, finding.PackageVersion);
+					var sig = sigService.ReadSignature(dllPath);
+
+					if (sig.IsSigned && !string.IsNullOrWhiteSpace(sig.Subject))
+					{
+						isApprovedBySigner = trustStoreService.IsSignerTrusted(trustStore, sig.Subject);
+					}
+				}
+
 				var owningAssembly = !string.IsNullOrWhiteSpace(finding.PackageId) && !string.IsNullOrWhiteSpace(finding.PackageVersion)
 					? $"{finding.PackageId}@{finding.PackageVersion}"
 					: string.Empty;
+
+				var isEffectivelyTrusted = isTrusted || isApprovedByAssembly || isApprovedBySigner;
 
 				this.allFindings.Add(new FindingViewModel
 				{
@@ -191,11 +220,11 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 					Line                      = finding.StartLine,
 					Fingerprint               = finding.Fingerprint,
 					PolicyAction              = string.Equals(finding.Id, "MBG000", StringComparison.OrdinalIgnoreCase) ? "Trusted" : finding.PolicyAction.ToString(),
-					IsTrusted                 = string.Equals(finding.Id, "MBG000", StringComparison.OrdinalIgnoreCase) || isTrusted || isApprovedByAssembly,
+					IsTrusted                 = string.Equals(finding.Id, "MBG000", StringComparison.OrdinalIgnoreCase) || isEffectivelyTrusted,
 					IsInTrustStore            = isTrusted,
 					OwningAssembly            = owningAssembly,
 					IsNewComparedWithBaseline = finding.IsNewComparedWithBaseline,
-					Reasoning                 = FindingViewModel.BuildReasoning(finding, isTrusted || isApprovedByAssembly)
+					Reasoning                 = FindingViewModel.BuildReasoning(finding, isEffectivelyTrusted)
 				});
 			}
 
@@ -551,8 +580,8 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				Owner            = Application.Current.MainWindow,
 				WindowStartupLocation = System.Windows.WindowStartupLocation.CenterOwner,
 				AssemblyName     = assemblyName,
-				AssemblyVersion  = assemblyVersion,
-				AssemblyPath     = finding.FilePath
+					AssemblyVersion  = assemblyVersion,
+					AssemblyPath     = MSBuildGuard.VisualStudio.Services.AssemblySignatureService.ResolveAssemblyFilePath(finding.FilePath)
 			};
 
 			var result = dialog.ShowDialog();
@@ -568,7 +597,15 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				? dialog.TrustReason
 				: $"Assembly trusted from Visual Studio solution review on {System.DateTime.UtcNow:O}";
 
-			trustStoreService.AddAssemblyTrust(trustStorePath, assemblyName, assemblyVersion, reason, userSid);
+			trustStoreService.AddAssemblyTrust(
+				trustStorePath,
+				assemblyName,
+				assemblyVersion,
+				reason,
+				userSid,
+				dialog.AssemblySigner,
+				dialog.AssemblyIssuer,
+				dialog.AssemblySubject);
 
 			if (MSBuildGuardPackage.Instance is MSBuildGuardPackage package)
 			{

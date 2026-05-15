@@ -14,7 +14,10 @@ namespace MSBuildGuard.Core.Trust
 		Solution,
 		Finding,
 		Baseline,
-		Assembly
+		Assembly,
+
+		/// <summary>Trust granted to all assemblies signed by a specific certificate signer.</summary>
+		Signer
 	}
 
 	/// <summary>
@@ -145,6 +148,11 @@ namespace MSBuildGuard.Core.Trust
 					return TrustDecisionScopeKind.Assembly;
 				}
 
+				if (string.Equals(this.Scope, "Signer", StringComparison.OrdinalIgnoreCase))
+				{
+					return TrustDecisionScopeKind.Signer;
+				}
+
 				return TrustDecisionScopeKind.Unknown;
 			}
 		}
@@ -153,6 +161,21 @@ namespace MSBuildGuard.Core.Trust
 		/// Gets or sets subject hash or fingerprint.
 		/// </summary>
 		public string SubjectHash { get; set; } = string.Empty;
+
+		/// <summary>
+		/// Gets or sets the assembly signer display name when scope is <c>Assembly</c>.
+		/// </summary>
+		public string AssemblySigner { get; set; } = string.Empty;
+
+		/// <summary>
+		/// Gets or sets the assembly certificate issuer when scope is <c>Assembly</c>.
+		/// </summary>
+		public string AssemblyIssuer { get; set; } = string.Empty;
+
+		/// <summary>
+		/// Gets or sets the assembly certificate subject when scope is <c>Assembly</c>.
+		/// </summary>
+		public string AssemblySubject { get; set; } = string.Empty;
 
 		/// <summary>
 		/// Gets or sets repository remote.
