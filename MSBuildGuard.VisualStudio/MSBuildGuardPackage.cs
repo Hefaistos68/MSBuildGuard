@@ -280,7 +280,14 @@ namespace MSBuildGuard.VisualStudio
 				return;
 			}
 
-			this.shieldStatusBarControl.UpdateState(this.latestScanReport);
+			int? effectiveRiskScore = null;
+
+			if (this.latestScanReport != null)
+			{
+				effectiveRiskScore = GetEffectiveRiskScore(this.latestScanReport);
+			}
+
+			this.shieldStatusBarControl.UpdateState(this.latestScanReport, effectiveRiskScore);
 		}
 
 		/// <summary>
@@ -348,6 +355,7 @@ namespace MSBuildGuard.VisualStudio
 			this.reviewSelectionService.SolutionReviewTargetPath = resolvedTargetPath;
 			await this.UiFeedbackService.WriteLineAsync($"Loaded Solution Security Review report for {resolvedTargetPath}.", CancellationToken.None);
 			reviewWindow.LoadReport(resolvedTargetPath, report);
+			await this.RefreshStatusBarShieldAsync();
 		}
 
 		/// <summary>
@@ -624,6 +632,7 @@ namespace MSBuildGuard.VisualStudio
 
 			await this.UiFeedbackService.WriteLineAsync($"[Flow] RefreshSolutionSecurityReviewIfOpenAsync loading window with resolvedTarget='{resolvedTargetPath}'.", CancellationToken.None);
 			reviewWindow.LoadReport(resolvedTargetPath, report);
+			await this.RefreshStatusBarShieldAsync();
 			await this.UiFeedbackService.WriteLineAsync($"Solution Security Review refreshed for {resolvedTargetPath}.", CancellationToken.None);
 		}
 
@@ -640,6 +649,13 @@ namespace MSBuildGuard.VisualStudio
 			}
 
 			return "Unknown target";
+		}
+
+		private static int GetEffectiveRiskScore(Core.ScanReport report)
+		{
+			var buildBlockViewModel = new ToolWindows.BuildBlockDialogViewModel(report);
+
+			return buildBlockViewModel.RiskScore;
 		}
 
 		private static Core.ScanReport? SelectPreferredReport(Core.ScanReport? current, Core.ScanReport? candidate)

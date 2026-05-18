@@ -107,11 +107,15 @@ namespace MSBuildGuard.VisualStudio.Services
 				throw new InvalidOperationException("Finding does not have an owning assembly.");
 			}
 
+			var assemblyPath = !string.IsNullOrWhiteSpace(finding.PackageId) && !string.IsNullOrWhiteSpace(finding.PackageVersion)
+				? AssemblySignatureService.ResolveAssemblyFilePathFromPackageId(finding.PackageId, finding.PackageVersion)
+				: AssemblySignatureService.ResolveAssemblyFilePath(finding.FilePath);
+
 			var dialog = new TrustAssemblyDialog
 			{
 				AssemblyName    = finding.OwningAssembly.Split('@')[0],
 					AssemblyVersion = finding.OwningAssembly.Contains("@") ? finding.OwningAssembly.Split('@')[1] : "Unknown",
-					AssemblyPath    = AssemblySignatureService.ResolveAssemblyFilePath(finding.FilePath),
+					AssemblyPath    = assemblyPath,
 				Owner           = System.Windows.Application.Current.MainWindow,
 				WindowStartupLocation = System.Windows.WindowStartupLocation.CenterOwner
 			};

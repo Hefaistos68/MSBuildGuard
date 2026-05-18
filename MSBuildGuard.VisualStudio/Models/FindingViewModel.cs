@@ -59,6 +59,21 @@ namespace MSBuildGuard.VisualStudio.Models
 		public string FilePath { get; set; } = string.Empty;
 
 		/// <summary>
+		/// Gets or sets the package asset path when this finding originates from a NuGet package asset.
+		/// </summary>
+		public string NuGetAssetPath { get; set; } = string.Empty;
+
+		/// <summary>
+		/// Gets or sets the package identifier for package-sourced findings.
+		/// </summary>
+		public string PackageId { get; set; } = string.Empty;
+
+		/// <summary>
+		/// Gets or sets the package version for package-sourced findings.
+		/// </summary>
+		public string PackageVersion { get; set; } = string.Empty;
+
+		/// <summary>
 		/// Gets or sets the project path that introduced this finding (populated for package-sourced findings).
 		/// </summary>
 		public string IntroducedViaProject { get; set; } = string.Empty;
@@ -216,7 +231,21 @@ namespace MSBuildGuard.VisualStudio.Models
 			if (!string.IsNullOrWhiteSpace(finding.FilePath))
 			{
 				sb.AppendLine();
-				sb.AppendLine($"Location: {PathRedactionService.RedactPath(finding.FilePath)}, line {finding.StartLine}");
+
+				if (finding.StartLine > 0)
+				{
+					sb.AppendLine($"Location: {PathRedactionService.RedactPath(finding.FilePath)}, line {finding.StartLine}");
+				}
+				else
+				{
+					sb.AppendLine($"Location: {PathRedactionService.RedactPath(finding.FilePath)}");
+				}
+			}
+
+			if (!string.IsNullOrWhiteSpace(finding.NuGetAssetPath) && !string.Equals(finding.NuGetAssetPath, finding.FilePath, System.StringComparison.OrdinalIgnoreCase))
+			{
+				sb.AppendLine();
+				sb.AppendLine($"Package asset: {PathRedactionService.RedactPath(finding.NuGetAssetPath)}");
 			}
 
 			if (!string.IsNullOrWhiteSpace(finding.PackageId))

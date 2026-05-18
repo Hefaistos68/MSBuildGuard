@@ -71,6 +71,11 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		public ScanSummaryViewModel Summary { get; }
 
 		/// <summary>
+		/// Gets the solution-level effective risk score for the latest full solution scan.
+		/// </summary>
+		public int SolutionEffectiveRiskScore { get; private set; }
+
+		/// <summary>
 		/// Gets project options for selection.
 		/// </summary>
 		public ObservableCollection<SolutionProjectOptionViewModel> ProjectOptions { get; }
@@ -214,6 +219,9 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 					RuleId                    = finding.Id,
 					Title                     = finding.Title,
 					FilePath                  = finding.FilePath,
+					NuGetAssetPath            = finding.NuGetAssetPath,
+					PackageId                 = finding.PackageId,
+					PackageVersion            = finding.PackageVersion,
 					IntroducedViaProject      = finding.IntroducedViaProject,
 					Line                      = finding.StartLine,
 					Fingerprint               = finding.Fingerprint,
@@ -231,6 +239,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			this.BuildProjectOptions(solutionPath, report, previousSelectedPath, loadedProjectPaths);
 			this.solutionRiskScore         = solutionActiveRiskScore;
 			this.solutionTrustedRiskScore  = solutionTrustedRiskScore;
+			this.SolutionEffectiveRiskScore = solutionActiveRiskScore;
 			this.solutionRecommendedAction = MapRecommendedAction(solutionActiveRiskScore).ToString();
 			this.Summary.TargetPath        = solutionPath;
 			this.Summary.RiskScore         = solutionActiveRiskScore;
@@ -255,6 +264,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			this.CurrentTargetPath         = string.Empty;
 			this.solutionRiskScore          = 0;
 			this.solutionTrustedRiskScore   = 0;
+			this.SolutionEffectiveRiskScore = 0;
 			this.solutionRecommendedAction  = "Unknown";
 			this.Summary.TargetPath         = "No scan loaded";
 			this.Summary.RiskScore          = 0;
@@ -573,13 +583,25 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			var assemblyName    = parts[0];
 			var assemblyVersion = parts[1];
 			var trustStorePath  = new TrustStoreService().GetDefaultUserTrustPath();
+			var assemblyPath    = MSBuildGuard.VisualStudio.Services.AssemblySignatureService.ResolveAssemblyFilePath(finding.FilePath);
+
+			if (!string.IsNullOrWhiteSpace(finding.PackageId) && !string.IsNullOrWhiteSpace(finding.PackageVersion))
+			{
+				var packageAssemblyPath = MSBuildGuard.VisualStudio.Services.AssemblySignatureService.ResolveAssemblyFilePathFromPackageId(finding.PackageId, finding.PackageVersion);
+
+				if (!string.IsNullOrWhiteSpace(packageAssemblyPath))
+				{
+					assemblyPath = packageAssemblyPath;
+				}
+			}
+
 			var dialog          = new TrustAssemblyDialog
 			{
 				Owner            = Application.Current.MainWindow,
 				WindowStartupLocation = System.Windows.WindowStartupLocation.CenterOwner,
 				AssemblyName     = assemblyName,
 					AssemblyVersion  = assemblyVersion,
-					AssemblyPath     = MSBuildGuard.VisualStudio.Services.AssemblySignatureService.ResolveAssemblyFilePath(finding.FilePath)
+					AssemblyPath     = assemblyPath
 			};
 
 			var result = dialog.ShowDialog();
