@@ -71,6 +71,11 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		public ScanSummaryViewModel Summary { get; }
 
 		/// <summary>
+		/// Gets the solution-level effective risk score for the latest full solution scan.
+		/// </summary>
+		public int SolutionEffectiveRiskScore { get; private set; }
+
+		/// <summary>
 		/// Gets project options for selection.
 		/// </summary>
 		public ObservableCollection<SolutionProjectOptionViewModel> ProjectOptions { get; }
@@ -234,6 +239,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			this.BuildProjectOptions(solutionPath, report, previousSelectedPath, loadedProjectPaths);
 			this.solutionRiskScore         = solutionActiveRiskScore;
 			this.solutionTrustedRiskScore  = solutionTrustedRiskScore;
+			this.SolutionEffectiveRiskScore = solutionActiveRiskScore;
 			this.solutionRecommendedAction = MapRecommendedAction(solutionActiveRiskScore).ToString();
 			this.Summary.TargetPath        = solutionPath;
 			this.Summary.RiskScore         = solutionActiveRiskScore;
@@ -258,6 +264,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			this.CurrentTargetPath         = string.Empty;
 			this.solutionRiskScore          = 0;
 			this.solutionTrustedRiskScore   = 0;
+			this.SolutionEffectiveRiskScore = 0;
 			this.solutionRecommendedAction  = "Unknown";
 			this.Summary.TargetPath         = "No scan loaded";
 			this.Summary.RiskScore          = 0;

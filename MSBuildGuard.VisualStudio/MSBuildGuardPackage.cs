@@ -281,12 +281,10 @@ namespace MSBuildGuard.VisualStudio
 			}
 
 			int? effectiveRiskScore = null;
-			var reviewWindow = await this.GetSolutionSecurityReviewToolWindowAsync(create: false);
 
-			if (reviewWindow?.Content is ToolWindows.SolutionSecurityReviewControl reviewControl &&
-				reviewControl.DataContext is ToolWindows.SolutionSecurityReviewViewModel reviewViewModel)
+			if (this.latestScanReport != null)
 			{
-				effectiveRiskScore = reviewViewModel.Summary.RiskScore;
+				effectiveRiskScore = GetEffectiveRiskScore(this.latestScanReport);
 			}
 
 			this.shieldStatusBarControl.UpdateState(this.latestScanReport, effectiveRiskScore);
@@ -651,6 +649,13 @@ namespace MSBuildGuard.VisualStudio
 			}
 
 			return "Unknown target";
+		}
+
+		private static int GetEffectiveRiskScore(Core.ScanReport report)
+		{
+			var buildBlockViewModel = new ToolWindows.BuildBlockDialogViewModel(report);
+
+			return buildBlockViewModel.RiskScore;
 		}
 
 		private static Core.ScanReport? SelectPreferredReport(Core.ScanReport? current, Core.ScanReport? candidate)
