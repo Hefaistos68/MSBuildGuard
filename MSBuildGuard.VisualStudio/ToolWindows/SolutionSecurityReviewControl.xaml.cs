@@ -163,12 +163,15 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			}
 
 			var parts = finding.OwningAssembly.Split('@');
+			var assemblyPath = !string.IsNullOrWhiteSpace(finding.PackageId) && !string.IsNullOrWhiteSpace(finding.PackageVersion)
+				? AssemblySignatureService.ResolveAssemblyFilePathFromPackageId(finding.PackageId, finding.PackageVersion)
+				: AssemblySignatureService.ResolveAssemblyFilePath(finding.FilePath);
 
 			var dialog = new AssemblyInformationDialog
 			{
 				AssemblyName    = parts[0],
 				AssemblyVersion = parts.Length > 1 ? parts[1] : "Unknown",
-				AssemblyPath    = AssemblySignatureService.ResolveAssemblyFilePath(finding.FilePath),
+				AssemblyPath    = assemblyPath,
 				Owner           = System.Windows.Application.Current.MainWindow,
 				WindowStartupLocation = System.Windows.WindowStartupLocation.CenterOwner
 			};

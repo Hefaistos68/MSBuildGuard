@@ -69,13 +69,14 @@ namespace MSBuildGuard.VisualStudio.Services
 		/// Updates the displayed shield state.
 		/// </summary>
 		/// <param name="report">The current scan report.</param>
-		public void UpdateState(ScanReport? report)
+		/// <param name="effectiveRiskScore">Optional trust-adjusted risk score from the security review.</param>
+		public void UpdateState(ScanReport? report, int? effectiveRiskScore = null)
 		{
 			var hasOpenSolution = SolutionDiscoveryService.HasOpenSolution();
 			this.IsEnabled = hasOpenSolution;
 			this.Opacity = hasOpenSolution ? 1.0 : 0.5;
 
-			var level = GetSecurityLevel(report);
+			var level = GetSecurityLevel(report, effectiveRiskScore);
 
 			this.severityText.Text = level switch
 			{
@@ -92,14 +93,24 @@ namespace MSBuildGuard.VisualStudio.Services
 			};
 		}
 
-		private void OnMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+		private static SecurityLevel GetSecurityLevel(ScanReport? report, int? effectiveRiskScore)
 		{
-			ThreadHelper.ThrowIfNotOnUIThread();
-
-			this.package.JoinableTaskFactory.RunAsync(async delegate
+			if (effectiveRiskScore.HasValue)
 			{
-				await this.package.ShowSolutionSecurityReviewAsync(null, this.package.LatestScanReport);
-			}).FileAndForget(nameof(ShieldStatusBarControl));
+				if (effectiveRiskScore.Value >= 100)
+				{
+					return SecurityLevel.Red;
+				}
+
+				if (effectiveRiskScore.Value >= 20)
+				{
+					return SecurityLevel.Orange;
+				}
+
+				return SecurityLevel.Green;
+			}
+
+			return GetSecurityLevel(report);
 		}
 
 		private static SecurityLevel GetSecurityLevel(ScanReport? report)
@@ -120,6 +131,16 @@ namespace MSBuildGuard.VisualStudio.Services
 			}
 
 			return SecurityLevel.Green;
+		}
+
+		private void OnMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+		{
+			ThreadHelper.ThrowIfNotOnUIThread();
+
+			this.package.JoinableTaskFactory.RunAsync(async delegate
+			{
+				await this.package.ShowSolutionSecurityReviewAsync(null, this.package.LatestScanReport);
+			}).FileAndForget(nameof(ShieldStatusBarControl));
 		}
 	}
 }

@@ -280,7 +280,16 @@ namespace MSBuildGuard.VisualStudio
 				return;
 			}
 
-			this.shieldStatusBarControl.UpdateState(this.latestScanReport);
+			int? effectiveRiskScore = null;
+			var reviewWindow = await this.GetSolutionSecurityReviewToolWindowAsync(create: false);
+
+			if (reviewWindow?.Content is ToolWindows.SolutionSecurityReviewControl reviewControl &&
+				reviewControl.DataContext is ToolWindows.SolutionSecurityReviewViewModel reviewViewModel)
+			{
+				effectiveRiskScore = reviewViewModel.Summary.RiskScore;
+			}
+
+			this.shieldStatusBarControl.UpdateState(this.latestScanReport, effectiveRiskScore);
 		}
 
 		/// <summary>
@@ -348,6 +357,7 @@ namespace MSBuildGuard.VisualStudio
 			this.reviewSelectionService.SolutionReviewTargetPath = resolvedTargetPath;
 			await this.UiFeedbackService.WriteLineAsync($"Loaded Solution Security Review report for {resolvedTargetPath}.", CancellationToken.None);
 			reviewWindow.LoadReport(resolvedTargetPath, report);
+			await this.RefreshStatusBarShieldAsync();
 		}
 
 		/// <summary>
@@ -624,6 +634,7 @@ namespace MSBuildGuard.VisualStudio
 
 			await this.UiFeedbackService.WriteLineAsync($"[Flow] RefreshSolutionSecurityReviewIfOpenAsync loading window with resolvedTarget='{resolvedTargetPath}'.", CancellationToken.None);
 			reviewWindow.LoadReport(resolvedTargetPath, report);
+			await this.RefreshStatusBarShieldAsync();
 			await this.UiFeedbackService.WriteLineAsync($"Solution Security Review refreshed for {resolvedTargetPath}.", CancellationToken.None);
 		}
 

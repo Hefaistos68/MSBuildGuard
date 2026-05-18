@@ -214,6 +214,9 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 					RuleId                    = finding.Id,
 					Title                     = finding.Title,
 					FilePath                  = finding.FilePath,
+					NuGetAssetPath            = finding.NuGetAssetPath,
+					PackageId                 = finding.PackageId,
+					PackageVersion            = finding.PackageVersion,
 					IntroducedViaProject      = finding.IntroducedViaProject,
 					Line                      = finding.StartLine,
 					Fingerprint               = finding.Fingerprint,
@@ -573,13 +576,17 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			var assemblyName    = parts[0];
 			var assemblyVersion = parts[1];
 			var trustStorePath  = new TrustStoreService().GetDefaultUserTrustPath();
+			var assemblyPath = !string.IsNullOrWhiteSpace(finding.PackageId) && !string.IsNullOrWhiteSpace(finding.PackageVersion)
+				? MSBuildGuard.VisualStudio.Services.AssemblySignatureService.ResolveAssemblyFilePathFromPackageId(finding.PackageId, finding.PackageVersion)
+				: MSBuildGuard.VisualStudio.Services.AssemblySignatureService.ResolveAssemblyFilePath(finding.FilePath);
+
 			var dialog          = new TrustAssemblyDialog
 			{
 				Owner            = Application.Current.MainWindow,
 				WindowStartupLocation = System.Windows.WindowStartupLocation.CenterOwner,
 				AssemblyName     = assemblyName,
 					AssemblyVersion  = assemblyVersion,
-					AssemblyPath     = MSBuildGuard.VisualStudio.Services.AssemblySignatureService.ResolveAssemblyFilePath(finding.FilePath)
+					AssemblyPath     = assemblyPath
 			};
 
 			var result = dialog.ShowDialog();
