@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -639,8 +640,10 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 					AddIndexEntry(index, projectNode.Attribute("ProjectGuid")?.Value, name, basePath);
 				}
 			}
-			catch
+			catch (Exception ex)
 			{
+				// Fail safe: if SLNX parsing fails, keep an empty index so the review window can still load.
+				Trace.WriteLine($"[MSBuildGuard] Failed to parse SLNX non-buildable item names from '{solutionPath}'. {ex}");
 			}
 		}
 
@@ -651,40 +654,92 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		/// <param name="index">Destination index.</param>
 		private static void BuildSlnNonBuildableItemNameIndex(string solutionPath, Dictionary<string, string> index)
 		{
-			foreach (var line in File.ReadLines(solutionPath))
+			try
 			{
-				if (!line.StartsWith("Project(", StringComparison.OrdinalIgnoreCase))
+				var basePath = Path.GetDirectoryName(solutionPath) ?? string.Empty;
+
+				foreach (var line in File.ReadLines(solutionPath))
 				{
-					continue;
+					if (!line.StartsWith("Project(", StringComparison.OrdinalIgnoreCase))
+					{
+						continue;
+					}
+
+					if (!TryParseSlnProjectDefinitionLine(line, out var name, out var relativePath, out var projectGuid))
+					{
+						continue;
+					}
+
+					if (IsBuildableProjectPath(relativePath) || string.IsNullOrWhiteSpace(name))
+					{
+						continue;
+					}
+
+					AddIndexEntry(index, relativePath, name, basePath);
+					AddIndexEntry(index, projectGuid, name, basePath);
 				}
-
-				var parts = line.Split(',');
-
-				if (parts.Length < 3)
-				{
-					continue;
-				}
-
-				var nameStart = line.IndexOf("=", StringComparison.Ordinal);
-				var firstComma = line.IndexOf(',', nameStart + 1);
-
-				if (nameStart < 0 || firstComma < 0)
-				{
-					continue;
-				}
-
-				var name = line.Substring(nameStart + 1, firstComma - nameStart - 1).Trim().Trim('"');
-				var relativePath = parts[1].Trim().Trim('"');
-				var projectGuid = parts[2].Trim().Trim('"');
-
-				if (IsBuildableProjectPath(relativePath) || string.IsNullOrWhiteSpace(name))
-				{
-					continue;
-				}
-
-				AddIndexEntry(index, relativePath, name, Path.GetDirectoryName(solutionPath) ?? string.Empty);
-				AddIndexEntry(index, projectGuid, name, Path.GetDirectoryName(solutionPath) ?? string.Empty);
 			}
+			catch (Exception ex)
+			{
+				// Fail safe: if SLN parsing fails, keep an empty index so the review window can still load.
+				Trace.WriteLine($"[MSBuildGuard] Failed to parse SLN non-buildable item names from '{solutionPath}'. {ex}");
+			}
+		}
+
+		/// <summary>
+		/// Tries to parse an SLN project definition line using quote-aware extraction.
+		/// </summary>
+		/// <param name="line">The raw SLN line.</param>
+		/// <param name="name">Parsed project display name.</param>
+		/// <param name="relativePath">Parsed project relative path.</param>
+		/// <param name="projectGuid">Parsed project guid.</param>
+		/// <returns><c>true</c> when the line is parsed successfully; otherwise <c>false</c>.</returns>
+		private static bool TryParseSlnProjectDefinitionLine(string line, out string name, out string relativePath, out string projectGuid)
+		{
+			name = string.Empty;
+			relativePath = string.Empty;
+			projectGuid = string.Empty;
+
+			if (string.IsNullOrWhiteSpace(line))
+			{
+				return false;
+			}
+
+			var quotedValues = new List<string>();
+			var searchIndex = 0;
+
+			while (searchIndex < line.Length)
+			{
+				var startQuote = line.IndexOf('"', searchIndex);
+
+				if (startQuote < 0)
+				{
+					break;
+				}
+
+				var endQuote = line.IndexOf('"', startQuote + 1);
+
+				if (endQuote < 0)
+				{
+					break;
+				}
+
+				quotedValues.Add(line.Substring(startQuote + 1, endQuote - startQuote - 1));
+				searchIndex = endQuote + 1;
+			}
+
+			if (quotedValues.Count < 3)
+			{
+				return false;
+			}
+
+			name = quotedValues[quotedValues.Count - 3].Trim();
+			relativePath = quotedValues[quotedValues.Count - 2].Trim();
+			projectGuid = quotedValues[quotedValues.Count - 1].Trim();
+
+			return !string.IsNullOrWhiteSpace(name) &&
+				!string.IsNullOrWhiteSpace(relativePath) &&
+				!string.IsNullOrWhiteSpace(projectGuid);
 		}
 
 		/// <summary>
