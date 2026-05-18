@@ -576,9 +576,17 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			var assemblyName    = parts[0];
 			var assemblyVersion = parts[1];
 			var trustStorePath  = new TrustStoreService().GetDefaultUserTrustPath();
-			var assemblyPath = !string.IsNullOrWhiteSpace(finding.PackageId) && !string.IsNullOrWhiteSpace(finding.PackageVersion)
-				? MSBuildGuard.VisualStudio.Services.AssemblySignatureService.ResolveAssemblyFilePathFromPackageId(finding.PackageId, finding.PackageVersion)
-				: MSBuildGuard.VisualStudio.Services.AssemblySignatureService.ResolveAssemblyFilePath(finding.FilePath);
+			var assemblyPath    = MSBuildGuard.VisualStudio.Services.AssemblySignatureService.ResolveAssemblyFilePath(finding.FilePath);
+
+			if (!string.IsNullOrWhiteSpace(finding.PackageId) && !string.IsNullOrWhiteSpace(finding.PackageVersion))
+			{
+				var packageAssemblyPath = MSBuildGuard.VisualStudio.Services.AssemblySignatureService.ResolveAssemblyFilePathFromPackageId(finding.PackageId, finding.PackageVersion);
+
+				if (!string.IsNullOrWhiteSpace(packageAssemblyPath))
+				{
+					assemblyPath = packageAssemblyPath;
+				}
+			}
 
 			var dialog          = new TrustAssemblyDialog
 			{
