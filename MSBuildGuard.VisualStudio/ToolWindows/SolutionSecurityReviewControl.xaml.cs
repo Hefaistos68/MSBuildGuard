@@ -1,5 +1,7 @@
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Input;
 using Microsoft.VisualStudio.Shell;
 using MSBuildGuard.Core;
@@ -36,6 +38,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			{
 				var loadedProjectPaths = SolutionExplorerProjectDiscoveryService.GetLoadedProjectPaths();
 				viewModel.LoadReport(solutionPath, report, loadedProjectPaths);
+				this.ApplyDefaultSeveritySort();
 				this.UpdateTrustedColumnVisibility();
 
 				if (MSBuildGuardPackage.Instance is MSBuildGuardPackage package)
@@ -182,6 +185,22 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		private void OnOnlyUntrustedIssuesCheckedChanged(object sender, RoutedEventArgs e)
 		{
 			this.UpdateTrustedColumnVisibility();
+		}
+
+		private void ApplyDefaultSeveritySort()
+		{
+			var view = CollectionViewSource.GetDefaultView(this.FindingsGrid.ItemsSource);
+
+			if (view == null)
+			{
+				return;
+			}
+
+			using (view.DeferRefresh())
+			{
+				view.SortDescriptions.Clear();
+				view.SortDescriptions.Add(new SortDescription(nameof(FindingViewModel.SeveritySortRank), ListSortDirection.Descending));
+			}
 		}
 
 		private void UpdateTrustedColumnVisibility()

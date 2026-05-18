@@ -107,13 +107,15 @@
 					  Unchecked="OnOnlyUntrustedIssuesCheckedChanged" />
 		</Grid>
 
-		<DataGrid Grid.Row="2"
+		<DataGrid x:Name="FindingsGrid"
+				  Grid.Row="2"
 				  ItemsSource="{Binding Findings}"
 				  SelectedItem="{Binding SelectedFinding, Mode=TwoWay}"
 				  AutoGenerateColumns="False"
 				  IsReadOnly="True"
 				  CanUserAddRows="False"
 				  CanUserDeleteRows="False"
+				  CanUserSortColumns="True"
 				  MouseDoubleClick="OnFindingsMouseDoubleClick"
 				  Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}" Margin="8,0,8,4">
 			<DataGrid.ContextMenu>
@@ -135,7 +137,7 @@
 				</ContextMenu>
 			</DataGrid.ContextMenu>
 			<DataGrid.Columns>
-				<DataGridTemplateColumn Header="Severity" Width="90">
+				<DataGridTemplateColumn Header="Severity" Width="55" SortMemberPath="SeveritySortRank">
 					<DataGridTemplateColumn.CellTemplate>
 						<DataTemplate>
 							<Image Source="{Binding SeverityIconPath}" Width="16" Height="16" ToolTip="{Binding Severity}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
@@ -143,12 +145,12 @@
 					</DataGridTemplateColumn.CellTemplate>
 				</DataGridTemplateColumn>
 				<DataGridTextColumn Header="Rule" Binding="{Binding RuleId}" Width="90" />
-				<DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="2*" />
+				<DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="1*" />
 				<DataGridTextColumn Header="File" Binding="{Binding FilePathDisplay}" Width="2*" />
-				<DataGridTextColumn Header="Line" Binding="{Binding Line}" Width="70" />
+				<DataGridTextColumn Header="Line" Binding="{Binding Line}" Width="50" />
 				<DataGridTextColumn Header="Policy" Binding="{Binding PolicyAction}" Width="120" />
-				<DataGridCheckBoxColumn x:Name="TrustedColumn" Header="Trusted" Binding="{Binding IsTrusted}" Width="80" />
-				<DataGridCheckBoxColumn Header="New" Binding="{Binding IsNewComparedWithBaseline}" Width="80" />
+				<DataGridCheckBoxColumn x:Name="TrustedColumn" Header="Trusted" Binding="{Binding IsTrusted}" Width="50" />
+				<DataGridCheckBoxColumn Header="New" Binding="{Binding IsNewComparedWithBaseline}" Width="50" />
 			</DataGrid.Columns>
 		</DataGrid>
 

@@ -8,6 +8,7 @@ using System.Runtime.CompilerServices;
 using System.Security.Principal;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Xml.Linq;
 using MSBuildGuard.Core;
 using MSBuildGuard.Core.Trust;
 using MSBuildGuard.VisualStudio.Models;
@@ -294,6 +295,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			});
 
 			var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+			var nonBuildableItemNameIndex = BuildNonBuildableItemNameIndex(solutionPath);
 
 			if (loadedProjectPaths != null)
 			{
@@ -304,9 +306,13 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 						continue;
 					}
 
+					var displayName = IsBuildableProjectPath(projectPath)
+						? Path.GetFileNameWithoutExtension(projectPath)
+						: ResolveNonBuildableItemDisplayName(nonBuildableItemNameIndex, projectPath);
+
 					this.ProjectOptions.Add(new SolutionProjectOptionViewModel
 					{
-						Name = Path.GetFileNameWithoutExtension(projectPath),
+						Name = displayName,
 						Path = projectPath
 					});
 				}
@@ -544,6 +550,218 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			}
 
 			return false;
+		}
+
+		/// <summary>
+		/// Determines whether the provided path points to a buildable project file.
+		/// </summary>
+		/// <param name="path">Project path candidate.</param>
+		/// <returns><c>true</c> when the path has a known buildable project extension; otherwise <c>false</c>.</returns>
+		private static bool IsBuildableProjectPath(string path)
+		{
+			if (string.IsNullOrWhiteSpace(path))
+			{
+				return false;
+			}
+
+			var extension = Path.GetExtension(path);
+
+			return string.Equals(extension, ".csproj", StringComparison.OrdinalIgnoreCase) ||
+				string.Equals(extension, ".vbproj", StringComparison.OrdinalIgnoreCase) ||
+				string.Equals(extension, ".fsproj", StringComparison.OrdinalIgnoreCase) ||
+				string.Equals(extension, ".proj", StringComparison.OrdinalIgnoreCase);
+		}
+
+		/// <summary>
+		/// Builds a lookup for non-buildable solution item names from SLN/SLNX content.
+		/// </summary>
+		/// <param name="solutionPath">Current solution path.</param>
+		/// <returns>Lookup of canonical identifiers to display names.</returns>
+		private static Dictionary<string, string> BuildNonBuildableItemNameIndex(string solutionPath)
+		{
+			var index = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+			if (string.IsNullOrWhiteSpace(solutionPath) || !File.Exists(solutionPath))
+			{
+				return index;
+			}
+
+			if (string.Equals(Path.GetExtension(solutionPath), ".slnx", StringComparison.OrdinalIgnoreCase))
+			{
+				BuildSlnxNonBuildableItemNameIndex(solutionPath, index);
+
+				return index;
+			}
+
+			BuildSlnNonBuildableItemNameIndex(solutionPath, index);
+
+			return index;
+		}
+
+		/// <summary>
+		/// Loads non-buildable item names from an SLNX file.
+		/// </summary>
+		/// <param name="solutionPath">Current solution path.</param>
+		/// <param name="index">Destination index.</param>
+		private static void BuildSlnxNonBuildableItemNameIndex(string solutionPath, Dictionary<string, string> index)
+		{
+			try
+			{
+				var document = XDocument.Load(solutionPath);
+				var basePath = Path.GetDirectoryName(solutionPath) ?? string.Empty;
+				var projectNodes = document.Descendants().Where(element => string.Equals(element.Name.LocalName, "Project", StringComparison.OrdinalIgnoreCase));
+
+				foreach (var projectNode in projectNodes)
+				{
+					var type = projectNode.Attribute("Type")?.Value ?? string.Empty;
+					var path = projectNode.Attribute("Path")?.Value ?? string.Empty;
+
+					if (!string.Equals(type, "Folder", StringComparison.OrdinalIgnoreCase) && IsBuildableProjectPath(path))
+					{
+						continue;
+					}
+
+					var name = projectNode.Attribute("Name")?.Value;
+
+					if (string.IsNullOrWhiteSpace(name))
+					{
+						name = Path.GetFileNameWithoutExtension(path);
+					}
+
+					if (string.IsNullOrWhiteSpace(name))
+					{
+						continue;
+					}
+
+					AddIndexEntry(index, path, name, basePath);
+					AddIndexEntry(index, projectNode.Attribute("Guid")?.Value, name, basePath);
+					AddIndexEntry(index, projectNode.Attribute("Id")?.Value, name, basePath);
+					AddIndexEntry(index, projectNode.Attribute("ProjectGuid")?.Value, name, basePath);
+				}
+			}
+			catch
+			{
+			}
+		}
+
+		/// <summary>
+		/// Loads non-buildable item names from an SLN file.
+		/// </summary>
+		/// <param name="solutionPath">Current solution path.</param>
+		/// <param name="index">Destination index.</param>
+		private static void BuildSlnNonBuildableItemNameIndex(string solutionPath, Dictionary<string, string> index)
+		{
+			foreach (var line in File.ReadLines(solutionPath))
+			{
+				if (!line.StartsWith("Project(", StringComparison.OrdinalIgnoreCase))
+				{
+					continue;
+				}
+
+				var parts = line.Split(',');
+
+				if (parts.Length < 3)
+				{
+					continue;
+				}
+
+				var nameStart = line.IndexOf("=", StringComparison.Ordinal);
+				var firstComma = line.IndexOf(',', nameStart + 1);
+
+				if (nameStart < 0 || firstComma < 0)
+				{
+					continue;
+				}
+
+				var name = line.Substring(nameStart + 1, firstComma - nameStart - 1).Trim().Trim('"');
+				var relativePath = parts[1].Trim().Trim('"');
+				var projectGuid = parts[2].Trim().Trim('"');
+
+				if (IsBuildableProjectPath(relativePath) || string.IsNullOrWhiteSpace(name))
+				{
+					continue;
+				}
+
+				AddIndexEntry(index, relativePath, name, Path.GetDirectoryName(solutionPath) ?? string.Empty);
+				AddIndexEntry(index, projectGuid, name, Path.GetDirectoryName(solutionPath) ?? string.Empty);
+			}
+		}
+
+		/// <summary>
+		/// Resolves a display name for non-buildable solution items.
+		/// </summary>
+		/// <param name="index">Resolved non-buildable name index.</param>
+		/// <param name="projectPath">Project path or hierarchy identifier.</param>
+		/// <returns>The resolved display name.</returns>
+		private static string ResolveNonBuildableItemDisplayName(Dictionary<string, string> index, string projectPath)
+		{
+			if (index.TryGetValue(projectPath, out var displayName))
+			{
+				return displayName;
+			}
+
+			var guidKey = NormalizeGuidKey(projectPath);
+
+			if (!string.IsNullOrWhiteSpace(guidKey) && index.TryGetValue(guidKey, out displayName))
+			{
+				return displayName;
+			}
+
+			return Path.GetFileNameWithoutExtension(projectPath);
+		}
+
+		/// <summary>
+		/// Adds a normalized key/value pair to the non-buildable item display-name index.
+		/// </summary>
+		/// <param name="index">Destination index.</param>
+		/// <param name="rawKey">Raw path or identifier key.</param>
+		/// <param name="name">Display name value.</param>
+		/// <param name="basePath">Solution directory for relative path normalization.</param>
+		private static void AddIndexEntry(Dictionary<string, string> index, string? rawKey, string name, string basePath)
+		{
+			if (string.IsNullOrWhiteSpace(rawKey) || string.IsNullOrWhiteSpace(name))
+			{
+				return;
+			}
+
+			var key = rawKey.Trim();
+
+			index[key] = name;
+
+			var guidKey = NormalizeGuidKey(key);
+
+			if (!string.IsNullOrWhiteSpace(guidKey))
+			{
+				index[guidKey] = name;
+			}
+
+			if (!Path.IsPathRooted(key) && !string.IsNullOrWhiteSpace(basePath))
+			{
+				var fullPath = Path.GetFullPath(Path.Combine(basePath, key));
+				index[fullPath] = name;
+			}
+		}
+
+		/// <summary>
+		/// Normalizes GUID-like keys for dictionary lookup.
+		/// </summary>
+		/// <param name="value">Candidate GUID text.</param>
+		/// <returns>Normalized GUID text or empty when not a GUID.</returns>
+		private static string NormalizeGuidKey(string? value)
+		{
+			if (string.IsNullOrWhiteSpace(value))
+			{
+				return string.Empty;
+			}
+
+			var trimmed = value.Trim().Trim('{', '}');
+
+			if (!Guid.TryParse(trimmed, out var guid))
+			{
+				return string.Empty;
+			}
+
+			return guid.ToString("D").ToUpperInvariant();
 		}
 
 		/// <summary>

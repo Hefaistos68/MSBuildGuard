@@ -16,6 +16,34 @@ namespace MSBuildGuard.VisualStudio.Models
 		public string Severity { get; set; } = string.Empty;
 
 		/// <summary>
+		/// Gets a sortable severity rank used by the review grid.
+		/// </summary>
+		public int SeveritySortRank
+		{
+			get
+			{
+				if (!System.Enum.TryParse<FindingSeverity>(this.Severity, out var severity))
+				{
+					return 0;
+				}
+
+				switch (severity)
+				{
+					case FindingSeverity.Critical:
+						return 4;
+					case FindingSeverity.High:
+						return 3;
+					case FindingSeverity.Medium:
+						return 2;
+					case FindingSeverity.Low:
+						return 1;
+					default:
+						return 0;
+				}
+			}
+		}
+
+		/// <summary>
 		/// Gets the shield icon path associated with the current severity.
 		/// </summary>
 		public string SeverityIconPath
