@@ -260,11 +260,17 @@ Typical baseline workflow:
 
 ### Trust Store
 
-Trust decisions allow approved exceptions without disabling rules globally. Common trust scopes:
+Trust decisions allow approved exceptions without disabling rules globally.
 
-- **Finding** — one fingerprinted finding
-- **File** — specific file content hash
-- **Repository** — repository state (remote + commit)
+#### Trust types and evaluation criteria
+
+| Trust type | How it works | What is evaluated |
+|---|---|---|
+| **Issue** (finding-level trust) | Approves one specific finding instance. | Matches the finding `Fingerprint` exactly (case-insensitive), plus trust-context filters when present (repository remote, branch, commit SHA, policy profile), and requires a non-expired approving decision. The fingerprint is derived from `Rule ID` (issue type), file path, line/column, and evidence/description payload. |
+| **Assembly** | Approves findings tied to one exact package/assembly version. | Matches `assemblyName@assemblyVersion` (for package findings this is `PackageId@PackageVersion`), case-insensitive, and requires a non-expired approving decision. Signer/issuer/subject fields are stored as metadata for audit context. |
+| **Signature** (signer-level trust) | Approves findings for assemblies signed by a trusted certificate identity. | Matches a canonical signer key: certificate thumbprint when available; otherwise normalized `Subject|Issuer|SerialNumber`. In the Visual Studio workflow this is applied when a valid assembly signature can be resolved for the package and the signer identity matches a non-expired approving decision. |
+
+Other supported scopes include **File** (normalized file hash) and **Repository/Baseline** (remote + commit, optional branch/profile constraints).
 
 Trust decisions must include explicit reason text and are auditable:
 
