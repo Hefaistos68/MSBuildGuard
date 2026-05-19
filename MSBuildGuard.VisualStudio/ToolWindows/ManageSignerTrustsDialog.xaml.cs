@@ -364,7 +364,6 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				}
 
 				var sourceStore = trustStoreService.Load(sourcePath);
-				var targetStore = trustStoreService.Load(targetPath);
 				var sourceEntries = sourceStore.Decisions
 					.Where(d => (d.ScopeKind == TrustDecisionScopeKind.Signer || string.Equals(d.Scope, "Signer", StringComparison.OrdinalIgnoreCase)) && string.Equals(d.SubjectHash, selectedTrust.SubjectDn, StringComparison.OrdinalIgnoreCase))
 					.ToList();
@@ -374,37 +373,37 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 					return;
 				}
 
+				var moveReason = $"Moved signer trust from {sourceScope} to {targetScope}";
+
 				foreach (var sourceEntry in sourceEntries)
 				{
-					targetStore.Decisions.Add(new TrustDecisionEntry
+					var movedEntryReason = string.IsNullOrWhiteSpace(sourceEntry.Reason)
+						? moveReason
+						: $"{sourceEntry.Reason} ({moveReason})";
+
+					trustStoreService.AddDecision(targetPath, new TrustDecisionEntry
 					{
-						DecisionId = Guid.NewGuid().ToString("N"),
-						Scope = sourceEntry.Scope,
-						SubjectHash = sourceEntry.SubjectHash,
-						AssemblySigner = sourceEntry.AssemblySigner,
-						AssemblyIssuer = sourceEntry.AssemblyIssuer,
-						AssemblySubject = sourceEntry.AssemblySubject,
-						AssemblyThumbprint = sourceEntry.AssemblyThumbprint,
+						DecisionId           = Guid.NewGuid().ToString("N"),
+						Scope                = sourceEntry.Scope,
+						SubjectHash          = sourceEntry.SubjectHash,
+						AssemblySigner       = sourceEntry.AssemblySigner,
+						AssemblyIssuer       = sourceEntry.AssemblyIssuer,
+						AssemblySubject      = sourceEntry.AssemblySubject,
+						AssemblyThumbprint   = sourceEntry.AssemblyThumbprint,
 						AssemblySerialNumber = sourceEntry.AssemblySerialNumber,
-						Decision = sourceEntry.Decision,
-						Reason = sourceEntry.Reason,
-						UserSid = userSid,
-						CreatedAtUtc = DateTimeOffset.UtcNow,
-						ExpiresAtUtc = sourceEntry.ExpiresAtUtc,
-						RepositoryRemote = sourceEntry.RepositoryRemote,
-						Branch = sourceEntry.Branch,
-						CommitSha = sourceEntry.CommitSha,
-						PolicyProfile = sourceEntry.PolicyProfile
+						Decision             = sourceEntry.Decision,
+						Reason               = movedEntryReason,
+						UserSid              = userSid,
+						CreatedAtUtc         = DateTimeOffset.UtcNow,
+						ExpiresAtUtc         = sourceEntry.ExpiresAtUtc,
+						RepositoryRemote     = sourceEntry.RepositoryRemote,
+						Branch               = sourceEntry.Branch,
+						CommitSha            = sourceEntry.CommitSha,
+						PolicyProfile        = sourceEntry.PolicyProfile
 					});
 				}
 
-				foreach (var sourceEntry in sourceEntries)
-				{
-					sourceStore.Decisions.Remove(sourceEntry);
-				}
-
-				trustStoreService.Save(sourcePath, sourceStore);
-				trustStoreService.Save(targetPath, targetStore);
+				trustStoreService.RemoveDecisionsBySubject(sourcePath, selectedTrust.SubjectDn, moveReason, userSid);
 
 				trustedSigners.Remove(selectedTrust);
 				hasMovedTrust = true;

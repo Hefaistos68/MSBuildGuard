@@ -684,7 +684,9 @@ namespace MSBuildGuard.VisualStudio
 			}
 
 			var options = await this.GetOptionsSnapshotAsync(this.DisposalToken).ConfigureAwait(false);
-			var changed = Services.GitIgnoreTrustSharingService.ApplyForSolution(solutionPath!, options.AllowSharingTrustsInRepositories);
+			var changed = await Task.Run(() =>
+				Services.GitIgnoreTrustSharingService.ApplyForSolution(solutionPath!, options.AllowSharingTrustsInRepositories),
+				this.DisposalToken).ConfigureAwait(false);
 
 			if (changed > 0)
 			{

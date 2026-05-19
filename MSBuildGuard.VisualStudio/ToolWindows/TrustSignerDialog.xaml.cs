@@ -102,6 +102,11 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		/// </summary>
 		private void NoExpirationCheckBox_Changed(object sender, RoutedEventArgs e)
 		{
+			if (NoExpirationCheckBox == null || ValidUntilDatePicker == null)
+			{
+				return;
+			}
+
 			var noExpiration = NoExpirationCheckBox.IsChecked == true;
 			ValidUntilDatePicker.IsEnabled = !noExpiration;
 

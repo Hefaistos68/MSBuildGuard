@@ -445,7 +445,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				return;
 			}
 
-			if (targetScope == TrustScope.Project && string.IsNullOrWhiteSpace(this.projectPath))
+			if (targetScope == TrustScope.Project && string.IsNullOrWhiteSpace(targetProjectPath))
 			{
 				MessageBox.Show("Project scope is not available in this context.", "Move Trust", MessageBoxButton.OK, MessageBoxImage.Information);
 				return;
@@ -466,7 +466,6 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				}
 
 				var sourceStore = trustStoreService.Load(sourcePath);
-				var targetStore = trustStoreService.Load(targetPath);
 				var sourceEntries = sourceStore.Decisions
 					.Where(d => (d.ScopeKind == TrustDecisionScopeKind.Assembly || string.Equals(d.Scope, "Assembly", StringComparison.OrdinalIgnoreCase)) && string.Equals(d.SubjectHash, selectedTrust.Subject, StringComparison.OrdinalIgnoreCase))
 					.ToList();
@@ -476,37 +475,37 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 					return;
 				}
 
+				var moveReason = $"Moved assembly trust from {sourceScope} to {targetScope}";
+
 				foreach (var sourceEntry in sourceEntries)
 				{
-					targetStore.Decisions.Add(new TrustDecisionEntry
+					var movedEntryReason = string.IsNullOrWhiteSpace(sourceEntry.Reason)
+						? moveReason
+						: $"{sourceEntry.Reason} ({moveReason})";
+
+					trustStoreService.AddDecision(targetPath, new TrustDecisionEntry
 					{
-						DecisionId = Guid.NewGuid().ToString("N"),
-						Scope = sourceEntry.Scope,
-						SubjectHash = sourceEntry.SubjectHash,
-						AssemblySigner = sourceEntry.AssemblySigner,
-						AssemblyIssuer = sourceEntry.AssemblyIssuer,
-						AssemblySubject = sourceEntry.AssemblySubject,
-						AssemblyThumbprint = sourceEntry.AssemblyThumbprint,
+						DecisionId           = Guid.NewGuid().ToString("N"),
+						Scope                = sourceEntry.Scope,
+						SubjectHash          = sourceEntry.SubjectHash,
+						AssemblySigner       = sourceEntry.AssemblySigner,
+						AssemblyIssuer       = sourceEntry.AssemblyIssuer,
+						AssemblySubject      = sourceEntry.AssemblySubject,
+						AssemblyThumbprint   = sourceEntry.AssemblyThumbprint,
 						AssemblySerialNumber = sourceEntry.AssemblySerialNumber,
-						Decision = sourceEntry.Decision,
-						Reason = sourceEntry.Reason,
-						UserSid = userSid,
-						CreatedAtUtc = DateTimeOffset.UtcNow,
-						ExpiresAtUtc = sourceEntry.ExpiresAtUtc,
-						RepositoryRemote = sourceEntry.RepositoryRemote,
-						Branch = sourceEntry.Branch,
-						CommitSha = sourceEntry.CommitSha,
-						PolicyProfile = sourceEntry.PolicyProfile
+						Decision             = sourceEntry.Decision,
+						Reason               = movedEntryReason,
+						UserSid              = userSid,
+						CreatedAtUtc         = DateTimeOffset.UtcNow,
+						ExpiresAtUtc         = sourceEntry.ExpiresAtUtc,
+						RepositoryRemote     = sourceEntry.RepositoryRemote,
+						Branch               = sourceEntry.Branch,
+						CommitSha            = sourceEntry.CommitSha,
+						PolicyProfile        = sourceEntry.PolicyProfile
 					});
 				}
 
-				foreach (var sourceEntry in sourceEntries)
-				{
-					sourceStore.Decisions.Remove(sourceEntry);
-				}
-
-				trustStoreService.Save(sourcePath, sourceStore);
-				trustStoreService.Save(targetPath, targetStore);
+				trustStoreService.RemoveDecisionsBySubject(sourcePath, selectedTrust.Subject, moveReason, userSid);
 
 				trustedAssemblies.Remove(selectedTrust);
 				hasMovedTrust = true;
@@ -619,16 +618,32 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			}).FileAndForget(nameof(ManageAssemblyTrustsDialog));
 		}
 
+		/// <summary>
+		/// Gets the currently selected trust scope from the UI.
+		/// </summary>
+		/// <returns></returns>
 		private TrustScope GetSelectedScope()
 		{
 			return ScopeComboBox?.SelectedItem is TrustScope scope ? scope : TrustScope.User;
 		}
 
+		/// <summary>
+		/// Gets the currently selected project path for the project scope, if applicable.
+		/// </summary>
+		/// <returns></returns>
 		private string GetSelectedProjectPathForScope()
 		{
 			return ProjectScopeComboBox?.SelectedValue as string ?? this.projectPath;
 		}
 
+		/// <summary>
+		/// Resolves the appropriate trust store path based on the selected scope and context.
+		/// </summary>
+		/// <param name="trustStoreService">The trust store service used to resolve paths.</param>
+		/// <param name="scope">The selected trust scope.</param>
+		/// <param name="solutionPath">The path to the solution.</param>
+		/// <param name="projectPath">The path to the project.</param>
+		/// <returns>The resolved trust store path.</returns>
 		private static string ResolveTrustStorePath(TrustStoreService trustStoreService, TrustScope scope, string solutionPath, string projectPath)
 		{
 			if (scope == TrustScope.Project && !string.IsNullOrWhiteSpace(projectPath))
@@ -648,7 +663,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 	/// <summary>
 	/// Represents a single trusted assembly item in the list.
 	/// </summary>
-	internal class AssemblyTrustItem
+	internal sealed class AssemblyTrustItem
 	{
 		/// <summary>
 		/// Gets or sets the assembly name.
