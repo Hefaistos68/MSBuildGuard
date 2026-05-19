@@ -26,6 +26,41 @@ namespace MSBuildGuard.VisualStudio.Options
 		private const string DefaultReflectionInteropIndicators = "System.Reflection;Assembly.Load;Activator.CreateInstance;GetType(;dynamic ;DllImport;Marshal.GetDelegateForFunctionPointer;LoadLibrary";
 
 		/// <summary>
+		/// Defines the unified setting key for <see cref="AutoOpenSecurityReviewOnOpen"/>.
+		/// </summary>
+		internal const string AutoOpenSecurityReviewOnOpenSettingName = "extensions.msbuildguard.general.autoOpenSecurityReviewOnOpen";
+
+		/// <summary>
+		/// Defines the unified setting key for <see cref="ScanNuGetPackages"/>.
+		/// </summary>
+		internal const string ScanNuGetPackagesSettingName = "extensions.msbuildguard.general.scanNuGetPackages";
+
+		/// <summary>
+		/// Defines the unified setting key for <see cref="AllowSharingTrustsInRepositories"/>.
+		/// </summary>
+		internal const string AllowSharingTrustsInRepositoriesSettingName = "extensions.msbuildguard.trustManagement.allowSharingTrustsInRepositories";
+
+		/// <summary>
+		/// Defines the unified setting key for <see cref="FileTypesToScan"/>.
+		/// </summary>
+		internal const string FileTypesToScanSettingName = "extensions.msbuildguard.scanning.fileTypesToScan";
+
+		/// <summary>
+		/// Defines the unified setting key for <see cref="ProcessCreationIndicators"/>.
+		/// </summary>
+		internal const string ProcessCreationIndicatorsSettingName = "extensions.msbuildguard.ruleIndicators.processCreationIndicators";
+
+		/// <summary>
+		/// Defines the unified setting key for <see cref="ReflectionInteropIndicators"/>.
+		/// </summary>
+		internal const string ReflectionInteropIndicatorsSettingName = "extensions.msbuildguard.ruleIndicators.reflectionInteropIndicators";
+
+		/// <summary>
+		/// Defines the unified setting key for <see cref="AdditionalBlockedAssemblies"/>.
+		/// </summary>
+		internal const string AdditionalBlockedAssembliesSettingName = "extensions.msbuildguard.ruleIndicators.additionalBlockedAssemblies";
+
+		/// <summary>
 		/// Gets or sets a value indicating whether security review windows should auto-open when a solution or project is opened.
 		/// </summary>
 		[Category("Behavior")]
@@ -113,6 +148,8 @@ namespace MSBuildGuard.VisualStudio.Options
 
 			if (MSBuildGuardPackage.Instance != null)
 			{
+				MSBuildGuardPackage.Instance.NotifyOptionsChanged();
+
 				ThreadHelper.JoinableTaskFactory.RunAsync(async delegate
 				{
 					await MSBuildGuardPackage.Instance.ApplyTrustSharingPreferenceAsync().ConfigureAwait(false);

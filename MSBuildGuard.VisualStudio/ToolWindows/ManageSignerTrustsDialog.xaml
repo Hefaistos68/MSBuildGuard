@@ -22,11 +22,11 @@
         <StackPanel Grid.Row="1" Orientation="Vertical" Margin="0,0,0,12">
             <TextBlock Text="Trusted signers have all findings from assemblies bearing their certificate automatically approved, regardless of assembly version." TextWrapping="Wrap" Foreground="#666666" Margin="0,0,0,8"/>
             <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                <TextBlock Text="Scope:" VerticalAlignment="Center" FontWeight="Bold" Margin="0,0,8,0"/>
+                <TextBlock Text="Scope:" VerticalAlignment="Center" FontWeight="Bold" Margin="0,0,8,0" Width="50"/>
                 <ComboBox x:Name="ScopeComboBox" Width="180" SelectionChanged="ScopeComboBox_SelectionChanged"/>
             </StackPanel>
             <StackPanel x:Name="ProjectSelectorPanel" Orientation="Horizontal" Visibility="Collapsed">
-                <TextBlock Text="Project:" VerticalAlignment="Center" FontWeight="Bold" Margin="0,0,8,0"/>
+                <TextBlock Text="Project:" VerticalAlignment="Center" FontWeight="Bold" Margin="0,0,8,0" Width="50"/>
                 <ComboBox x:Name="ProjectScopeComboBox" Width="360" DisplayMemberPath="Name" SelectedValuePath="Path" SelectionChanged="ProjectScopeComboBox_SelectionChanged"/>
             </StackPanel>
         </StackPanel>

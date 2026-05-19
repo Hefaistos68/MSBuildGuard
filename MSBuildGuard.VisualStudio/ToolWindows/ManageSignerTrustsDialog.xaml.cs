@@ -5,6 +5,7 @@ using System.Linq;
 using System.Security.Principal;
 using System.Windows;
 using System.Windows.Controls;
+using Microsoft.VisualStudio.Shell;
 using MSBuildGuard.Core.Trust;
 using MSBuildGuard.VisualStudio.Models;
 using MSBuildGuard.VisualStudio.Services;
@@ -42,6 +43,8 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		/// </summary>
 		private void Window_Loaded(object sender, RoutedEventArgs e)
 		{
+			ThreadHelper.ThrowIfNotOnUIThread();
+
 			InitializeProjectOptions();
 			InitializeScopeOptions();
 			LoadTrustedSigners();
@@ -49,6 +52,11 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			TrustedSignersGrid.SelectionChanged += (s, args) => UpdateRemoveButtonState();
 		}
 
+		/// <summary>
+		/// Wires context menu open handlers when the trusted signers grid is loaded.
+		/// </summary>
+		/// <param name="sender">The grid raising the loaded event.</param>
+		/// <param name="e">Event arguments.</param>
 		private void TrustedSignersGrid_Loaded(object sender, RoutedEventArgs e)
 		{
 			if (TrustedSignersGrid.ContextMenu != null)
@@ -58,6 +66,9 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			}
 		}
 
+		/// <summary>
+		/// Initializes available trust scopes and related project selector state.
+		/// </summary>
 		private void InitializeScopeOptions()
 		{
 			var scopes = new List<TrustScope> { TrustScope.User };
@@ -83,8 +94,13 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			}
 		}
 
+		/// <summary>
+		/// Loads project options from the solution for project-scope trust operations.
+		/// </summary>
 		private void InitializeProjectOptions()
 		{
+			ThreadHelper.ThrowIfNotOnUIThread();
+
 			projectOptions.Clear();
 
 			if (string.IsNullOrWhiteSpace(this.solutionPath))
@@ -111,6 +127,11 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			}
 		}
 
+		/// <summary>
+		/// Handles scope selection changes and reloads signer trusts for the selected scope.
+		/// </summary>
+		/// <param name="sender">The scope selector.</param>
+		/// <param name="e">Event arguments.</param>
 		private void ScopeComboBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
 		{
 			if (!IsLoaded)
@@ -123,6 +144,11 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			LoadTrustedSigners();
 		}
 
+		/// <summary>
+		/// Handles project selection changes for project-scoped trust management.
+		/// </summary>
+		/// <param name="sender">The project selector.</param>
+		/// <param name="e">Event arguments.</param>
 		private void ProjectScopeComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
 		{
 			if (!IsLoaded || GetSelectedScope() != TrustScope.Project)
@@ -200,6 +226,8 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		/// <summary>
 		/// Handles the Remove button click to remove the selected signer trust.
 		/// </summary>
+		/// <param name="sender">The remove button.</param>
+		/// <param name="e">Event arguments.</param>
 		private void RemoveButton_Click(object sender, RoutedEventArgs e)
 		{
 			if (TrustedSignersGrid.SelectedItem is not SignerTrustItem selected)
@@ -223,6 +251,11 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			UpdateRemoveButtonState();
 		}
 
+		/// <summary>
+		/// Handles context-menu requests to move selected signer trust to user or solution scope.
+		/// </summary>
+		/// <param name="sender">The menu item that initiated the action.</param>
+		/// <param name="e">Event arguments.</param>
 		private void MoveTrustToScopeMenuItem_Click(object sender, RoutedEventArgs e)
 		{
 			if (sender is not MenuItem menuItem || menuItem.Tag is not string targetScopeText || !Enum.TryParse(targetScopeText, out TrustScope targetScope))
@@ -238,6 +271,11 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			MoveTrustToScope(selectedTrust, targetScope, this.projectPath);
 		}
 
+		/// <summary>
+		/// Handles context-menu requests to move selected signer trust to a specific project scope.
+		/// </summary>
+		/// <param name="sender">The project-scope submenu item.</param>
+		/// <param name="e">Event arguments.</param>
 		private void MoveTrustToProjectScopeMenuItem_Click(object sender, RoutedEventArgs e)
 		{
 			if (sender is not MenuItem menuItem || menuItem.Tag is not string targetProjectPath || string.IsNullOrWhiteSpace(targetProjectPath))
@@ -253,6 +291,11 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			MoveTrustToScope(selectedTrust, TrustScope.Project, targetProjectPath);
 		}
 
+		/// <summary>
+		/// Updates context menu command enabled states based on current selection and scope availability.
+		/// </summary>
+		/// <param name="sender">The context menu being opened.</param>
+		/// <param name="e">Event arguments.</param>
 		private void TrustedSignersContextMenu_Opened(object sender, RoutedEventArgs e)
 		{
 			if (sender is not ContextMenu contextMenu)
@@ -279,6 +322,12 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			}
 		}
 
+		/// <summary>
+		/// Moves a signer trust entry from the current scope store to the requested target scope store.
+		/// </summary>
+		/// <param name="selectedTrust">The selected trust entry.</param>
+		/// <param name="targetScope">The destination trust scope.</param>
+		/// <param name="targetProjectPath">The destination project path when moving to project scope.</param>
 		private void MoveTrustToScope(SignerTrustItem selectedTrust, TrustScope targetScope, string targetProjectPath)
 		{
 			var sourceScope = GetSelectedScope();
@@ -370,6 +419,8 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		/// <summary>
 		/// Handles the Save button click to persist changes to the trust store.
 		/// </summary>
+		/// <param name="sender">The save button.</param>
+		/// <param name="e">Event arguments.</param>
 		private void SaveButton_Click(object sender, RoutedEventArgs e)
 		{
 			if (!hasChanges)
@@ -440,6 +491,8 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		/// <summary>
 		/// Handles the Cancel button click.
 		/// </summary>
+		/// <param name="sender">The cancel button.</param>
+		/// <param name="e">Event arguments.</param>
 		private void CancelButton_Click(object sender, RoutedEventArgs e)
 		{
 			DialogResult = false;
@@ -447,7 +500,8 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		}
 
 		/// <inheritdoc/>
-		protected override async void OnClosed(EventArgs e)
+		/// <param name="e">Event arguments.</param>
+		protected override void OnClosed(EventArgs e)
 		{
 			base.OnClosed(e);
 
@@ -461,19 +515,38 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				return;
 			}
 
-			await MSBuildGuardPackage.Instance.RescanSolutionSecurityReviewAsync();
+			ThreadHelper.JoinableTaskFactory.RunAsync(async delegate
+			{
+				await MSBuildGuardPackage.Instance.RescanSolutionSecurityReviewAsync();
+			}).FileAndForget(nameof(ManageSignerTrustsDialog));
 		}
 
+		/// <summary>
+		/// Gets the currently selected trust scope from the scope selector.
+		/// </summary>
+		/// <returns>The selected trust scope, or user scope when no selection is available.</returns>
 		private TrustScope GetSelectedScope()
 		{
 			return ScopeComboBox?.SelectedItem is TrustScope scope ? scope : TrustScope.User;
 		}
 
+		/// <summary>
+		/// Gets the currently selected project path for project-scoped trust operations.
+		/// </summary>
+		/// <returns>The selected project path, or the dialog project path fallback.</returns>
 		private string GetSelectedProjectPathForScope()
 		{
 			return ProjectScopeComboBox?.SelectedValue as string ?? this.projectPath;
 		}
 
+		/// <summary>
+		/// Resolves the trust store file path for the requested scope and context.
+		/// </summary>
+		/// <param name="trustStoreService">Trust store service used to resolve default paths.</param>
+		/// <param name="scope">Target trust scope.</param>
+		/// <param name="solutionPath">Current solution path.</param>
+		/// <param name="projectPath">Current project path.</param>
+		/// <returns>The resolved trust store path.</returns>
 		private static string ResolveTrustStorePath(TrustStoreService trustStoreService, TrustScope scope, string solutionPath, string projectPath)
 		{
 			if (scope == TrustScope.Project && !string.IsNullOrWhiteSpace(projectPath))

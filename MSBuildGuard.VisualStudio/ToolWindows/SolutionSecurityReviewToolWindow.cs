@@ -25,6 +25,8 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		/// <param name="report">The scan report.</param>
 		public void LoadReport(string solutionPath, ScanReport report)
 		{
+			ThreadHelper.ThrowIfNotOnUIThread();
+
 			if (this.Content is SolutionSecurityReviewControl control)
 			{
 				control.LoadReport(solutionPath, report);

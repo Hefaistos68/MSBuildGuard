@@ -41,7 +41,12 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		/// </summary>
 		/// <param name="sender">The button.</param>
 		/// <param name="e">Event arguments.</param>
-		private async void OnSaveClick(object sender, RoutedEventArgs e)
+		private void OnSaveClick(object sender, RoutedEventArgs e)
+		{
+			ThreadHelper.JoinableTaskFactory.RunAsync(this.OnSaveClickAsync).FileAndForget(nameof(PolicyEditorControl));
+		}
+
+		private async System.Threading.Tasks.Task OnSaveClickAsync()
 		{
 			if (this.DataContext is not PolicyEditorViewModel viewModel)
 			{

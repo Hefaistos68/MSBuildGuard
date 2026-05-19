@@ -51,7 +51,7 @@ namespace MSBuildGuard.Core.Trust
 				throw new InvalidDataException("Trust store signature validation failed. Do not modify the contents of this file manually.");
 			}
 
-			var trust = JsonSerializer.Deserialize<TrustStoreDocument>(trustPayload, SerializerOptions);
+			var trust = JsonSerializer.Deserialize<TrustStoreDocument>(trustPayload!, SerializerOptions);
 
 			if (trust == null)
 			{
@@ -848,12 +848,12 @@ namespace MSBuildGuard.Core.Trust
 
 			if (!string.IsNullOrWhiteSpace(solutionPath))
 			{
-				AppendDecisions(merged, Load(GetSolutionTrustPath(solutionPath)));
+				AppendDecisions(merged, Load(GetSolutionTrustPath(solutionPath!)));
 			}
 
 			if (!string.IsNullOrWhiteSpace(projectPath))
 			{
-				AppendDecisions(merged, Load(GetProjectTrustPath(projectPath)));
+				AppendDecisions(merged, Load(GetProjectTrustPath(projectPath!)));
 			}
 
 			return merged;

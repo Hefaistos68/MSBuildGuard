@@ -1,0 +1,119 @@
+{
+  "properties": {
+    "extensions.msbuildguard.general.autoOpenSecurityReviewOnOpen": {
+      "type": "boolean",
+      "default": true,
+      "title": "Auto-open Security Review",
+      "description": "Automatically open Security Review when opening a solution or project.",
+      "migration": {
+        "pass": {
+          "input": {
+            "store": "VsUserSettingsRegistry",
+            "path": "MSBuild Guard\\General\\AutoOpenSecurityReviewOnOpen"
+          }
+        }
+      }
+    },
+    "extensions.msbuildguard.general.scanNuGetPackages": {
+      "type": "boolean",
+      "default": true,
+      "title": "Scan NuGet packages",
+      "description": "Include package-provided .props/.targets and related NuGet assets during scanning.",
+      "migration": {
+        "pass": {
+          "input": {
+            "store": "VsUserSettingsRegistry",
+            "path": "MSBuild Guard\\General\\ScanNuGetPackages"
+          }
+        }
+      }
+    },
+    "extensions.msbuildguard.trustManagement.allowSharingTrustsInRepositories": {
+      "type": "boolean",
+      "default": false,
+      "title": "Allow sharing trusts in repositories",
+      "description": "When enabled, MSBuild Guard removes managed .msbuildguard ignore entries from .gitignore files. When disabled, the entries are enforced.",
+      "migration": {
+        "pass": {
+          "input": {
+            "store": "VsUserSettingsRegistry",
+            "path": "MSBuild Guard\\General\\AllowSharingTrustsInRepositories"
+          }
+        }
+      }
+    },
+    "extensions.msbuildguard.scanning.fileTypesToScan": {
+      "type": "string",
+      "default": ".csproj;.vbproj;.fsproj;.proj;.props;.targets;.sln;.slnx",
+      "title": "File types to scan",
+      "description": "Semicolon-separated file extensions, for example: .csproj;.targets;.props",
+      "migration": {
+        "pass": {
+          "input": {
+            "store": "VsUserSettingsRegistry",
+            "path": "MSBuild Guard\\General\\FileTypesToScan"
+          }
+        }
+      }
+    },
+    "extensions.msbuildguard.ruleIndicators.processCreationIndicators": {
+      "type": "string",
+      "default": "System.Diagnostics.Process;Process.Start(;CreateProcess(;cmd.exe;powershell;pwsh",
+      "title": "Process creation indicators",
+      "description": "Semicolon-separated tokens used to detect process creation or shell execution in code/commands.",
+      "migration": {
+        "pass": {
+          "input": {
+            "store": "VsUserSettingsRegistry",
+            "path": "MSBuild Guard\\General\\ProcessCreationIndicators"
+          }
+        }
+      }
+    },
+    "extensions.msbuildguard.ruleIndicators.reflectionInteropIndicators": {
+      "type": "string",
+      "default": "System.Reflection;Assembly.Load;Activator.CreateInstance;GetType(;dynamic ;DllImport;Marshal.GetDelegateForFunctionPointer;LoadLibrary",
+      "title": "Reflection/interop indicators",
+      "description": "Semicolon-separated tokens used to detect reflection, dynamic loading, or native interop patterns.",
+      "migration": {
+        "pass": {
+          "input": {
+            "store": "VsUserSettingsRegistry",
+            "path": "MSBuild Guard\\General\\ReflectionInteropIndicators"
+          }
+        }
+      }
+    },
+    "extensions.msbuildguard.ruleIndicators.additionalBlockedAssemblies": {
+      "type": "string",
+      "default": "",
+      "title": "Additional blocked assemblies",
+      "description": "Semicolon-separated assembly names that should be treated as blocked when referenced.",
+      "migration": {
+        "pass": {
+          "input": {
+            "store": "VsUserSettingsRegistry",
+            "path": "MSBuild Guard\\General\\AdditionalBlockedAssemblies"
+          }
+        }
+      }
+    }
+  },
+  "categories": {
+    "extensions.msbuildguard": {
+      "title": "MSBuild Guard"
+    },
+    "extensions.msbuildguard.general": {
+      "title": "General"
+    },
+    "extensions.msbuildguard.scanning": {
+      "title": "Scanning"
+    },
+    "extensions.msbuildguard.ruleIndicators": {
+      "title": "Rule Indicators"
+    },
+    "extensions.msbuildguard.trustManagement": {
+      "title": "Trust Management"
+    }
+  }
+}

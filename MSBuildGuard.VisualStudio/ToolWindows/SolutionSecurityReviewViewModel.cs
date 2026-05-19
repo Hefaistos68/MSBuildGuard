@@ -740,10 +740,10 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 						continue;
 					}
 
-					AddIndexEntry(index, path, name, basePath);
-					AddIndexEntry(index, projectNode.Attribute("Guid")?.Value, name, basePath);
-					AddIndexEntry(index, projectNode.Attribute("Id")?.Value, name, basePath);
-					AddIndexEntry(index, projectNode.Attribute("ProjectGuid")?.Value, name, basePath);
+					AddIndexEntry(index, path, name!, basePath);
+					AddIndexEntry(index, projectNode.Attribute("Guid")?.Value, name!, basePath);
+					AddIndexEntry(index, projectNode.Attribute("Id")?.Value, name!, basePath);
+					AddIndexEntry(index, projectNode.Attribute("ProjectGuid")?.Value, name!, basePath);
 				}
 			}
 			catch (Exception ex)
@@ -885,7 +885,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				return;
 			}
 
-			var key = rawKey.Trim();
+			var key = rawKey!.Trim();
 
 			index[key] = name;
 
@@ -915,7 +915,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				return string.Empty;
 			}
 
-			var trimmed = value.Trim().Trim('{', '}');
+			var trimmed = value!.Trim().Trim('{', '}');
 
 			if (!Guid.TryParse(trimmed, out var guid))
 			{

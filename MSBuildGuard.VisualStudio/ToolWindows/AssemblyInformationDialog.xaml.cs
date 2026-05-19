@@ -115,6 +115,8 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		/// </summary>
 		private void TrustSignerButton_Click(object sender, RoutedEventArgs e)
 		{
+			ThreadHelper.ThrowIfNotOnUIThread();
+
 			if (string.IsNullOrWhiteSpace(this.resolvedSignerSubject))
 			{
 				return;

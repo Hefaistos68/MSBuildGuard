@@ -24,7 +24,7 @@ namespace MSBuildGuard.VisualStudio.Services
 		/// <param name="solutionPath">Loaded solution path.</param>
 		/// <param name="allowSharingTrustsInRepositories">When true, removes managed trust ignore entries; when false, adds them.</param>
 		/// <returns>The number of .gitignore files changed.</returns>
-		public int ApplyForSolution(string solutionPath, bool allowSharingTrustsInRepositories)
+		public static int ApplyForSolution(string solutionPath, bool allowSharingTrustsInRepositories)
 		{
 			if (string.IsNullOrWhiteSpace(solutionPath) || !File.Exists(solutionPath))
 			{
@@ -52,6 +52,12 @@ namespace MSBuildGuard.VisualStudio.Services
 			return changedCount;
 		}
 
+		/// <summary>
+		/// Updates a .gitignore file to add or remove managed trust ignore entries based on the specified preference.
+		/// </summary>
+		/// <param name="gitIgnorePath">The path to the .gitignore file.</param>
+		/// <param name="allowSharingTrustsInRepositories">When true, removes managed trust ignore entries; when false, adds them.</param>
+		/// <returns>True if the .gitignore file was modified; otherwise, false.</returns>
 		private static bool UpdateGitIgnoreFile(string gitIgnorePath, bool allowSharingTrustsInRepositories)
 		{
 			if (string.IsNullOrWhiteSpace(gitIgnorePath) || !File.Exists(gitIgnorePath))
@@ -82,6 +88,11 @@ namespace MSBuildGuard.VisualStudio.Services
 			return true;
 		}
 
+		/// <summary>
+		/// Verifies whether a given line from a .gitignore file matches any of the managed trust ignore entries, ignoring whitespace and case.
+		/// </summary>
+		/// <param name="line">The line to check.</param>
+		/// <returns>True if the line matches a managed trust ignore entry; otherwise, false.</returns>
 		private static bool IsManagedTrustIgnoreEntry(string line)
 		{
 			if (line == null)

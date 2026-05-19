@@ -72,6 +72,8 @@ namespace MSBuildGuard.VisualStudio.Services
 		/// <param name="effectiveRiskScore">Optional trust-adjusted risk score from the security review.</param>
 		public void UpdateState(ScanReport? report, int? effectiveRiskScore = null)
 		{
+			ThreadHelper.ThrowIfNotOnUIThread();
+
 			var hasOpenSolution = SolutionDiscoveryService.HasOpenSolution();
 			this.IsEnabled = hasOpenSolution;
 			this.Opacity = hasOpenSolution ? 1.0 : 0.5;

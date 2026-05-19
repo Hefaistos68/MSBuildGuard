@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.Shell;
 using MSBuildGuard.Core;
+using MSBuildGuard.VisualStudio.Options;
 using MSBuildGuard.Core.Policy;
 using MSBuildGuard.Core.Scanning;
 using MSBuildGuard.Core.Trust;
@@ -18,6 +19,7 @@ namespace MSBuildGuard.VisualStudio.Services
 	{
 		private readonly MsBuildScanner scanner;
 		private readonly MSBuildGuardPackage package;
+		private readonly MSBuildGuard.VisualStudio.Options.MSBuildGuardOptionsSnapshot options;
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="VisualStudioScannerService"/> class.
@@ -26,16 +28,18 @@ namespace MSBuildGuard.VisualStudio.Services
 		public VisualStudioScannerService(MSBuildGuardPackage package)
 		{
 			this.package = package;
-
-			var options = this.package.GetOptionsPage();
+			this.options = this.package.JoinableTaskFactory.Run(async delegate
+			{
+				return await this.package.GetOptionsSnapshotAsync(this.package.DisposalToken).ConfigureAwait(false);
+			});
 
 			this.scanner = new MsBuildScanner(
 				fileSystem: null,
 				activityLogger: this.LogActivity,
-				msBuildExtensions: SplitList(options.FileTypesToScan),
-				processCreationIndicators: SplitList(options.ProcessCreationIndicators),
-				reflectionInteropIndicators: SplitList(options.ReflectionInteropIndicators),
-				additionalBlockedAssemblies: SplitList(options.AdditionalBlockedAssemblies));
+				msBuildExtensions: SplitList(this.options.FileTypesToScan),
+				processCreationIndicators: SplitList(this.options.ProcessCreationIndicators),
+				reflectionInteropIndicators: SplitList(this.options.ReflectionInteropIndicators),
+				additionalBlockedAssemblies: SplitList(this.options.AdditionalBlockedAssemblies));
 		}
 
 		/// <summary>

@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Security.Principal;
 using System.Windows;
 using System.Windows.Controls;
+using Microsoft.VisualStudio.Shell;
 using Microsoft.Win32;
 using MSBuildGuard.Core.Trust;
 using MSBuildGuard.VisualStudio.Models;
@@ -43,6 +44,8 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		/// </summary>
 		private void Window_Loaded(object sender, RoutedEventArgs e)
 		{
+			ThreadHelper.ThrowIfNotOnUIThread();
+
 			InitializeProjectOptions();
 			InitializeScopeOptions();
 			LoadTrustedAssemblies();
@@ -86,6 +89,8 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 
 		private void InitializeProjectOptions()
 		{
+			ThreadHelper.ThrowIfNotOnUIThread();
+
 			projectOptions.Clear();
 
 			if (string.IsNullOrWhiteSpace(this.solutionPath))
@@ -594,7 +599,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		}
 
 		/// <inheritdoc/>
-		protected override async void OnClosed(EventArgs e)
+		protected override void OnClosed(EventArgs e)
 		{
 			base.OnClosed(e);
 
@@ -608,7 +613,10 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				return;
 			}
 
-			await MSBuildGuardPackage.Instance.RescanSolutionSecurityReviewAsync();
+			ThreadHelper.JoinableTaskFactory.RunAsync(async delegate
+			{
+				await MSBuildGuardPackage.Instance.RescanSolutionSecurityReviewAsync();
+			}).FileAndForget(nameof(ManageAssemblyTrustsDialog));
 		}
 
 		private TrustScope GetSelectedScope()

@@ -9,6 +9,7 @@ using Microsoft.VisualStudio;
 using Microsoft.VisualStudio.ComponentModelHost;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
+using MSBuildGuard.VisualStudio.Options;
 using Task = System.Threading.Tasks.Task;
 
 namespace MSBuildGuard.VisualStudio
@@ -32,6 +33,7 @@ namespace MSBuildGuard.VisualStudio
 		/// </summary>
 		private readonly Services.VisualStudioUiFeedbackService uiFeedbackService;
 		private readonly Services.GitIgnoreTrustSharingService gitIgnoreTrustSharingService = new Services.GitIgnoreTrustSharingService();
+		private readonly Options.UnifiedSettingsOptionsProvider unifiedSettingsOptionsProvider = new Options.UnifiedSettingsOptionsProvider();
 
 		/// <summary>
 		/// Stores the latest scan report used by UI surfaces.
@@ -104,6 +106,24 @@ namespace MSBuildGuard.VisualStudio
 			var page = (Options.MSBuildGuardOptionsPage)this.GetDialogPage(typeof(Options.MSBuildGuardOptionsPage));
 
 			return page;
+		}
+
+		/// <summary>
+		/// Gets the current runtime options from unified settings storage.
+		/// </summary>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>The current options snapshot.</returns>
+		internal async Task<Options.MSBuildGuardOptionsSnapshot> GetOptionsSnapshotAsync(CancellationToken cancellationToken)
+		{
+			return await this.unifiedSettingsOptionsProvider.GetSnapshotAsync(this, cancellationToken);
+		}
+
+		/// <summary>
+		/// Notifies the options storage that settings were updated.
+		/// </summary>
+		internal void NotifyOptionsChanged()
+		{
+			this.unifiedSettingsOptionsProvider.NotifyChanged();
 		}
 
 		/// <summary>
@@ -224,6 +244,7 @@ namespace MSBuildGuard.VisualStudio
 					this.solutionMonitorService = null;
 				}
 
+				this.unifiedSettingsOptionsProvider.Dispose();
 				this.uiFeedbackService.Dispose();
 			}
 
@@ -241,7 +262,7 @@ namespace MSBuildGuard.VisualStudio
 			{
 				await JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
 
-				var options = this.GetOptionsPage();
+				var options = await this.GetOptionsSnapshotAsync(cancellationToken).ConfigureAwait(false);
 				await this.ApplyTrustSharingPreferenceAsync().ConfigureAwait(false);
 
 				if (this.solutionMonitorService != null)
@@ -366,6 +387,8 @@ namespace MSBuildGuard.VisualStudio
 		/// <returns>A task that completes when rescan and refresh operations finish.</returns>
 		internal async Task RescanSolutionSecurityReviewAsync()
 		{
+			await this.JoinableTaskFactory.SwitchToMainThreadAsync(this.DisposalToken);
+
 			if (!Services.SolutionDiscoveryService.HasOpenSolution())
 			{
 				await this.UiFeedbackService.WriteLineAsync("Solution rescan skipped because no solution is loaded.", CancellationToken.None);
@@ -515,7 +538,7 @@ namespace MSBuildGuard.VisualStudio
 				await this.UiFeedbackService.WriteLineAsync($"[Flow] OnSolutionScanCompleted targetKind={e.Target.TargetKind}, findings={e.Findings.Count}", CancellationToken.None);
 				await this.JoinableTaskFactory.SwitchToMainThreadAsync(this.DisposalToken);
 
-				var options = this.GetOptionsPage();
+				var options = await this.GetOptionsSnapshotAsync(this.DisposalToken).ConfigureAwait(false);
 
 				if (Services.RiskEvaluationService.RequiresUserAttention(e) && options.AutoOpenSecurityReviewOnOpen)
 				{
@@ -660,8 +683,8 @@ namespace MSBuildGuard.VisualStudio
 				return;
 			}
 
-			var options = this.GetOptionsPage();
-			var changed = this.gitIgnoreTrustSharingService.ApplyForSolution(solutionPath!, options.AllowSharingTrustsInRepositories);
+			var options = await this.GetOptionsSnapshotAsync(this.DisposalToken).ConfigureAwait(false);
+			var changed = Services.GitIgnoreTrustSharingService.ApplyForSolution(solutionPath!, options.AllowSharingTrustsInRepositories);
 
 			if (changed > 0)
 			{
