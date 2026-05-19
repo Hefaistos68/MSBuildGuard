@@ -170,7 +170,7 @@ namespace MSBuildGuard.Core.Policy
 
 			ValidateSignedPolicy(path);
 
-			var policy = JsonSerializer.Deserialize<PolicyDocument>(policyPayload, SerializerOptions);
+			var policy = JsonSerializer.Deserialize<PolicyDocument>(policyPayload!, SerializerOptions);
 
 			if (policy == null)
 			{
@@ -201,7 +201,7 @@ namespace MSBuildGuard.Core.Policy
 				throw new InvalidDataException("Unable to deserialize policy file.");
 			}
 
-			var policy = JsonSerializer.Deserialize<PolicyDocument>(policyPayload, SerializerOptions);
+			var policy = JsonSerializer.Deserialize<PolicyDocument>(policyPayload!, SerializerOptions);
 
 			if (policy == null)
 			{
@@ -211,17 +211,6 @@ namespace MSBuildGuard.Core.Policy
 			return policy;
 		}
 
-
-		/// </summary>
-		/// <param name="policyPath">The policy file path.</param>
-		/// <summary>
-		/// Signs a policy file and stores the signature in an NTFS alternate data stream.
-		/// </summary>
-		/// <param name="policyPath">The policy file path.</param>
-		public void Sign(string policyPath)
-		{
-			Sign(policyPath, null);
-		}
 
 		/// <summary>
 		/// Signs a policy file and stores the signature in an NTFS alternate data stream.

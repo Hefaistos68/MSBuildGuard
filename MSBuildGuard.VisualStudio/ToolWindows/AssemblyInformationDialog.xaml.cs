@@ -1,7 +1,9 @@
 using System.Runtime.InteropServices;
 using System.Security.Principal;
 using System.Windows;
+using Microsoft.VisualStudio.Shell;
 using MSBuildGuard.Core.Trust;
+using MSBuildGuard.VisualStudio.Models;
 using MSBuildGuard.VisualStudio.Services;
 
 namespace MSBuildGuard.VisualStudio.ToolWindows
@@ -113,26 +115,45 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		/// </summary>
 		private void TrustSignerButton_Click(object sender, RoutedEventArgs e)
 		{
+			ThreadHelper.ThrowIfNotOnUIThread();
+
 			if (string.IsNullOrWhiteSpace(this.resolvedSignerSubject))
 			{
 				return;
 			}
 
-			var confirm = MessageBox.Show(
-				$"Trust all assemblies signed by:\n\n  {this.resolvedSignerName}\n\nThis will approve any package whose certificate Subject matches this signer. Continue?",
-				"Trust Signer",
-				MessageBoxButton.YesNo,
-				MessageBoxImage.Question);
+			var solutionPath = string.Empty;
+			var projectPath  = string.Empty;
 
-			if (confirm != MessageBoxResult.Yes)
+			if (MSBuildGuardPackage.Instance != null)
+			{
+				solutionPath = ThreadHelper.JoinableTaskFactory.Run(async () => await SolutionDiscoveryService.GetOpenSolutionPathAsync(MSBuildGuardPackage.Instance).ConfigureAwait(false)) ?? string.Empty;
+				projectPath  = SolutionExplorerProjectDiscoveryService.GetSelectedProjectPath() ?? string.Empty;
+			}
+
+			var trustDialog = new TrustSignerDialog
+			{
+				SignerName           = this.resolvedSignerName,
+				Issuer               = this.resolvedIssuer,
+				Subject              = this.resolvedSignerSubject,
+				Thumbprint           = this.resolvedThumbprint,
+				SolutionPath         = solutionPath,
+				ProjectPath          = projectPath,
+				Owner                = this,
+				WindowStartupLocation = WindowStartupLocation.CenterOwner
+			};
+
+			if (trustDialog.ShowDialog() != true)
 			{
 				return;
 			}
 
 			var trustStoreService = new TrustStoreService();
-			var trustPath = trustStoreService.GetDefaultUserTrustPath();
-			var userSid   = WindowsIdentity.GetCurrent()?.User?.Value ?? "Unknown";
-			var reason    = $"Signer trusted from Assembly Information dialog on {System.DateTime.UtcNow:O}";
+			var trustPath         = ResolveTrustStorePath(trustStoreService, trustDialog.SelectedScope, solutionPath, projectPath);
+			var userSid           = WindowsIdentity.GetCurrent()?.User?.Value ?? "Unknown";
+			var reason            = !string.IsNullOrWhiteSpace(trustDialog.TrustReason)
+				? trustDialog.TrustReason
+				: $"Signer trusted from Assembly Information dialog on {System.DateTime.UtcNow:O}";
 
 			trustStoreService.AddSignerTrust(
 				trustPath,
@@ -142,7 +163,8 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				this.resolvedIssuer,
 				this.resolvedSerialNumber,
 				reason,
-				userSid);
+				userSid,
+				trustDialog.ExpiresAtUtc);
 
 			TrustSignerButton.IsEnabled = false;
 			TrustSignerButton.Content   = "Signer Trusted ✓";
@@ -199,6 +221,21 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		private void CloseButton_Click(object sender, RoutedEventArgs e)
 		{
 			this.Close();
+		}
+
+		private static string ResolveTrustStorePath(TrustStoreService trustStoreService, TrustScope scope, string solutionPath, string projectPath)
+		{
+			if (scope == TrustScope.Project && !string.IsNullOrWhiteSpace(projectPath))
+			{
+				return trustStoreService.GetProjectTrustPath(projectPath);
+			}
+
+			if (scope == TrustScope.Solution && !string.IsNullOrWhiteSpace(solutionPath))
+			{
+				return trustStoreService.GetSolutionTrustPath(solutionPath);
+			}
+
+			return trustStoreService.GetDefaultUserTrustPath();
 		}
 
 		/// <summary>

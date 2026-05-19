@@ -170,8 +170,16 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		public void LoadReport(string solutionPath, ScanReport report, IReadOnlyCollection<string>? loadedProjectPaths)
 		{
 			var previousSelectedPath = this.selectedProject?.Path;
-			var trustStoreService = new TrustStoreService();
-			var trustStore = trustStoreService.Load(trustStoreService.GetDefaultUserTrustPath());
+			var trustStoreService    = new TrustStoreService();
+			var currentProjectPath   = this.selectedProject != null && !string.Equals(this.selectedProject.Path, AllProjectsPath, StringComparison.OrdinalIgnoreCase)
+				? this.selectedProject.Path
+				: null;
+			var userTrustStore = trustStoreService.Load(trustStoreService.GetDefaultUserTrustPath());
+			var solutionTrustStore = !string.IsNullOrWhiteSpace(solutionPath)
+				? trustStoreService.Load(trustStoreService.GetSolutionTrustPath(solutionPath))
+				: new TrustStoreDocument();
+			var projectTrustStoreCache = new Dictionary<string, TrustStoreDocument>(StringComparer.OrdinalIgnoreCase);
+			var trustStore = trustStoreService.LoadMergedTrustStore(trustStoreService.GetDefaultUserTrustPath(), solutionPath, currentProjectPath);
 			this.CurrentTargetPath = solutionPath;
 			this.allFindings.Clear();
 
@@ -183,12 +191,65 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			foreach (var finding in report.Findings)
 			{
 				var fileRecord = report.FilesScanned.FirstOrDefault(item => string.Equals(item.Path, finding.FilePath, StringComparison.OrdinalIgnoreCase));
-				var isTrusted = !string.IsNullOrWhiteSpace(finding.Fingerprint) &&
-					fileRecord != null &&
-					trustStoreService.IsFindingApproved(trustStore, finding.Fingerprint, fileRecord.NormalizedSha256, report.Target.TrustContext, report.PolicyProfile);
+				var findingProjectPath = !string.IsNullOrWhiteSpace(finding.IntroducedViaProject) ? finding.IntroducedViaProject : string.Empty;
+				TrustStoreDocument? projectTrustStore = null;
 
-				var isApprovedByAssembly = !string.IsNullOrWhiteSpace(finding.PackageId) && !string.IsNullOrWhiteSpace(finding.PackageVersion) &&
-					trustStoreService.IsFindingApprovedByAssembly(trustStore, finding.PackageId, finding.PackageVersion);
+				if (!string.IsNullOrWhiteSpace(findingProjectPath))
+				{
+					if (!projectTrustStoreCache.TryGetValue(findingProjectPath, out projectTrustStore))
+					{
+						projectTrustStore = trustStoreService.Load(trustStoreService.GetProjectTrustPath(findingProjectPath));
+						projectTrustStoreCache[findingProjectPath] = projectTrustStore;
+					}
+				}
+
+				var issueTrustScopes = new List<string>();
+				var assemblyTrustScopes = new List<string>();
+				var signerTrustScopes = new List<string>();
+
+				var isTrusted = false;
+
+				if (!string.IsNullOrWhiteSpace(finding.Fingerprint) && fileRecord != null)
+				{
+					if (trustStoreService.IsFindingApproved(userTrustStore, finding.Fingerprint, fileRecord.NormalizedSha256, report.Target.TrustContext, report.PolicyProfile))
+					{
+						issueTrustScopes.Add("User");
+					}
+
+					if (trustStoreService.IsFindingApproved(solutionTrustStore, finding.Fingerprint, fileRecord.NormalizedSha256, report.Target.TrustContext, report.PolicyProfile))
+					{
+						issueTrustScopes.Add("Solution");
+					}
+
+					if (projectTrustStore != null && trustStoreService.IsFindingApproved(projectTrustStore, finding.Fingerprint, fileRecord.NormalizedSha256, report.Target.TrustContext, report.PolicyProfile))
+					{
+						issueTrustScopes.Add("Project");
+					}
+
+					isTrusted = issueTrustScopes.Count > 0;
+				}
+
+				var isApprovedByAssembly = false;
+
+				if (!string.IsNullOrWhiteSpace(finding.PackageId) && !string.IsNullOrWhiteSpace(finding.PackageVersion))
+				{
+					if (trustStoreService.IsFindingApprovedByAssembly(userTrustStore, finding.PackageId, finding.PackageVersion))
+					{
+						assemblyTrustScopes.Add("User");
+					}
+
+					if (trustStoreService.IsFindingApprovedByAssembly(solutionTrustStore, finding.PackageId, finding.PackageVersion))
+					{
+						assemblyTrustScopes.Add("Solution");
+					}
+
+					if (projectTrustStore != null && trustStoreService.IsFindingApprovedByAssembly(projectTrustStore, finding.PackageId, finding.PackageVersion))
+					{
+						assemblyTrustScopes.Add("Project");
+					}
+
+					isApprovedByAssembly = assemblyTrustScopes.Count > 0;
+				}
 
 				var isApprovedBySigner = false;
 
@@ -205,7 +266,22 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 
 					if (signature.IsSignatureValid && (!string.IsNullOrWhiteSpace(signature.Thumbprint) || !string.IsNullOrWhiteSpace(signature.Subject)))
 					{
-						isApprovedBySigner = trustStoreService.IsSignerTrusted(trustStore, signature.Thumbprint, signature.Subject, signature.Issuer, signature.SerialNumber);
+						if (trustStoreService.IsSignerTrusted(userTrustStore, signature.Thumbprint, signature.Subject, signature.Issuer, signature.SerialNumber))
+						{
+							signerTrustScopes.Add("User");
+						}
+
+						if (trustStoreService.IsSignerTrusted(solutionTrustStore, signature.Thumbprint, signature.Subject, signature.Issuer, signature.SerialNumber))
+						{
+							signerTrustScopes.Add("Solution");
+						}
+
+						if (projectTrustStore != null && trustStoreService.IsSignerTrusted(projectTrustStore, signature.Thumbprint, signature.Subject, signature.Issuer, signature.SerialNumber))
+						{
+							signerTrustScopes.Add("Project");
+						}
+
+						isApprovedBySigner = signerTrustScopes.Count > 0;
 					}
 				}
 
@@ -213,6 +289,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 					? $"{finding.PackageId}@{finding.PackageVersion}"
 					: string.Empty;
 
+				var trustStatusDetails = BuildTrustStatusDetails(issueTrustScopes, assemblyTrustScopes, signerTrustScopes);
 				var isEffectivelyTrusted = isTrusted || isApprovedByAssembly || isApprovedBySigner;
 
 				this.allFindings.Add(new FindingViewModel
@@ -232,7 +309,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 					IsInTrustStore            = isTrusted,
 					OwningAssembly            = owningAssembly,
 					IsNewComparedWithBaseline = finding.IsNewComparedWithBaseline,
-					Reasoning                 = FindingViewModel.BuildReasoning(finding, isEffectivelyTrusted)
+					Reasoning                 = FindingViewModel.BuildReasoning(finding, isEffectivelyTrusted, trustStatusDetails)
 				});
 			}
 
@@ -431,6 +508,35 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			this.Summary.TrustedRiskScore  = projectTrustedRiskScore;
 			this.Summary.RecommendedAction = MapRecommendedAction(projectRiskScore).ToString();
 			this.Summary.FindingsCount     = this.Findings.Count;
+		}
+
+		/// <summary>
+		/// Builds a reasoning-friendly trust detail summary, including trust type and matching scope.
+		/// </summary>
+		/// <param name="issueTrustScopes">Matching scope names for issue trust.</param>
+		/// <param name="assemblyTrustScopes">Matching scope names for assembly trust.</param>
+		/// <param name="signerTrustScopes">Matching scope names for signer trust.</param>
+		/// <returns>Concise trust detail string.</returns>
+		private static string BuildTrustStatusDetails(IReadOnlyCollection<string> issueTrustScopes, IReadOnlyCollection<string> assemblyTrustScopes, IReadOnlyCollection<string> signerTrustScopes)
+		{
+			var parts = new List<string>();
+
+			if (issueTrustScopes.Count > 0)
+			{
+				parts.Add($"issue trust ({string.Join("/", issueTrustScopes)})");
+			}
+
+			if (assemblyTrustScopes.Count > 0)
+			{
+				parts.Add($"assembly trust ({string.Join("/", assemblyTrustScopes)})");
+			}
+
+			if (signerTrustScopes.Count > 0)
+			{
+				parts.Add($"signer trust ({string.Join("/", signerTrustScopes)})");
+			}
+
+			return string.Join("; ", parts);
 		}
 
 		/// <summary>
@@ -634,10 +740,10 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 						continue;
 					}
 
-					AddIndexEntry(index, path, name, basePath);
-					AddIndexEntry(index, projectNode.Attribute("Guid")?.Value, name, basePath);
-					AddIndexEntry(index, projectNode.Attribute("Id")?.Value, name, basePath);
-					AddIndexEntry(index, projectNode.Attribute("ProjectGuid")?.Value, name, basePath);
+					AddIndexEntry(index, path, name!, basePath);
+					AddIndexEntry(index, projectNode.Attribute("Guid")?.Value, name!, basePath);
+					AddIndexEntry(index, projectNode.Attribute("Id")?.Value, name!, basePath);
+					AddIndexEntry(index, projectNode.Attribute("ProjectGuid")?.Value, name!, basePath);
 				}
 			}
 			catch (Exception ex)
@@ -779,7 +885,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				return;
 			}
 
-			var key = rawKey.Trim();
+			var key = rawKey!.Trim();
 
 			index[key] = name;
 
@@ -809,7 +915,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				return string.Empty;
 			}
 
-			var trimmed = value.Trim().Trim('{', '}');
+			var trimmed = value!.Trim().Trim('{', '}');
 
 			if (!Guid.TryParse(trimmed, out var guid))
 			{
@@ -853,10 +959,12 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				return;
 			}
 
-			var assemblyName    = parts[0];
-			var assemblyVersion = parts[1];
-			var trustStorePath  = new TrustStoreService().GetDefaultUserTrustPath();
-			var assemblyPath    = MSBuildGuard.VisualStudio.Services.AssemblySignatureService.ResolveAssemblyFilePath(finding.FilePath);
+			var assemblyName     = parts[0];
+			var assemblyVersion  = parts[1];
+			var currentProjectPath = this.selectedProject != null && !string.Equals(this.selectedProject.Path, AllProjectsPath, StringComparison.OrdinalIgnoreCase)
+				? this.selectedProject.Path
+				: string.Empty;
+			var assemblyPath     = MSBuildGuard.VisualStudio.Services.AssemblySignatureService.ResolveAssemblyFilePath(finding.FilePath);
 
 			if (!string.IsNullOrWhiteSpace(finding.PackageId) && !string.IsNullOrWhiteSpace(finding.PackageVersion))
 			{
@@ -868,13 +976,15 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				}
 			}
 
-			var dialog          = new TrustAssemblyDialog
+			var dialog = new TrustAssemblyDialog
 			{
-				Owner            = Application.Current.MainWindow,
+				Owner                 = Application.Current.MainWindow,
 				WindowStartupLocation = System.Windows.WindowStartupLocation.CenterOwner,
-				AssemblyName     = assemblyName,
-					AssemblyVersion  = assemblyVersion,
-					AssemblyPath     = assemblyPath
+				AssemblyName          = assemblyName,
+				AssemblyVersion       = assemblyVersion,
+				AssemblyPath          = assemblyPath,
+				SolutionPath          = this.CurrentTargetPath,
+				ProjectPath           = currentProjectPath
 			};
 
 			var result = dialog.ShowDialog();
@@ -885,6 +995,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			}
 
 			var trustStoreService = new TrustStoreService();
+			var trustStorePath    = ResolveTrustStorePath(trustStoreService, dialog.SelectedScope, this.CurrentTargetPath, currentProjectPath);
 			var userSid           = WindowsIdentity.GetCurrent()?.User?.Value ?? "Unknown";
 			var reason            = !string.IsNullOrWhiteSpace(dialog.TrustReason)
 				? dialog.TrustReason
@@ -898,12 +1009,36 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				userSid,
 				dialog.AssemblySigner,
 				dialog.AssemblyIssuer,
-				dialog.AssemblySubject);
+				dialog.AssemblySubject,
+				dialog.ExpiresAtUtc);
 
 			if (MSBuildGuardPackage.Instance is MSBuildGuardPackage package)
 			{
 				await package.RescanSolutionSecurityReviewAsync();
 			}
+		}
+
+		/// <summary>
+		/// Resolves trust store path by selected UI scope.
+		/// </summary>
+		/// <param name="trustStoreService">Trust store service instance.</param>
+		/// <param name="scope">Selected trust scope.</param>
+		/// <param name="solutionPath">Current solution path.</param>
+		/// <param name="projectPath">Current project path.</param>
+		/// <returns>Resolved trust store path.</returns>
+		private static string ResolveTrustStorePath(TrustStoreService trustStoreService, TrustScope scope, string solutionPath, string projectPath)
+		{
+			if (scope == TrustScope.Project && !string.IsNullOrWhiteSpace(projectPath))
+			{
+				return trustStoreService.GetProjectTrustPath(projectPath);
+			}
+
+			if (scope == TrustScope.Solution && !string.IsNullOrWhiteSpace(solutionPath))
+			{
+				return trustStoreService.GetSolutionTrustPath(solutionPath);
+			}
+
+			return trustStoreService.GetDefaultUserTrustPath();
 		}
 
 		/// <summary>

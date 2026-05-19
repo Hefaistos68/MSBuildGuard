@@ -81,6 +81,34 @@ Current settings:
   - Default: `System.Reflection;Assembly.Load;Activator.CreateInstance;GetType(;dynamic ;DllImport;Marshal.GetDelegateForFunctionPointer;LoadLibrary`
 - **Additional blocked assemblies** (semicolon-separated list)
   - Default: empty
+- **Allow sharing trusts in repositories** (`false` by default)
+  - Global VSIX setting that controls managed `.gitignore` entries for trust files.
+  - When **enabled**, managed `.msbuildguard` trust ignore entries are removed from `.gitignore` files under the currently loaded solution.
+  - When **disabled**, managed trust ignore entries are added/enforced in existing `.gitignore` files under the currently loaded solution.
+
+## Trust management and moving trust scopes
+
+The extension supports moving trust entries between scopes directly in trust management dialogs.
+
+### Manage Assembly Trusts
+
+- Scope selector supports **User**, **Solution**, and **Project** scopes.
+- When **Project** scope is selected, a **Project** dropdown appears so a specific project trust store can be managed.
+- The grid context menu supports:
+  - Move trust to User scope
+  - Move trust to Solution scope
+  - Move trust to Project scope → submenu listing loaded projects
+- Moving trust copies the trust entry into the target scope store and removes it from the source scope store.
+
+### Manage Signer Trusts
+
+- Scope selector supports **User**, **Solution**, and **Project** scopes.
+- When **Project** scope is selected, a **Project** dropdown appears so a specific project trust store can be managed.
+- The grid context menu supports:
+  - Move trust to User scope
+  - Move trust to Solution scope
+  - Move trust to Project scope → submenu listing loaded projects
+- Moving signer trust preserves signer identity metadata and optional expiration while changing scope.
 
 ## Notes
 

@@ -212,8 +212,9 @@ namespace MSBuildGuard.VisualStudio.Models
 		/// </summary>
 		/// <param name="finding">The source finding.</param>
 		/// <param name="isTrusted">A value indicating whether the finding is currently trusted by the trust store.</param>
+		/// <param name="trustStatusDetails">Optional trust provenance details, including trust type and matched scope.</param>
 		/// <returns>A human-readable reasoning string.</returns>
-		public static string BuildReasoning(Finding finding, bool isTrusted)
+		public static string BuildReasoning(Finding finding, bool isTrusted, string trustStatusDetails)
 		{
 			var sb = new StringBuilder();
 
@@ -236,7 +237,14 @@ namespace MSBuildGuard.VisualStudio.Models
 			}
 			else if (isTrusted)
 			{
-				sb.AppendLine("Trust status: This finding is trusted (fingerprint approved in trust store).");
+				if (string.IsNullOrWhiteSpace(trustStatusDetails))
+				{
+					sb.AppendLine("Trust status: This finding is trusted (fingerprint approved in trust store).");
+				}
+				else
+				{
+					sb.AppendLine($"Trust status: This finding is trusted via {trustStatusDetails}.");
+				}
 			}
 			else
 			{

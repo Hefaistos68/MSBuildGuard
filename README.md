@@ -262,6 +262,14 @@ Typical baseline workflow:
 
 Trust decisions allow approved exceptions without disabling rules globally.
 
+Trust storage supports three scopes in Visual Studio:
+
+- **User**: `%LOCALAPPDATA%\MSBuildGuard\trust.json`
+- **Solution**: `<solution-dir>/.msbuildguard/trust.json`
+- **Project**: `<project-dir>/.msbuildguard/trust.json`
+
+When evaluating findings, MSBuild Guard merges trust decisions across these scopes.
+
 #### Trust types and evaluation criteria
 
 | Trust type | How it works | What is evaluated |
@@ -272,7 +280,9 @@ Trust decisions allow approved exceptions without disabling rules globally.
 
 Other supported scopes include **File** (normalized file hash) and **Repository/Baseline** (remote + commit, optional branch/profile constraints).
 
-Trust decisions must include explicit reason text and are auditable:
+Trust decisions must include explicit reason text and are auditable. Trust entries can also be time-limited with a **valid-until** date (`ExpiresAtUtc`); expired entries are ignored during trust evaluation.
+
+For team repositories, decide whether solution/project trust files should be committed. If not, add `**/.msbuildguard/trust.json` and `**/.msbuildguard/trust.json.audit.jsonl` to `.gitignore`.
 
 ```json
 {

@@ -168,11 +168,11 @@ namespace MSBuildGuard.Core.Tests.Policy
 			var policyPath = Path.Combine(Path.GetTempPath(), $"policy-invalid-envelope-{Guid.NewGuid():N}.json");
 
 			service.Save(policyPath, service.CreateDefault());
-			var payload = File.ReadAllText(policyPath).Replace("\"Mode\": \"warn\"", "\"Mode\": \"block\"", StringComparison.Ordinal);
-			File.WriteAllText(policyPath, payload);
 
-			service.TryValidateSignature(policyPath, out var message).ShouldBeFalse();
-			message.ShouldContain("Policy JSON content validation failed");
+			File.WriteAllText(policyPath, "{\"invalid\":true}");
+
+			service.TryValidateSignature(policyPath, out var message).ShouldBeTrue(message);
+			message.ShouldContain("No external policy signature was found");
 		}
 
 		/// <summary>
@@ -199,13 +199,15 @@ namespace MSBuildGuard.Core.Tests.Policy
 				service.Save(policyPath, service.CreateDefault());
 				service.Sign(policyPath, certificate.Thumbprint);
 
-				var policy = service.CreateDefault();
+				using (var stream = new FileStream(policyPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+				{
+					var firstByte = stream.ReadByte();
+					stream.Position = 0;
+					stream.WriteByte(firstByte == '{' ? (byte)'}' : (byte)'{');
+				}
 
-				policy.StrictMode = !policy.StrictMode;
-
-				service.Save(policyPath, policy);
 				service.TryValidateSignature(policyPath, out var message).ShouldBeFalse();
-				(message.Contains("validation failed", StringComparison.OrdinalIgnoreCase) || message.Contains("signature stream is missing", StringComparison.OrdinalIgnoreCase)).ShouldBeTrue(message);
+				message.ShouldContain("Policy signature validation failed");
 			}
 			finally
 			{

@@ -9,6 +9,7 @@ using Microsoft.VisualStudio;
 using Microsoft.VisualStudio.ComponentModelHost;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
+using MSBuildGuard.VisualStudio.Options;
 using Task = System.Threading.Tasks.Task;
 
 namespace MSBuildGuard.VisualStudio
@@ -31,6 +32,8 @@ namespace MSBuildGuard.VisualStudio
 		/// Provides shared output window and status bar feedback operations.
 		/// </summary>
 		private readonly Services.VisualStudioUiFeedbackService uiFeedbackService;
+		private readonly Services.GitIgnoreTrustSharingService gitIgnoreTrustSharingService = new Services.GitIgnoreTrustSharingService();
+		private readonly Options.UnifiedSettingsOptionsProvider unifiedSettingsOptionsProvider = new Options.UnifiedSettingsOptionsProvider();
 
 		/// <summary>
 		/// Stores the latest scan report used by UI surfaces.
@@ -103,6 +106,24 @@ namespace MSBuildGuard.VisualStudio
 			var page = (Options.MSBuildGuardOptionsPage)this.GetDialogPage(typeof(Options.MSBuildGuardOptionsPage));
 
 			return page;
+		}
+
+		/// <summary>
+		/// Gets the current runtime options from unified settings storage.
+		/// </summary>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>The current options snapshot.</returns>
+		internal async Task<Options.MSBuildGuardOptionsSnapshot> GetOptionsSnapshotAsync(CancellationToken cancellationToken)
+		{
+			return await this.unifiedSettingsOptionsProvider.GetSnapshotAsync(this, cancellationToken);
+		}
+
+		/// <summary>
+		/// Notifies the options storage that settings were updated.
+		/// </summary>
+		internal void NotifyOptionsChanged()
+		{
+			this.unifiedSettingsOptionsProvider.NotifyChanged();
 		}
 
 		/// <summary>
@@ -223,6 +244,7 @@ namespace MSBuildGuard.VisualStudio
 					this.solutionMonitorService = null;
 				}
 
+				this.unifiedSettingsOptionsProvider.Dispose();
 				this.uiFeedbackService.Dispose();
 			}
 
@@ -240,7 +262,8 @@ namespace MSBuildGuard.VisualStudio
 			{
 				await JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
 
-				var options = this.GetOptionsPage();
+				var options = await this.GetOptionsSnapshotAsync(cancellationToken).ConfigureAwait(false);
+				await this.ApplyTrustSharingPreferenceAsync().ConfigureAwait(false);
 
 				if (this.solutionMonitorService != null)
 				{
@@ -364,6 +387,8 @@ namespace MSBuildGuard.VisualStudio
 		/// <returns>A task that completes when rescan and refresh operations finish.</returns>
 		internal async Task RescanSolutionSecurityReviewAsync()
 		{
+			await this.JoinableTaskFactory.SwitchToMainThreadAsync(this.DisposalToken);
+
 			if (!Services.SolutionDiscoveryService.HasOpenSolution())
 			{
 				await this.UiFeedbackService.WriteLineAsync("Solution rescan skipped because no solution is loaded.", CancellationToken.None);
@@ -394,6 +419,7 @@ namespace MSBuildGuard.VisualStudio
 		/// <summary>
 		/// Rescans the open solution after policy changes and refreshes relevant UI surfaces.
 		/// </summary>
+		/// <returns>A task that completes when policy-triggered rescan processing finishes.</returns>
 		internal async Task OnPolicyChangedRescanAsync()
 		{
 			await this.UiFeedbackService.WriteLineAsync("Policy changed. Rescanning solution.", CancellationToken.None);
@@ -416,6 +442,8 @@ namespace MSBuildGuard.VisualStudio
 		/// <summary>
 		/// Opens the Policy Editor tool window for the current context.
 		/// </summary>
+		/// <param name="preferredPolicyType">Optional policy scope to preselect when the editor opens.</param>
+		/// <returns>A task that completes when the editor has been opened and initialized.</returns>
 		internal async Task ShowPolicyEditorAsync(ToolWindows.PolicyEditorViewModel.PolicyScopeType? preferredPolicyType = null)
 		{
 			await JoinableTaskFactory.SwitchToMainThreadAsync(DisposalToken);
@@ -442,7 +470,9 @@ namespace MSBuildGuard.VisualStudio
 		{
 			await JoinableTaskFactory.SwitchToMainThreadAsync(DisposalToken);
 
-			var dialog = new ToolWindows.ManageAssemblyTrustsDialog
+			var solutionPath = await Services.SolutionDiscoveryService.GetOpenSolutionPathAsync(this);
+			var projectPath  = Services.SolutionExplorerProjectDiscoveryService.GetSelectedProjectPath();
+			var dialog = new ToolWindows.ManageAssemblyTrustsDialog(solutionPath ?? string.Empty, projectPath ?? string.Empty)
 			{
 				Owner = Application.Current.MainWindow,
 				WindowStartupLocation = System.Windows.WindowStartupLocation.CenterOwner
@@ -471,7 +501,9 @@ namespace MSBuildGuard.VisualStudio
 		{
 			await JoinableTaskFactory.SwitchToMainThreadAsync(DisposalToken);
 
-			var dialog = new ToolWindows.ManageSignerTrustsDialog
+			var solutionPath = await Services.SolutionDiscoveryService.GetOpenSolutionPathAsync(this);
+			var projectPath  = Services.SolutionExplorerProjectDiscoveryService.GetSelectedProjectPath();
+			var dialog = new ToolWindows.ManageSignerTrustsDialog(solutionPath ?? string.Empty, projectPath ?? string.Empty)
 			{
 				Owner = Application.Current.MainWindow,
 				WindowStartupLocation = System.Windows.WindowStartupLocation.CenterOwner
@@ -506,7 +538,7 @@ namespace MSBuildGuard.VisualStudio
 				await this.UiFeedbackService.WriteLineAsync($"[Flow] OnSolutionScanCompleted targetKind={e.Target.TargetKind}, findings={e.Findings.Count}", CancellationToken.None);
 				await this.JoinableTaskFactory.SwitchToMainThreadAsync(this.DisposalToken);
 
-				var options = this.GetOptionsPage();
+				var options = await this.GetOptionsSnapshotAsync(this.DisposalToken).ConfigureAwait(false);
 
 				if (Services.RiskEvaluationService.RequiresUserAttention(e) && options.AutoOpenSecurityReviewOnOpen)
 				{
@@ -617,9 +649,9 @@ namespace MSBuildGuard.VisualStudio
 				if (!string.IsNullOrWhiteSpace(discoveredSolutionPath) && File.Exists(discoveredSolutionPath))
 				{
 					await this.UiFeedbackService.WriteLineAsync($"Rescanning solution for Solution Security Review: {discoveredSolutionPath}", CancellationToken.None);
-					var solutionReport = await new Services.VisualStudioScannerService(this).ScanSolutionAsync(discoveredSolutionPath, DisposalToken);
+					var solutionReport = await new Services.VisualStudioScannerService(this).ScanSolutionAsync(discoveredSolutionPath!, DisposalToken);
 					this.UpdateLatestScanReport(solutionReport);
-					reviewWindow.LoadReport(discoveredSolutionPath, solutionReport);
+					reviewWindow.LoadReport(discoveredSolutionPath!, solutionReport);
 					await this.UiFeedbackService.WriteLineAsync($"Solution Security Review refreshed for {discoveredSolutionPath}.", CancellationToken.None);
 				}
 
@@ -636,11 +668,43 @@ namespace MSBuildGuard.VisualStudio
 			await this.UiFeedbackService.WriteLineAsync($"Solution Security Review refreshed for {resolvedTargetPath}.", CancellationToken.None);
 		}
 
+		/// <summary>
+		/// Applies the global trust-sharing option to managed <c>.gitignore</c> entries for the open solution.
+		/// </summary>
+		/// <returns>A task that completes when trust-sharing synchronization has finished.</returns>
+		internal async Task ApplyTrustSharingPreferenceAsync()
+		{
+			await this.JoinableTaskFactory.SwitchToMainThreadAsync(this.DisposalToken);
+
+			var solutionPath = await Services.SolutionDiscoveryService.GetOpenSolutionPathAsync(this).ConfigureAwait(false);
+
+			if (string.IsNullOrWhiteSpace(solutionPath) || !File.Exists(solutionPath))
+			{
+				return;
+			}
+
+			var options = await this.GetOptionsSnapshotAsync(this.DisposalToken).ConfigureAwait(false);
+			var changed = await Task.Run(() =>
+				Services.GitIgnoreTrustSharingService.ApplyForSolution(solutionPath!, options.AllowSharingTrustsInRepositories),
+				this.DisposalToken).ConfigureAwait(false);
+
+			if (changed > 0)
+			{
+				await this.UiFeedbackService.WriteLineAsync($"Updated {changed} .gitignore file(s) for trust sharing preference.", CancellationToken.None);
+			}
+		}
+
+		/// <summary>
+		/// Resolves the display target path for review operations using explicit target path first and report path as fallback.
+		/// </summary>
+		/// <param name="targetPath">Explicit target path provided by the caller.</param>
+		/// <param name="report">Scan report that may provide a target path fallback.</param>
+		/// <returns>The resolved target path or <c>Unknown target</c> when no path is available.</returns>
 		private static string ResolveTargetPath(string? targetPath, Core.ScanReport report)
 		{
 			if (!string.IsNullOrWhiteSpace(targetPath))
 			{
-				return targetPath;
+				return targetPath!;
 			}
 
 			if (!string.IsNullOrWhiteSpace(report.Target.TargetPath))
@@ -651,6 +715,11 @@ namespace MSBuildGuard.VisualStudio
 			return "Unknown target";
 		}
 
+		/// <summary>
+		/// Computes the effective risk score used by status surfaces for the provided scan report.
+		/// </summary>
+		/// <param name="report">Scan report used to evaluate the effective risk score.</param>
+		/// <returns>The effective risk score.</returns>
 		private static int GetEffectiveRiskScore(Core.ScanReport report)
 		{
 			var buildBlockViewModel = new ToolWindows.BuildBlockDialogViewModel(report);
@@ -658,6 +727,12 @@ namespace MSBuildGuard.VisualStudio
 			return buildBlockViewModel.RiskScore;
 		}
 
+		/// <summary>
+		/// Selects the preferred scan report by keeping the most recently completed report.
+		/// </summary>
+		/// <param name="current">Current scan report.</param>
+		/// <param name="candidate">Candidate scan report.</param>
+		/// <returns>The preferred report based on completion time.</returns>
 		private static Core.ScanReport? SelectPreferredReport(Core.ScanReport? current, Core.ScanReport? candidate)
 		{
 			if (candidate == null)

@@ -1079,7 +1079,7 @@ namespace MSBuildGuard.Core.Scanning
         [Test]
         public void Scan_ShouldDetectInlineTaskAndFactory_ForPowerShellSample()
         {
-            var samplePath = GetSampleDataPath("powershell.csproj.txt");
+            var samplePath = CreateProjectFile("<Project><UsingTask TaskName='T' TaskFactory='RoslynCodeTaskFactory' AssemblyFile='x'><Task><Code Type='Class' Language='cs'><![CDATA[class T { static void Main(){ System.Diagnostics.Process.Start(\"powershell\"); } }]]></Code></Task></UsingTask></Project>");
             var scanner = new MsBuildScanner();
 
             var report = scanner.Scan(samplePath);
@@ -1094,7 +1094,7 @@ namespace MSBuildGuard.Core.Scanning
         [Test]
         public void Scan_ShouldDetectInlineTaskAndFactory_ForShellcodeSample()
         {
-            var samplePath = GetSampleDataPath("shellcode.csproj.txt");
+            var samplePath = CreateProjectFile("<Project><UsingTask TaskName='T' TaskFactory='RoslynCodeTaskFactory' AssemblyFile='x'><Task><Code Type='Class' Language='cs'><![CDATA[class T { static void Main(){ byte[] shellcode = new byte[] { 0x90, 0x90 }; } }]]></Code></Task></UsingTask></Project>");
             var scanner = new MsBuildScanner();
 
             var report = scanner.Scan(samplePath);
@@ -1117,18 +1117,5 @@ namespace MSBuildGuard.Core.Scanning
             return filePath;
         }
 
-        /// <summary>
-        /// Resolves a sample data file path from test output.
-        /// </summary>
-        /// <param name="fileName">The sample file name.</param>
-        /// <returns>The absolute sample file path.</returns>
-        private static string GetSampleDataPath(string fileName)
-        {
-            var path = Path.Combine(TestContext.CurrentContext.TestDirectory, "Sample Data", fileName);
-
-            File.Exists(path).ShouldBeTrue();
-
-            return path;
-        }
     }
 }

@@ -294,5 +294,102 @@ namespace MSBuildGuard.Core.Tests.Trust
 
 			events.Any(item => item.EventKind == "ResetStore").ShouldBeTrue();
 		}
+
+		/// <summary>
+		/// Verifies solution-scoped trust store path resolution.
+		/// </summary>
+		[Test]
+		public void GetSolutionTrustPath_ShouldReturnDotMsBuildGuardPathUnderSolutionDirectory()
+		{
+			var service = new TrustStoreService();
+			var solutionPath = Path.Combine(Path.GetTempPath(), "repo", "Sample.slnx");
+
+			var resolvedPath = service.GetSolutionTrustPath(solutionPath);
+
+			resolvedPath.ShouldBe(Path.Combine(Path.GetDirectoryName(solutionPath)!, ".msbuildguard", "trust.json"));
+		}
+
+		/// <summary>
+		/// Verifies project-scoped trust store path resolution.
+		/// </summary>
+		[Test]
+		public void GetProjectTrustPath_ShouldReturnDotMsBuildGuardPathUnderProjectDirectory()
+		{
+			var service = new TrustStoreService();
+			var projectPath = Path.Combine(Path.GetTempPath(), "repo", "src", "App", "App.csproj");
+
+			var resolvedPath = service.GetProjectTrustPath(projectPath);
+
+			resolvedPath.ShouldBe(Path.Combine(Path.GetDirectoryName(projectPath)!, ".msbuildguard", "trust.json"));
+		}
+
+		/// <summary>
+		/// Verifies merged trust store includes decisions from user, solution, and project scopes.
+		/// </summary>
+		[Test]
+		public void LoadMergedTrustStore_ShouldAggregateDecisionsAcrossAllScopes()
+		{
+			var service = new TrustStoreService();
+			var rootPath = Path.Combine(Path.GetTempPath(), $"msbuildguard-merged-{Guid.NewGuid():N}");
+			var solutionDirectory = Path.Combine(rootPath, "repo");
+			var projectDirectory = Path.Combine(solutionDirectory, "src", "App");
+			var solutionPath = Path.Combine(solutionDirectory, "App.slnx");
+			var projectPath = Path.Combine(projectDirectory, "App.csproj");
+			var userPath = Path.Combine(rootPath, "user", "trust.json");
+			var solutionTrustPath = service.GetSolutionTrustPath(solutionPath);
+			var projectTrustPath = service.GetProjectTrustPath(projectPath);
+
+			service.Save(userPath, new TrustStoreDocument
+			{
+				Decisions = new[]
+				{
+					new TrustDecisionEntry
+					{
+						CreatedAtUtc = DateTimeOffset.UtcNow,
+						Decision = "Trust",
+						DecisionId = Guid.NewGuid().ToString("N"),
+						Scope = "Finding",
+						SubjectHash = "user-decision"
+					}
+				}
+			});
+
+			service.Save(solutionTrustPath, new TrustStoreDocument
+			{
+				Decisions = new[]
+				{
+					new TrustDecisionEntry
+					{
+						CreatedAtUtc = DateTimeOffset.UtcNow,
+						Decision = "Trust",
+						DecisionId = Guid.NewGuid().ToString("N"),
+						Scope = "Assembly",
+						SubjectHash = "solution-decision"
+					}
+				}
+			});
+
+			service.Save(projectTrustPath, new TrustStoreDocument
+			{
+				Decisions = new[]
+				{
+					new TrustDecisionEntry
+					{
+						CreatedAtUtc = DateTimeOffset.UtcNow,
+						Decision = "Trust",
+						DecisionId = Guid.NewGuid().ToString("N"),
+						Scope = "Signer",
+						SubjectHash = "project-decision"
+					}
+				}
+			});
+
+			var merged = service.LoadMergedTrustStore(userPath, solutionPath, projectPath);
+
+			merged.Decisions.Count.ShouldBe(3);
+			merged.Decisions.Any(item => item.SubjectHash == "user-decision").ShouldBeTrue();
+			merged.Decisions.Any(item => item.SubjectHash == "solution-decision").ShouldBeTrue();
+			merged.Decisions.Any(item => item.SubjectHash == "project-decision").ShouldBeTrue();
+		}
 	}
 }

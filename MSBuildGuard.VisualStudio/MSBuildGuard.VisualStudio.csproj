@@ -39,8 +39,8 @@
 		<RootNamespace>MSBuildGuard.VisualStudio</RootNamespace>
 		<Product>MSBuildGuard</Product>
 		<Title>MSBuildGuard</Title>
-		<Version>0.0.1.6</Version>
-		<FileVersion>0.0.1.6</FileVersion>
+		<Version>0.0.1.7</Version>
+		<FileVersion>0.0.1.7</FileVersion>
 		<SignAssembly>False</SignAssembly>
 		<Authors>Hefaistos68</Authors>
 		<Company>Hefaistos68.dev</Company>
@@ -73,6 +73,12 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<!-- Unified Settings -->
+		<Content Include="UnifiedSettings\msbuildguard.registration.json">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+			<IncludeInVSIX>true</IncludeInVSIX>
+		</Content>
+
 		<None Include="source.extension.vsixmanifest">
 			<SubType>Designer</SubType>
 		</None>

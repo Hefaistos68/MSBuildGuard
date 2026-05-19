@@ -118,18 +118,18 @@ namespace MSBuildGuard.Core.Baseline
 		{
 			var finding = new Finding
 			{
-				Confidence     = FindingConfidence.High,
-				Description    = "New .props or .targets file appears compared with baseline.",
-				FilePath       = path,
-				Id             = "MBG010",
+				Confidence                = FindingConfidence.High,
+				Description               = "New .props or .targets file appears compared with baseline.",
+				FilePath                  = path,
+				Id                        = "MBG010",
 				IsNewComparedWithBaseline = true,
-				IsNewInBaseline = true,
-				PolicyAction   = PolicyAction.RequireApproval,
-				PolicyEvaluatedAction = PolicyAction.RequireApproval,
-				Recommendation = "Review and approve new build customization files before trusting baseline drift.",
-				ScannerPolicyAction = PolicyAction.RequireApproval,
-				Severity       = FindingSeverity.Medium,
-				Title          = "New build customization file detected"
+				IsNewInBaseline           = true,
+				PolicyAction              = PolicyAction.RequireApproval,
+				PolicyEvaluatedAction     = PolicyAction.RequireApproval,
+				Recommendation            = "Review and approve new build customization files before trusting baseline drift.",
+				ScannerPolicyAction       = PolicyAction.RequireApproval,
+				Severity                  = FindingSeverity.Medium,
+				Title                     = "New build customization file detected"
 			};
 
 			finding.Fingerprint = string.Format(System.Globalization.CultureInfo.InvariantCulture, "MBG010|{0}", path);
@@ -137,6 +137,11 @@ namespace MSBuildGuard.Core.Baseline
 			return finding;
 		}
 
+		/// <summary>
+		/// Returns a user-friendly representation of a file for drift reporting, including package asset details when available.
+		/// </summary>
+		/// <param name="file">The file record to format.</param>
+		/// <returns>A formatted string representing the file for drift reporting.</returns>
 		private static string FormatDriftPath(MsBuildFileRecord file)
 		{
 			if (file.PackageAssetKind == PackageAssetKind.Unknown || string.IsNullOrWhiteSpace(file.PackageId))
@@ -147,6 +152,13 @@ namespace MSBuildGuard.Core.Baseline
 			return string.Format(System.Globalization.CultureInfo.InvariantCulture, "NuGet package asset: {0} {1} ({2}) -> {3}", file.PackageId, file.PackageVersion, file.PackageAssetKind, file.Path);
 		}
 
+		/// <summary>
+		///	Adds MBG003_CHANGED findings to the comparison result for files that are present in the baseline but have changed content and associated MBG003 findings, indicating potential drift in InitialTargets behavior that may require attention.
+		/// </summary>
+		/// <param name="report">The scan report containing findings and file records.</param>
+		/// <param name="baselineFileMap">A map of file paths to their baseline hashes.</param>
+		/// <param name="baselineFingerprints">A set of baseline fingerprints.</param>
+		/// <param name="comparison">The baseline comparison result to update with new findings.</param>
 		private static void AddMbg003ChangedFindings(ScanReport report, IDictionary<string, string> baselineFileMap, ISet<string> baselineFingerprints, BaselineComparisonResult comparison)
 		{
 			foreach (var finding in report.Findings)
@@ -187,26 +199,31 @@ namespace MSBuildGuard.Core.Baseline
 			}
 		}
 
+		/// <summary>
+		/// Creates a new finding based on an existing MBG003 finding, indicating that the InitialTargets behavior appears changed from baseline for an existing file, which may require attention and approval.
+		/// </summary>
+		/// <param name="source">The source finding to base the new finding on.</param>
+		/// <returns>A new finding indicating a change in InitialTargets behavior.</returns>
 		private static Finding CreateMbg003ChangedFinding(Finding source)
 		{
 			var changedFinding = new Finding
 			{
-				Confidence = FindingConfidence.High,
-				Description = "InitialTargets behavior appears changed from baseline for an existing file.",
-				EndColumn = source.EndColumn,
-				EndLine = source.EndLine,
-				Evidence = source.Evidence,
-				FilePath = source.FilePath,
-				Id = "MBG003_CHANGED",
+				Confidence                = FindingConfidence.High,
+				Description               = "InitialTargets behavior appears changed from baseline for an existing file.",
+				EndColumn                 = source.EndColumn,
+				EndLine                   = source.EndLine,
+				Evidence                  = source.Evidence,
+				FilePath                  = source.FilePath,
+				Id                        = "MBG003_CHANGED",
 				IsNewComparedWithBaseline = true,
-				PolicyAction = PolicyAction.Block,
-				PolicyEvaluatedAction = PolicyAction.Block,
-				Recommendation = "Review InitialTargets drift and require explicit approval before trusting this change.",
-				ScannerPolicyAction = PolicyAction.Block,
-				Severity = FindingSeverity.High,
-				StartColumn = source.StartColumn,
-				StartLine = source.StartLine,
-				Title = "InitialTargets changed from baseline"
+				PolicyAction              = PolicyAction.Block,
+				PolicyEvaluatedAction     = PolicyAction.Block,
+				Recommendation            = "Review InitialTargets drift and require explicit approval before trusting this change.",
+				ScannerPolicyAction       = PolicyAction.Block,
+				Severity                  = FindingSeverity.High,
+				StartColumn               = source.StartColumn,
+				StartLine                 = source.StartLine,
+				Title                     = "InitialTargets changed from baseline"
 			};
 
 			changedFinding.Fingerprint = string.Format(System.Globalization.CultureInfo.InvariantCulture, "MBG003_CHANGED|{0}|{1}", source.FilePath, source.Fingerprint);
