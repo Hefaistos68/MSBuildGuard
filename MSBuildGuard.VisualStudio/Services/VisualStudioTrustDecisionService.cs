@@ -1,6 +1,7 @@
 using System;
 using System.Security.Principal;
 using System.Threading.Tasks;
+using Microsoft.VisualStudio.Shell;
 using MSBuildGuard.Core;
 using MSBuildGuard.Core.Trust;
 using MSBuildGuard.VisualStudio.Models;
@@ -52,17 +53,17 @@ namespace MSBuildGuard.VisualStudio.Services
 				trustPath,
 				new TrustDecisionEntry
 				{
-					DecisionId      = Guid.NewGuid().ToString("D"),
-					Scope           = "Finding",
-					SubjectHash     = finding.Fingerprint,
-					Decision        = "TrustUntilChanged",
-					Reason          = reason,
-					UserSid         = Environment.UserName,
-					CreatedAtUtc    = DateTimeOffset.UtcNow,
+					DecisionId       = Guid.NewGuid().ToString("D"),
+					Scope            = "Finding",
+					SubjectHash      = finding.Fingerprint,
+					Decision         = "TrustUntilChanged",
+					Reason           = reason,
+					UserSid          = Environment.UserName,
+					CreatedAtUtc     = DateTimeOffset.UtcNow,
 					RepositoryRemote = report.Target.TrustContext.RepositoryRemote,
-					Branch          = report.Target.TrustContext.Branch,
-					CommitSha       = report.Target.TrustContext.CommitSha,
-					PolicyProfile   = report.PolicyProfile
+					Branch           = report.Target.TrustContext.Branch,
+					CommitSha        = report.Target.TrustContext.CommitSha,
+					PolicyProfile    = report.PolicyProfile
 				});
 		}
 
@@ -107,39 +108,62 @@ namespace MSBuildGuard.VisualStudio.Services
 				throw new InvalidOperationException("Finding does not have an owning assembly.");
 			}
 
+			await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+
+			var split = finding.OwningAssembly.Split('@');
+			var assemblyName = split.Length > 0 ? split[0] : finding.OwningAssembly;
+			var assemblyVersion = split.Length > 1 ? split[1] : "Unknown";
+			var solutionPath = await SolutionDiscoveryService.GetOpenSolutionPathAsync(MSBuildGuardPackage.Instance!);
+			var projectPath = SolutionExplorerProjectDiscoveryService.GetSelectedProjectPath() ?? string.Empty;
 			var assemblyPath = !string.IsNullOrWhiteSpace(finding.PackageId) && !string.IsNullOrWhiteSpace(finding.PackageVersion)
 				? AssemblySignatureService.ResolveAssemblyFilePathFromPackageId(finding.PackageId, finding.PackageVersion)
 				: AssemblySignatureService.ResolveAssemblyFilePath(finding.FilePath);
 
 			var dialog = new TrustAssemblyDialog
 			{
-				AssemblyName    = finding.OwningAssembly.Split('@')[0],
-					AssemblyVersion = finding.OwningAssembly.Contains("@") ? finding.OwningAssembly.Split('@')[1] : "Unknown",
-					AssemblyPath    = assemblyPath,
-				Owner           = System.Windows.Application.Current.MainWindow,
-				WindowStartupLocation = System.Windows.WindowStartupLocation.CenterOwner
+				AssemblyName           = assemblyName,
+				AssemblyVersion        = assemblyVersion,
+				AssemblyPath           = assemblyPath,
+				SolutionPath           = solutionPath ?? string.Empty,
+				ProjectPath            = projectPath,
+				Owner                  = System.Windows.Application.Current.MainWindow,
+				WindowStartupLocation  = System.Windows.WindowStartupLocation.CenterOwner
 			};
 
-			var result = dialog.ShowDialog();
-
-			if (result == true)
+			if (dialog.ShowDialog() != true)
 			{
-				var trustPath = this.trustStoreService.GetDefaultUserTrustPath();
-				var userSid  = WindowsIdentity.GetCurrent()?.User?.Value ?? "Unknown";
-
-				this.trustStoreService.AddDecision(
-					trustPath,
-					new TrustDecisionEntry
-					{
-						DecisionId  = Guid.NewGuid().ToString("D"),
-						Scope       = "Assembly",
-						SubjectHash = finding.OwningAssembly,
-						Decision    = "Trust",
-						Reason      = reason,
-						UserSid     = userSid,
-						CreatedAtUtc = DateTimeOffset.UtcNow
-					});
+				return;
 			}
+
+			var trustPath = ResolveTrustStorePath(dialog.SelectedScope, solutionPath ?? string.Empty, projectPath);
+			var userSid = WindowsIdentity.GetCurrent()?.User?.Value ?? "Unknown";
+			var trustReason = !string.IsNullOrWhiteSpace(dialog.TrustReason) ? dialog.TrustReason : reason;
+
+			this.trustStoreService.AddAssemblyTrust(
+				trustPath,
+				assemblyName,
+				assemblyVersion,
+				trustReason,
+				userSid,
+				dialog.AssemblySigner,
+				dialog.AssemblyIssuer,
+				dialog.AssemblySubject,
+				dialog.ExpiresAtUtc);
+		}
+
+		private string ResolveTrustStorePath(TrustScope selectedScope, string solutionPath, string projectPath)
+		{
+			if (selectedScope == TrustScope.Project && !string.IsNullOrWhiteSpace(projectPath))
+			{
+				return this.trustStoreService.GetProjectTrustPath(projectPath);
+			}
+
+			if (selectedScope == TrustScope.Solution && !string.IsNullOrWhiteSpace(solutionPath))
+			{
+				return this.trustStoreService.GetSolutionTrustPath(solutionPath);
+			}
+
+			return this.trustStoreService.GetDefaultUserTrustPath();
 		}
 	}
 }

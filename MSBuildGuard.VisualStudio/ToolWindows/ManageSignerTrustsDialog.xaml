@@ -19,9 +19,37 @@
         </Grid.RowDefinitions>
 
         <TextBlock Grid.Row="0" Text="Manage Signer Trusts" FontSize="16" FontWeight="Bold" Margin="0,0,0,4"/>
-        <TextBlock Grid.Row="1" Text="Trusted signers have all findings from assemblies bearing their certificate automatically approved, regardless of assembly version." TextWrapping="Wrap" Margin="0,0,0,12" Foreground="#666666"/>
+        <StackPanel Grid.Row="1" Orientation="Vertical" Margin="0,0,0,12">
+            <TextBlock Text="Trusted signers have all findings from assemblies bearing their certificate automatically approved, regardless of assembly version." TextWrapping="Wrap" Foreground="#666666" Margin="0,0,0,8"/>
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                <TextBlock Text="Scope:" VerticalAlignment="Center" FontWeight="Bold" Margin="0,0,8,0"/>
+                <ComboBox x:Name="ScopeComboBox" Width="180" SelectionChanged="ScopeComboBox_SelectionChanged"/>
+            </StackPanel>
+            <StackPanel x:Name="ProjectSelectorPanel" Orientation="Horizontal" Visibility="Collapsed">
+                <TextBlock Text="Project:" VerticalAlignment="Center" FontWeight="Bold" Margin="0,0,8,0"/>
+                <ComboBox x:Name="ProjectScopeComboBox" Width="360" DisplayMemberPath="Name" SelectedValuePath="Path" SelectionChanged="ProjectScopeComboBox_SelectionChanged"/>
+            </StackPanel>
+        </StackPanel>
 
-        <DataGrid Grid.Row="2" x:Name="TrustedSignersGrid" AutoGenerateColumns="False" Margin="0,0,0,12" CanUserSortColumns="False" CanUserReorderColumns="False" CanUserAddRows="False">
+        <DataGrid Grid.Row="2" x:Name="TrustedSignersGrid" AutoGenerateColumns="False" Margin="0,0,0,12" CanUserSortColumns="False" CanUserReorderColumns="False" CanUserAddRows="False" Loaded="TrustedSignersGrid_Loaded">
+            <DataGrid.ContextMenu>
+                <ContextMenu>
+                    <MenuItem Header="Move trust to User scope" Tag="User" Click="MoveTrustToScopeMenuItem_Click"/>
+                    <MenuItem Header="Move trust to Solution scope" Tag="Solution" Click="MoveTrustToScopeMenuItem_Click"/>
+                    <MenuItem x:Name="MoveToProjectScopeMenuItem" Header="Move trust to Project scope">
+                        <MenuItem.ItemsSource>
+                            <Binding ElementName="ProjectScopeComboBox" Path="ItemsSource"/>
+                        </MenuItem.ItemsSource>
+                        <MenuItem.ItemContainerStyle>
+                            <Style TargetType="MenuItem">
+                                <Setter Property="Header" Value="{Binding Name}"/>
+                                <Setter Property="Tag" Value="{Binding Path}"/>
+                                <EventSetter Event="Click" Handler="MoveTrustToProjectScopeMenuItem_Click"/>
+                            </Style>
+                        </MenuItem.ItemContainerStyle>
+                    </MenuItem>
+                </ContextMenu>
+            </DataGrid.ContextMenu>
             <DataGrid.Columns>
                 <DataGridTextColumn Header="Signer" Binding="{Binding SignerName}" Width="200" IsReadOnly="True"/>
                 <DataGridTextColumn Header="Issuer" Binding="{Binding Issuer}" Width="220" IsReadOnly="True"/>

@@ -785,6 +785,81 @@ namespace MSBuildGuard.Core.Trust
 		}
 
 		/// <summary>
+		/// Gets the solution-level trust store path.
+		/// </summary>
+		/// <param name="solutionPath">The full solution path.</param>
+		/// <returns>The solution-level trust store path.</returns>
+		public string GetSolutionTrustPath(string solutionPath)
+		{
+			if (solutionPath == null)
+			{
+				throw new ArgumentNullException(nameof(solutionPath));
+			}
+
+			var solutionDirectory = Path.GetDirectoryName(solutionPath);
+
+			if (string.IsNullOrWhiteSpace(solutionDirectory))
+			{
+				throw new InvalidOperationException("Solution path must include a valid directory.");
+			}
+
+			return Path.Combine(solutionDirectory, ".msbuildguard", "trust.json");
+		}
+
+		/// <summary>
+		/// Gets the project-level trust store path.
+		/// </summary>
+		/// <param name="projectPath">The full project path.</param>
+		/// <returns>The project-level trust store path.</returns>
+		public string GetProjectTrustPath(string projectPath)
+		{
+			if (projectPath == null)
+			{
+				throw new ArgumentNullException(nameof(projectPath));
+			}
+
+			var projectDirectory = Path.GetDirectoryName(projectPath);
+
+			if (string.IsNullOrWhiteSpace(projectDirectory))
+			{
+				throw new InvalidOperationException("Project path must include a valid directory.");
+			}
+
+			return Path.Combine(projectDirectory, ".msbuildguard", "trust.json");
+		}
+
+		/// <summary>
+		/// Loads and merges trust decisions from user, solution, and project scopes.
+		/// </summary>
+		/// <param name="userTrustPath">The user-level trust store path.</param>
+		/// <param name="solutionPath">Optional solution path for solution-level trust.</param>
+		/// <param name="projectPath">Optional project path for project-level trust.</param>
+		/// <returns>A merged trust store document containing all active decisions.</returns>
+		public TrustStoreDocument LoadMergedTrustStore(string userTrustPath, string? solutionPath, string? projectPath)
+		{
+			if (userTrustPath == null)
+			{
+				throw new ArgumentNullException(nameof(userTrustPath));
+			}
+
+			var merged = new TrustStoreDocument();
+
+			AppendDecisions(merged, Load(userTrustPath));
+
+			if (!string.IsNullOrWhiteSpace(solutionPath))
+			{
+				AppendDecisions(merged, Load(GetSolutionTrustPath(solutionPath)));
+			}
+
+			if (!string.IsNullOrWhiteSpace(projectPath))
+			{
+				AppendDecisions(merged, Load(GetProjectTrustPath(projectPath)));
+			}
+
+			return merged;
+		}
+
+		/// <summary>
 		/// Gets the audit-log path associated with a trust store path.
 		/// </summary>
 		/// <param name="trustStorePath">Trust store path.</param>
@@ -797,6 +872,29 @@ namespace MSBuildGuard.Core.Trust
 			}
 
 			return trustStorePath + ".audit.jsonl";
+		}
+
+		/// <summary>
+		/// Appends trust decisions from a source document into a destination document.
+		/// </summary>
+		/// <param name="destination">The destination trust document.</param>
+		/// <param name="source">The source trust document.</param>
+		private static void AppendDecisions(TrustStoreDocument destination, TrustStoreDocument source)
+		{
+			if (destination == null)
+			{
+				throw new ArgumentNullException(nameof(destination));
+			}
+
+			if (source == null)
+			{
+				throw new ArgumentNullException(nameof(source));
+			}
+
+			foreach (var decision in source.Decisions)
+			{
+				destination.Decisions.Add(decision);
+			}
 		}
 
 		/// <summary>

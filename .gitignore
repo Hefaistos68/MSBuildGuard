@@ -200,6 +200,10 @@ PublishScripts/
 **/[Pp]ackages/*
 # except build/, which is used as an MSBuild target.
 !**/[Pp]ackages/build/
+
+# MSBuild Guard scoped trust stores (solution/project level)
+**/.msbuildguard/trust.json
+**/.msbuildguard/trust.json.audit.jsonl
 # Uncomment if necessary however generally it will be regenerated when needed
 #!**/[Pp]ackages/repositories.config
 # NuGet v3's project.json files produces more ignorable files
