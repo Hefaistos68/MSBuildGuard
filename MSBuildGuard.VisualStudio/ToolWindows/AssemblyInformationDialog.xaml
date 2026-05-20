@@ -1,19 +1,31 @@
-<Window x:Class="MSBuildGuard.VisualStudio.ToolWindows.AssemblyInformationDialog"
+<platformUi:DialogWindow x:Class="MSBuildGuard.VisualStudio.ToolWindows.AssemblyInformationDialog"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:platformUi="clr-namespace:Microsoft.VisualStudio.PlatformUI;assembly=Microsoft.VisualStudio.Shell.15.0"
+             xmlns:vsshell="clr-namespace:Microsoft.VisualStudio.Shell;assembly=Microsoft.VisualStudio.Shell.15.0"
              mc:Ignorable="d"
              Title="Assembly Information"
              SizeToContent="WidthAndHeight"
              MinWidth="480"
              ResizeMode="NoResize"
              WindowStartupLocation="CenterOwner"
-             Loaded="Window_Loaded">
+             Loaded="Window_Loaded"
+             Background="{DynamicResource {x:Static vsshell:VsBrushes.WindowKey}}"
+             Foreground="{DynamicResource {x:Static vsshell:VsBrushes.WindowTextKey}}"
+             platformUi:ThemedDialogStyleLoader.UseDefaultThemedDialogStyles="True">
+    <platformUi:DialogWindow.Resources>
+        <ResourceDictionary>
+            <Style TargetType="TextBlock">
+                <Setter Property="Foreground" Value="{DynamicResource {x:Static vsshell:VsBrushes.WindowTextKey}}"/>
+            </Style>
+        </ResourceDictionary>
+    </platformUi:DialogWindow.Resources>
     <StackPanel Margin="16">
         <TextBlock Text="Assembly Information" FontSize="16" FontWeight="Bold" Margin="0,0,0,16"/>
 
-        <Border Background="#F5F5F5" Padding="12" Margin="0,0,0,16" CornerRadius="4">
+        <Border Background="{DynamicResource {x:Static vsshell:VsBrushes.GridHeadingBackgroundKey}}" Padding="12" Margin="0,0,0,16" CornerRadius="4">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
@@ -58,4 +70,4 @@
             <Button x:Name="CloseButton" Content="Close" Padding="16,8" IsCancel="True" Click="CloseButton_Click"/>
         </StackPanel>
     </StackPanel>
-</Window>
+</platformUi:DialogWindow>

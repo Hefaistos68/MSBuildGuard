@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Windows;
+using Microsoft.VisualStudio.PlatformUI;
 using MSBuildGuard.VisualStudio.Models;
 
 namespace MSBuildGuard.VisualStudio.ToolWindows
@@ -8,7 +9,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 	/// <summary>
 	/// Confirmation dialog for trusting a signer certificate identity.
 	/// </summary>
-	public partial class TrustSignerDialog : Window
+	public partial class TrustSignerDialog : DialogWindow
 	{
 		/// <summary>
 		/// Gets or sets the signer display name.
@@ -61,6 +62,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		public TrustSignerDialog()
 		{
 			InitializeComponent();
+			MSBuildGuard.VisualStudio.Services.ThemeHelper.ApplyTitleBarTheme(this);
 		}
 
 		/// <summary>

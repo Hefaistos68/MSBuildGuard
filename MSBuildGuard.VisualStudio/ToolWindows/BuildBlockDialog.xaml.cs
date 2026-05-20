@@ -1,11 +1,12 @@
 using System.Windows;
+using Microsoft.VisualStudio.PlatformUI;
 
 namespace MSBuildGuard.VisualStudio.ToolWindows
 {
 	/// <summary>
 	/// Code-behind for the build block confirmation dialog.
 	/// </summary>
-	public partial class BuildBlockDialog : Window
+	public partial class BuildBlockDialog : DialogWindow
 	{
 		/// <summary>
 		/// Gets a value indicating whether the user chose to proceed despite the block.
@@ -19,6 +20,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		public BuildBlockDialog(BuildBlockDialogViewModel viewModel)
 		{
 			this.InitializeComponent();
+			MSBuildGuard.VisualStudio.Services.ThemeHelper.ApplyTitleBarTheme(this);
 			this.DataContext = viewModel;
 		}
 

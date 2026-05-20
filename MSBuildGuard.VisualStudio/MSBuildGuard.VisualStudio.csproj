@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
+<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
 
 	<PropertyGroup>
 		<TargetFramework>net472</TargetFramework>
@@ -60,6 +60,7 @@
 
 	<ItemGroup>
 		<Reference Include="System.Design" />
+		<Reference Include="System.Drawing" />
 	</ItemGroup>
 
 	<ItemGroup>

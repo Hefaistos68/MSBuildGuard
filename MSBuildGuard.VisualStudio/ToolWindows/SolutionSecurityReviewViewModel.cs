@@ -995,7 +995,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			}
 
 			var trustStoreService = new TrustStoreService();
-			var trustStorePath    = ResolveTrustStorePath(trustStoreService, dialog.SelectedScope, this.CurrentTargetPath, currentProjectPath);
+			var trustStorePath    = ResolveTrustStorePath(trustStoreService, dialog.SelectedScope, this.CurrentTargetPath, dialog.SelectedProjectPath);
 			var userSid           = WindowsIdentity.GetCurrent()?.User?.Value ?? "Unknown";
 			var reason            = !string.IsNullOrWhiteSpace(dialog.TrustReason)
 				? dialog.TrustReason
