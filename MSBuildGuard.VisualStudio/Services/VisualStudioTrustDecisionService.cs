@@ -135,7 +135,7 @@ namespace MSBuildGuard.VisualStudio.Services
 				return;
 			}
 
-			var trustPath = ResolveTrustStorePath(dialog.SelectedScope, solutionPath ?? string.Empty, projectPath);
+			var trustPath = ResolveTrustStorePath(dialog.SelectedScope, solutionPath ?? string.Empty, dialog.SelectedProjectPath);
 			var userSid = WindowsIdentity.GetCurrent()?.User?.Value ?? "Unknown";
 			var trustReason = !string.IsNullOrWhiteSpace(dialog.TrustReason) ? dialog.TrustReason : reason;
 

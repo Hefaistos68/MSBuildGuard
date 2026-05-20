@@ -95,6 +95,7 @@ namespace MSBuildGuard.VisualStudio.Models
 				{
 					this.OnPropertyChanged(nameof(this.RiskIndicator));
 					this.OnPropertyChanged(nameof(this.RiskIndicatorBrush));
+					this.OnPropertyChanged(nameof(this.RiskLevel));
 					this.OnPropertyChanged(nameof(this.RiskScoreDisplay));
 				}
 			}
@@ -139,6 +140,27 @@ namespace MSBuildGuard.VisualStudio.Models
 			get
 			{
 				return "●";
+			}
+		}
+
+		/// <summary>
+		/// Gets the risk level string ('High', 'Medium', or 'Low') based on RiskScore.
+		/// </summary>
+		public string RiskLevel
+		{
+			get
+			{
+				if (this.RiskScore >= 100)
+				{
+					return "High";
+				}
+
+				if (this.RiskScore >= 20)
+				{
+					return "Medium";
+				}
+
+				return "Low";
 			}
 		}
 		

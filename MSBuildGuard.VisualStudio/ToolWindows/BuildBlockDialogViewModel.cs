@@ -66,6 +66,19 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		public string RecommendedAction { get; }
 
 		/// <summary>
+		/// Gets the risk level string representing severity.
+		/// </summary>
+		public string RiskLevel
+		{
+			get
+			{
+				if (this.RiskScore >= 100) return "High";
+				if (this.RiskScore >= 20) return "Medium";
+				return "Low";
+			}
+		}
+
+		/// <summary>
 		/// Gets the list of actionable findings to display.
 		/// </summary>
 		public IReadOnlyList<FindingRow> Findings { get; }

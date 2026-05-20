@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Security.Principal;
 using System.Windows;
+using Microsoft.VisualStudio.PlatformUI;
 using Microsoft.VisualStudio.Shell;
 using MSBuildGuard.Core.Trust;
 using MSBuildGuard.VisualStudio.Models;
@@ -11,7 +12,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 	/// <summary>
 	/// Read-only information dialog that displays Authenticode and assembly metadata for a NuGet package assembly.
 	/// </summary>
-	public partial class AssemblyInformationDialog : Window
+	public partial class AssemblyInformationDialog : DialogWindow
 	{
 		/// <summary>The file-object type constant for <c>SHObjectProperties</c>.</summary>
 		private const uint ShopFilepath = 0x2;
@@ -52,6 +53,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		public AssemblyInformationDialog()
 		{
 			InitializeComponent();
+			MSBuildGuard.VisualStudio.Services.ThemeHelper.ApplyTitleBarTheme(this);
 		}
 
 		/// <summary>
@@ -91,7 +93,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			// Trust actions are only meaningful when the Authenticode signature verifies successfully.
 			TrustSignerButton.IsEnabled = signature.IsSignatureValid && !string.IsNullOrWhiteSpace(signature.Subject) && !isSignerTrusted;
 			TrustSignerButton.Content = isSignerTrusted ? "Signer Trusted ✓" : "Trust Signer";
-			TrustAssemblyButton.IsEnabled = hasAssemblyIdentity && signature.IsSignatureValid && !isAssemblyTrusted;
+			TrustAssemblyButton.IsEnabled = hasAssemblyIdentity && !isAssemblyTrusted;
 			TrustAssemblyButton.Content = isAssemblyTrusted ? "Assembly Trusted ✓" : "Trust Assembly";
 		}
 
@@ -175,9 +177,20 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		/// </summary>
 		private void TrustAssemblyButton_Click(object sender, RoutedEventArgs e)
 		{
+			ThreadHelper.ThrowIfNotOnUIThread();
+
 			if (string.IsNullOrWhiteSpace(this.AssemblyName) || string.IsNullOrWhiteSpace(this.AssemblyVersion) || string.IsNullOrWhiteSpace(this.AssemblyPath))
 			{
 				return;
+			}
+
+			var solutionPath = string.Empty;
+			var projectPath  = string.Empty;
+
+			if (MSBuildGuardPackage.Instance != null)
+			{
+				solutionPath = ThreadHelper.JoinableTaskFactory.Run(async () => await SolutionDiscoveryService.GetOpenSolutionPathAsync(MSBuildGuardPackage.Instance).ConfigureAwait(false)) ?? string.Empty;
+				projectPath  = SolutionExplorerProjectDiscoveryService.GetSelectedProjectPath() ?? string.Empty;
 			}
 
 			var trustDialog = new TrustAssemblyDialog
@@ -188,6 +201,8 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				AssemblySigner  = this.resolvedSignerName,
 				AssemblyIssuer  = this.resolvedIssuer,
 				AssemblySubject = this.resolvedSignerSubject,
+				SolutionPath    = solutionPath,
+				ProjectPath     = projectPath,
 				Owner           = this,
 				WindowStartupLocation = WindowStartupLocation.CenterOwner
 			};
@@ -198,18 +213,22 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			}
 
 			var trustStoreService = new TrustStoreService();
-			var trustPath = trustStoreService.GetDefaultUserTrustPath();
+			var trustPath = ResolveTrustStorePath(trustStoreService, trustDialog.SelectedScope, solutionPath, trustDialog.SelectedProjectPath);
 			var userSid = WindowsIdentity.GetCurrent()?.User?.Value ?? "Unknown";
+			var reason = !string.IsNullOrWhiteSpace(trustDialog.TrustReason)
+				? trustDialog.TrustReason
+				: $"Assembly trusted from Assembly Information dialog on {System.DateTime.UtcNow:O}";
 
 			trustStoreService.AddAssemblyTrust(
 				trustPath,
 				this.AssemblyName,
 				this.AssemblyVersion,
-				trustDialog.TrustReason,
+				reason,
 				userSid,
 				this.resolvedSignerName,
 				this.resolvedIssuer,
-				this.resolvedSignerSubject);
+				this.resolvedSignerSubject,
+				trustDialog.ExpiresAtUtc);
 
 			TrustAssemblyButton.IsEnabled = false;
 			TrustAssemblyButton.Content = "Assembly Trusted ✓";

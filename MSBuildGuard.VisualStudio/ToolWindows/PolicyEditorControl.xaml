@@ -1,15 +1,35 @@
-﻿<UserControl x:Class="MSBuildGuard.VisualStudio.ToolWindows.PolicyEditorControl"
+<UserControl x:Class="MSBuildGuard.VisualStudio.ToolWindows.PolicyEditorControl"
 			 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
 			 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 			 xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
 			 xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+			 xmlns:vsshell="clr-namespace:Microsoft.VisualStudio.Shell;assembly=Microsoft.VisualStudio.Shell.15.0"
 			 mc:Ignorable="d"
 			 d:DesignHeight="600"
 			 d:DesignWidth="700">
 	<UserControl.Resources>
-		<BooleanToVisibilityConverter x:Key="BoolToVis" />
+		<ResourceDictionary>
+			<BooleanToVisibilityConverter x:Key="BoolToVis" />
+			<Style TargetType="TextBlock">
+				<Setter Property="Foreground" Value="{DynamicResource {x:Static vsshell:VsBrushes.ToolWindowTextKey}}"/>
+			</Style>
+			<Style x:Key="PolicyPathLinkStyle" TargetType="TextBlock">
+				<Setter Property="Foreground" Value="{DynamicResource {x:Static vsshell:VsBrushes.ControlLinkTextKey}}"/>
+				<Setter Property="TextDecorations" Value="Underline"/>
+				<Setter Property="Cursor" Value="Hand"/>
+				<Style.Triggers>
+					<Trigger Property="IsMouseOver" Value="True">
+						<Setter Property="Foreground" Value="{DynamicResource {x:Static vsshell:VsBrushes.ControlLinkTextHoverKey}}"/>
+					</Trigger>
+				</Style.Triggers>
+			</Style>
+			<!-- Theming standard controls for VS Tool Windows -->
+			<Style TargetType="ComboBox" BasedOn="{StaticResource {x:Static vsshell:VsResourceKeys.ComboBoxStyleKey}}" />
+			<Style TargetType="ComboBoxItem" BasedOn="{StaticResource {x:Static vsshell:VsResourceKeys.ComboBoxItemStyleKey}}" />
+			<Style TargetType="CheckBox" BasedOn="{StaticResource {x:Static vsshell:VsResourceKeys.CheckBoxStyleKey}}" />
+		</ResourceDictionary>
 	</UserControl.Resources>
-	<Grid Margin="12" Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}">
+	<Grid Margin="12" Background="{DynamicResource {x:Static vsshell:VsBrushes.ToolWindowBackgroundKey}}">
 		<Grid.RowDefinitions>
 			<RowDefinition Height="Auto" />
 			<RowDefinition Height="Auto" />
@@ -29,15 +49,15 @@
 			<TextBlock Text="MSBuild Guard - Policy Editor ("
 					   FontSize="18"
 					   FontWeight="SemiBold"
-					   Foreground="{DynamicResource {x:Static SystemColors.ControlTextBrushKey}}" Margin="0,4,0,0" />
+					   Foreground="{DynamicResource {x:Static vsshell:VsBrushes.ToolWindowTextKey}}" Margin="0,4,0,0" />
 			<TextBlock Text="{Binding PolicyTypeLabel}"
 					   FontSize="18"
 					   FontWeight="SemiBold"
-					   Foreground="{DynamicResource {x:Static SystemColors.ControlTextBrushKey}}" Margin="0,4,0,0" />
+					   Foreground="{DynamicResource {x:Static vsshell:VsBrushes.ToolWindowTextKey}}" Margin="0,4,0,0" />
 			<TextBlock Text=")"
 					   FontSize="18"
 					   FontWeight="SemiBold"
-					   Foreground="{DynamicResource {x:Static SystemColors.ControlTextBrushKey}}" Margin="0,4,0,0" />
+					   Foreground="{DynamicResource {x:Static vsshell:VsBrushes.ToolWindowTextKey}}" Margin="0,4,0,0" />
 		</StackPanel>
 
 		<!-- Policy file path -->
@@ -59,9 +79,7 @@
 					  Visibility="{Binding IsProjectDropdownVisible, Converter={StaticResource BoolToVis}}" />
 			<TextBlock Text="Policy file:" FontWeight="Bold" VerticalAlignment="Center" />
 			<TextBlock Margin="6,0,0,0" VerticalAlignment="Center"
-					   Foreground="{DynamicResource {x:Static SystemColors.HotTrackBrushKey}}"
-					   TextDecorations="Underline"
-					   Cursor="Hand"
+					   Style="{StaticResource PolicyPathLinkStyle}"
 					   MouseLeftButtonUp="OnPolicyPathClick"
 					   ToolTip="Open policy file in editor"
 					   Text="{Binding PolicyPathDisplay}" />
@@ -73,7 +91,7 @@
 
 				<!-- General settings -->
 				<GroupBox Header="General" Margin="0,0,0,10"
-						  Foreground="{DynamicResource {x:Static SystemColors.ControlTextBrushKey}}">
+						  Foreground="{DynamicResource {x:Static vsshell:VsBrushes.ToolWindowTextKey}}">
 					<Grid Margin="6">
 						<Grid.ColumnDefinitions>
 							<ColumnDefinition Width="220" />
@@ -132,7 +150,7 @@
 
 				<!-- Minimum action by severity -->
 				<GroupBox Header="Minimum action by severity" Margin="0,0,0,10"
-						  Foreground="{DynamicResource {x:Static SystemColors.ControlTextBrushKey}}">
+						  Foreground="{DynamicResource {x:Static vsshell:VsBrushes.ToolWindowTextKey}}">
 					<Grid Margin="6">
 						<Grid.ColumnDefinitions>
 							<ColumnDefinition Width="220" />
@@ -184,7 +202,7 @@
 		<!-- Status bar -->
 		<TextBlock Grid.Row="4"
 				   Text="{Binding StatusMessage}"
-				   Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}"
+				   Foreground="{DynamicResource {x:Static vsshell:VsBrushes.GrayTextKey}}"
 				   TextTrimming="CharacterEllipsis" Margin="4,0,0,0" />
 	</Grid>
 </UserControl>

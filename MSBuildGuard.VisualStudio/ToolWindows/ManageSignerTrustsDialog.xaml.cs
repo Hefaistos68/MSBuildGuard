@@ -5,6 +5,7 @@ using System.Linq;
 using System.Security.Principal;
 using System.Windows;
 using System.Windows.Controls;
+using Microsoft.VisualStudio.PlatformUI;
 using Microsoft.VisualStudio.Shell;
 using MSBuildGuard.Core.Trust;
 using MSBuildGuard.VisualStudio.Models;
@@ -16,7 +17,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 	/// Dialog for managing trusted certificate signers.
 	/// Signers are added via the Assembly Information dialog; this dialog only allows removal.
 	/// </summary>
-	public partial class ManageSignerTrustsDialog : Window
+	public partial class ManageSignerTrustsDialog : DialogWindow
 	{
 		private readonly string solutionPath;
 		private readonly string projectPath;
@@ -36,6 +37,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			this.solutionPath = solutionPath ?? string.Empty;
 			this.projectPath  = projectPath ?? string.Empty;
 			InitializeComponent();
+			MSBuildGuard.VisualStudio.Services.ThemeHelper.ApplyTitleBarTheme(this);
 		}
 
 		/// <summary>

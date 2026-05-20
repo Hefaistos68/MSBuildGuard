@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Windows;
+using Microsoft.VisualStudio.PlatformUI;
 using MSBuildGuard.VisualStudio.Models;
 using MSBuildGuard.VisualStudio.Services;
 
@@ -9,7 +12,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 	/// <summary>
 	/// Confirmation dialog for trusting an assembly.
 	/// </summary>
-	public partial class TrustAssemblyDialog : Window
+	public partial class TrustAssemblyDialog : DialogWindow
 	{
 		/// <summary>
 		/// Gets or sets the assembly name.
@@ -66,12 +69,20 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		/// </summary>
 		public DateTimeOffset? ExpiresAtUtc { get; private set; }
 
+		private readonly List<SolutionProjectOptionViewModel> projectOptions = new List<SolutionProjectOptionViewModel>();
+
+		/// <summary>
+		/// Gets the selected project path.
+		/// </summary>
+		public string SelectedProjectPath { get; private set; } = string.Empty;
+
 		/// <summary>
 		/// Initializes a new instance of the <see cref="TrustAssemblyDialog"/> class.
 		/// </summary>
 		public TrustAssemblyDialog()
 		{
 			InitializeComponent();
+			MSBuildGuard.VisualStudio.Services.ThemeHelper.ApplyTitleBarTheme(this);
 		}
 
 		/// <summary>
@@ -79,6 +90,8 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		/// </summary>
 		private void Window_Loaded(object sender, RoutedEventArgs e)
 		{
+			Microsoft.VisualStudio.Shell.ThreadHelper.ThrowIfNotOnUIThread();
+
 			AssemblyNameTextBlock.Text    = this.AssemblyName;
 			AssemblyVersionTextBlock.Text = this.AssemblyVersion;
 			AssemblyPathTextBlock.Text    = PathRedactionService.RedactPath(this.AssemblyPath);
@@ -97,7 +110,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			AssemblySubjectTextBlock.Text = signature.HasEmbeddedSignature ? (string.IsNullOrWhiteSpace(this.AssemblySubject) ? "Not available" : this.AssemblySubject) : "Not available";
 
 			this.InitializeScopeOptions();
-			TrustButton.IsEnabled = signature.IsSignatureValid;
+			TrustButton.IsEnabled = !string.IsNullOrWhiteSpace(this.AssemblyName) && !string.IsNullOrWhiteSpace(this.AssemblyVersion);
 		}
 
 		/// <summary>
@@ -105,6 +118,8 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		/// </summary>
 		private void InitializeScopeOptions()
 		{
+			Microsoft.VisualStudio.Shell.ThreadHelper.ThrowIfNotOnUIThread();
+
 			var items = new List<TrustScope> { TrustScope.User };
 
 			if (!string.IsNullOrWhiteSpace(this.SolutionPath))
@@ -119,6 +134,56 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 
 			ScopeComboBox.ItemsSource = items;
 			ScopeComboBox.SelectedItem = TrustScope.User;
+
+			// Populate projects
+			this.projectOptions.Clear();
+			if (!string.IsNullOrWhiteSpace(this.SolutionPath))
+			{
+				try
+				{
+					var loadedPaths = SolutionExplorerProjectDiscoveryService.GetLoadedProjectPaths();
+					foreach (var loadedPath in loadedPaths.Where(path => !string.IsNullOrWhiteSpace(path)).Distinct(StringComparer.OrdinalIgnoreCase))
+					{
+						this.projectOptions.Add(new SolutionProjectOptionViewModel
+						{
+							Name = Path.GetFileNameWithoutExtension(loadedPath),
+							Path = loadedPath
+						});
+					}
+				}
+				catch
+				{
+					// Keep project selector empty when project discovery is unavailable.
+				}
+			}
+
+			ProjectComboBox.ItemsSource = this.projectOptions;
+			if (this.projectOptions.Count > 0)
+			{
+				var matched = this.projectOptions.FirstOrDefault(p => string.Equals(p.Path, this.ProjectPath, StringComparison.OrdinalIgnoreCase));
+				if (matched != null)
+				{
+					ProjectComboBox.SelectedItem = matched;
+				}
+				else
+				{
+					ProjectComboBox.SelectedIndex = 0;
+				}
+			}
+		}
+
+		/// <summary>
+		/// Handles scope selection change to show/hide project selector.
+		/// </summary>
+		private void ScopeComboBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+		{
+			if (!IsLoaded || ProjectSelectorPanel == null)
+			{
+				return;
+			}
+
+			var selectedScope = ScopeComboBox.SelectedItem is TrustScope scope ? scope : TrustScope.User;
+			ProjectSelectorPanel.Visibility = selectedScope == TrustScope.Project ? Visibility.Visible : Visibility.Collapsed;
 		}
 
 		/// <summary>
@@ -147,6 +212,15 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		{
 			this.TrustReason = this.ReasonTextBox.Text;
 			this.SelectedScope = ScopeComboBox.SelectedItem is TrustScope trustScope ? trustScope : TrustScope.User;
+
+			if (this.SelectedScope == TrustScope.Project)
+			{
+				this.SelectedProjectPath = ProjectComboBox.SelectedValue as string ?? this.ProjectPath;
+			}
+			else
+			{
+				this.SelectedProjectPath = string.Empty;
+			}
 
 			if (NoExpirationCheckBox.IsChecked == true || !ValidUntilDatePicker.SelectedDate.HasValue)
 			{

@@ -3,10 +3,68 @@
 			 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 			 xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
 			 xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+			 xmlns:vsshell="clr-namespace:Microsoft.VisualStudio.Shell;assembly=Microsoft.VisualStudio.Shell.15.0"
+			 xmlns:platformUi="clr-namespace:Microsoft.VisualStudio.PlatformUI;assembly=Microsoft.VisualStudio.Shell.15.0"
 			 mc:Ignorable="d"
 			 d:DesignHeight="450"
 			 d:DesignWidth="800">
-	<Grid Margin="12" Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}">
+	<UserControl.Resources>
+		<ResourceDictionary>
+			<Style TargetType="TextBlock">
+				<Setter Property="Foreground" Value="{DynamicResource {x:Static vsshell:VsBrushes.ToolWindowTextKey}}"/>
+			</Style>
+			<Style x:Key="RiskIndicatorStyle" TargetType="TextBlock">
+				<Style.Triggers>
+					<DataTrigger Binding="{Binding Summary.RiskLevel}" Value="High">
+						<Setter Property="Foreground" Value="{DynamicResource {x:Static platformUi:EnvironmentColors.VizSurfaceRedMediumBrushKey}}"/>
+					</DataTrigger>
+					<DataTrigger Binding="{Binding Summary.RiskLevel}" Value="Medium">
+						<Setter Property="Foreground" Value="{DynamicResource {x:Static platformUi:EnvironmentColors.VizSurfaceGoldMediumBrushKey}}"/>
+					</DataTrigger>
+					<DataTrigger Binding="{Binding Summary.RiskLevel}" Value="Low">
+						<Setter Property="Foreground" Value="{DynamicResource {x:Static platformUi:EnvironmentColors.VizSurfaceGreenMediumBrushKey}}"/>
+					</DataTrigger>
+				</Style.Triggers>
+			</Style>
+			<!-- Theming standard controls for VS Tool Windows -->
+			<Style TargetType="ComboBox" BasedOn="{StaticResource {x:Static vsshell:VsResourceKeys.ComboBoxStyleKey}}" />
+			<Style TargetType="ComboBoxItem" BasedOn="{StaticResource {x:Static vsshell:VsResourceKeys.ComboBoxItemStyleKey}}" />
+			<Style TargetType="CheckBox" BasedOn="{StaticResource {x:Static vsshell:VsResourceKeys.CheckBoxStyleKey}}" />
+			<Style TargetType="ContextMenu" BasedOn="{StaticResource {x:Static vsshell:VsResourceKeys.ContextMenuStyleKey}}" />
+			<Style TargetType="DataGrid">
+				<Setter Property="Background" Value="{DynamicResource {x:Static vsshell:VsBrushes.WindowKey}}"/>
+				<Setter Property="Foreground" Value="{DynamicResource {x:Static vsshell:VsBrushes.ToolWindowTextKey}}"/>
+				<Setter Property="BorderBrush" Value="{DynamicResource {x:Static vsshell:VsBrushes.PanelBorderKey}}"/>
+				<Setter Property="HorizontalGridLinesBrush" Value="{DynamicResource {x:Static vsshell:VsBrushes.PanelBorderKey}}"/>
+				<Setter Property="VerticalGridLinesBrush" Value="{DynamicResource {x:Static vsshell:VsBrushes.PanelBorderKey}}"/>
+				<Setter Property="RowBackground" Value="{DynamicResource {x:Static vsshell:VsBrushes.WindowKey}}"/>
+				<Setter Property="AlternatingRowBackground" Value="{DynamicResource {x:Static vsshell:VsBrushes.WindowKey}}"/>
+				<Setter Property="HeadersVisibility" Value="Column"/>
+			</Style>
+			<Style TargetType="DataGridColumnHeader">
+				<Setter Property="Background" Value="{DynamicResource {x:Static vsshell:VsBrushes.GridHeadingBackgroundKey}}"/>
+				<Setter Property="Foreground" Value="{DynamicResource {x:Static vsshell:VsBrushes.GridHeadingTextKey}}"/>
+				<Setter Property="BorderBrush" Value="{DynamicResource {x:Static vsshell:VsBrushes.PanelBorderKey}}"/>
+				<Setter Property="BorderThickness" Value="0,0,1,1"/>
+				<Setter Property="Padding" Value="6,4"/>
+			</Style>
+			<Style TargetType="DataGridRow">
+				<Setter Property="Background" Value="{DynamicResource {x:Static vsshell:VsBrushes.WindowKey}}"/>
+				<Setter Property="Foreground" Value="{DynamicResource {x:Static vsshell:VsBrushes.ToolWindowTextKey}}"/>
+			</Style>
+			<Style TargetType="DataGridCell">
+				<Setter Property="Background" Value="Transparent"/>
+				<Setter Property="Foreground" Value="{DynamicResource {x:Static vsshell:VsBrushes.ToolWindowTextKey}}"/>
+				<Style.Triggers>
+					<Trigger Property="IsSelected" Value="True">
+						<Setter Property="Background" Value="{DynamicResource {x:Static vsshell:VsBrushes.HighlightKey}}"/>
+						<Setter Property="Foreground" Value="{DynamicResource {x:Static vsshell:VsBrushes.HighlightTextKey}}"/>
+					</Trigger>
+				</Style.Triggers>
+			</Style>
+		</ResourceDictionary>
+	</UserControl.Resources>
+	<Grid Margin="12" Background="{DynamicResource {x:Static vsshell:VsBrushes.ToolWindowBackgroundKey}}">
 		<Grid.RowDefinitions>
 			<RowDefinition Height="Auto" />
 			<RowDefinition Height="Auto" />
@@ -30,7 +88,7 @@
 			<TextBlock Text="MSBuild Guard - Solution Security Review"
 					   FontSize="18"
 					   FontWeight="SemiBold"
-					   Foreground="{DynamicResource {x:Static SystemColors.ControlTextBrushKey}}" Margin="30,4,8,0" />
+					   Foreground="{DynamicResource {x:Static vsshell:VsBrushes.ToolWindowTextKey}}" Margin="30,4,8,0" />
 
 			<TextBlock Grid.Column="1"
 					   Text="{Binding Summary.TargetNameDisplay}"
@@ -39,7 +97,7 @@
 					   VerticalAlignment="Center"
 					   FontSize="14"
 					   FontWeight="SemiBold"
-					   Foreground="{DynamicResource {x:Static SystemColors.ControlTextBrushKey}}" />
+					   Foreground="{DynamicResource {x:Static vsshell:VsBrushes.ToolWindowTextKey}}" />
 		</Grid>
 
 		<Grid Grid.Row="1" Margin="0,10,0,10">
@@ -69,11 +127,13 @@
 				<StackPanel Orientation="Horizontal" Margin="8,2,0,0">
 					<TextBlock Text="Risk score:" FontWeight="Bold" Width="80" VerticalAlignment="Center" />
 					<TextBlock Text="{Binding Summary.RiskIndicator}"
-							   Foreground="{Binding Summary.RiskIndicatorBrush}"
+							   Style="{StaticResource RiskIndicatorStyle}"
 							   FontSize="13"
 							   Margin="0,0,6,0"
 							   VerticalAlignment="Center" />
-					<TextBlock Text="{Binding Summary.RiskScoreDisplay}" VerticalAlignment="Center" Foreground="{Binding Summary.RiskIndicatorBrush}"/>
+					<TextBlock Text="{Binding Summary.RiskScoreDisplay}"
+							   Style="{StaticResource RiskIndicatorStyle}"
+							   VerticalAlignment="Center" />
 				</StackPanel>
 				<StackPanel Orientation="Horizontal" Margin="8,2,0,0">
 					<TextBlock Text="Action:" FontWeight="Bold" Width="80" VerticalAlignment="Center" />
@@ -117,7 +177,10 @@
 				  CanUserDeleteRows="False"
 				  CanUserSortColumns="True"
 				  MouseDoubleClick="OnFindingsMouseDoubleClick"
-				  Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}" Margin="8,0,8,4">
+				  Background="{DynamicResource {x:Static vsshell:VsBrushes.WindowKey}}"
+				  Foreground="{DynamicResource {x:Static vsshell:VsBrushes.ToolWindowTextKey}}"
+				  BorderBrush="{DynamicResource {x:Static vsshell:VsBrushes.PanelBorderKey}}"
+				  Margin="8,0,8,4">
 			<DataGrid.ContextMenu>
 				<ContextMenu>
 					<MenuItem Header="Trust Issue"
@@ -128,8 +191,8 @@
 							  IsEnabled="{Binding PlacementTarget.SelectedItem.CanRemoveTrust, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
 					<Separator />
 					<MenuItem Header="Trust Owning Assembly"
-								  Click="OnTrustAssemblyClick"
-								  IsEnabled="{Binding PlacementTarget.SelectedItem.CanTrustAssembly, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+							  Click="OnTrustAssemblyClick"
+							  IsEnabled="{Binding PlacementTarget.SelectedItem.CanTrustAssembly, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
 						<Separator />
 						<MenuItem Header="Assembly Information..."
 								  Click="OnAssemblyInformationClick"
@@ -158,7 +221,7 @@
 					  Height="5"
 					  HorizontalAlignment="Stretch"
 					  VerticalAlignment="Center"
-					  Background="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" />
+					  Background="{DynamicResource {x:Static vsshell:VsBrushes.PanelSeparatorKey}}" />
 
 		<Grid Grid.Row="4" Margin="0,4,0,0">
 			<Grid.RowDefinitions>
@@ -169,7 +232,7 @@
 			<TextBlock Text="Reasoning:"
 					   FontWeight="SemiBold"
 					   Margin="8,0,0,4"
-					   Foreground="{DynamicResource {x:Static SystemColors.ControlTextBrushKey}}" />
+					   Foreground="{DynamicResource {x:Static vsshell:VsBrushes.ToolWindowTextKey}}" />
 
 			<TextBox Grid.Row="1"
 					 Text="{Binding ReasoningText, Mode=OneWay}"
@@ -179,8 +242,9 @@
 					 HorizontalScrollBarVisibility="Disabled"
 					 FontFamily="Consolas"
 					 FontSize="11"
-					 Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}"
-					 Foreground="{DynamicResource {x:Static SystemColors.ControlTextBrushKey}}"
+					 Background="{DynamicResource {x:Static vsshell:VsBrushes.GridHeadingBackgroundKey}}"
+					 Foreground="{DynamicResource {x:Static vsshell:VsBrushes.ToolWindowTextKey}}"
+					 BorderBrush="{DynamicResource {x:Static vsshell:VsBrushes.PanelBorderKey}}"
 					 BorderThickness="1" Margin="8,0,8,4" />
 		</Grid>
 	</Grid>

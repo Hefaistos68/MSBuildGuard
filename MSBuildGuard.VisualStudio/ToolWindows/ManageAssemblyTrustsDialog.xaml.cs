@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Security.Principal;
 using System.Windows;
 using System.Windows.Controls;
+using Microsoft.VisualStudio.PlatformUI;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.Win32;
 using MSBuildGuard.Core.Trust;
@@ -17,7 +18,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 	/// <summary>
 	/// Dialog for managing trusted assemblies.
 	/// </summary>
-	public partial class ManageAssemblyTrustsDialog : Window
+	public partial class ManageAssemblyTrustsDialog : DialogWindow
 	{
 		private readonly string solutionPath;
 		private readonly string projectPath;
@@ -37,6 +38,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			this.solutionPath = solutionPath ?? string.Empty;
 			this.projectPath  = projectPath ?? string.Empty;
 			InitializeComponent();
+			MSBuildGuard.VisualStudio.Services.ThemeHelper.ApplyTitleBarTheme(this);
 		}
 
 		/// <summary>
