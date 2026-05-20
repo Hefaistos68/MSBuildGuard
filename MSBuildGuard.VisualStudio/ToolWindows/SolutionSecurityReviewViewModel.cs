@@ -14,6 +14,9 @@ using MSBuildGuard.Core;
 using MSBuildGuard.Core.Trust;
 using MSBuildGuard.VisualStudio.Models;
 using MSBuildGuard.VisualStudio.Services;
+using Microsoft.VisualStudio.Settings;
+using Microsoft.VisualStudio.Shell;
+using Microsoft.VisualStudio.Shell.Settings;
 
 namespace MSBuildGuard.VisualStudio.ToolWindows
 {
@@ -98,14 +101,21 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			}
 			set
 			{
+				ThreadHelper.ThrowIfNotOnUIThread();
 				if (ReferenceEquals(this.selectedProject, value))
 				{
 					return;
 				}
 
 				this.selectedProject = value;
+
+				// Read the setting for the newly selected scope, and notify the UI
+				var path = this.selectedProject?.Path ?? AllProjectsPath;
+				this.onlyUntrustedIssues = ReadOnlyUntrustedSetting(path);
+
 				this.ApplyFilter();
 				this.OnPropertyChanged();
+				this.OnPropertyChanged(nameof(this.OnlyUntrustedIssues));
 			}
 		}
 
@@ -139,12 +149,18 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			}
 			set
 			{
+				ThreadHelper.ThrowIfNotOnUIThread();
 				if (this.onlyUntrustedIssues == value)
 				{
 					return;
 				}
 
 				this.onlyUntrustedIssues = value;
+
+				// Store the changed value at the scope level
+				var path = this.selectedProject?.Path ?? AllProjectsPath;
+				SaveOnlyUntrustedSetting(path, value);
+
 				this.ApplyFilter();
 				this.OnPropertyChanged();
 			}
@@ -169,6 +185,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		/// <param name="loadedProjectPaths">Project paths currently loaded in Solution Explorer.</param>
 		public void LoadReport(string solutionPath, ScanReport report, IReadOnlyCollection<string>? loadedProjectPaths)
 		{
+			ThreadHelper.ThrowIfNotOnUIThread();
 			var previousSelectedPath = this.selectedProject?.Path;
 			var trustStoreService    = new TrustStoreService();
 			var currentProjectPath   = this.selectedProject != null && !string.Equals(this.selectedProject.Path, AllProjectsPath, StringComparison.OrdinalIgnoreCase)
@@ -365,6 +382,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		/// <param name="loadedProjectPaths">Project paths currently loaded in Solution Explorer.</param>
 		private void BuildProjectOptions(string solutionPath, ScanReport report, string? previousSelectedPath, IReadOnlyCollection<string>? loadedProjectPaths)
 		{
+			ThreadHelper.ThrowIfNotOnUIThread();
 			this.ProjectOptions.Clear();
 			this.ProjectOptions.Add(new SolutionProjectOptionViewModel
 			{
@@ -437,7 +455,12 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				this.selectedProject = this.ProjectOptions.FirstOrDefault();
 			}
 
+			// Load the OnlyUntrustedIssues setting for the restored/selected scope
+			var path = this.selectedProject?.Path ?? AllProjectsPath;
+			this.onlyUntrustedIssues = ReadOnlyUntrustedSetting(path);
+
 			this.OnPropertyChanged(nameof(this.SelectedProject));
+			this.OnPropertyChanged(nameof(this.OnlyUntrustedIssues));
 		}
 
 		/// <summary>
@@ -1089,6 +1112,71 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			{
 				await package.RescanSolutionSecurityReviewAsync();
 			}
+		}
+
+		private const string SecurityReviewSettingsCollection = @"MSBuildGuard\SecurityReview\OnlyUntrustedIssues";
+
+		private static bool ReadOnlyUntrustedSetting(string scopePath)
+		{
+			ThreadHelper.ThrowIfNotOnUIThread();
+			try
+			{
+				if (MSBuildGuardPackage.Instance is not MSBuildGuardPackage package)
+				{
+					return false;
+				}
+
+				var settingsManager = new ShellSettingsManager(package);
+				var store = settingsManager.GetReadOnlySettingsStore(SettingsScope.UserSettings);
+				
+				var propertyName = GetRegistryPropertyName(scopePath);
+				if (store.CollectionExists(SecurityReviewSettingsCollection) && store.PropertyExists(SecurityReviewSettingsCollection, propertyName))
+				{
+					return store.GetBoolean(SecurityReviewSettingsCollection, propertyName, false);
+				}
+			}
+			catch (Exception ex)
+			{
+				Trace.WriteLine($"[MSBuildGuard] Failed to read OnlyUntrustedIssues setting for scope '{scopePath}': {ex}");
+			}
+
+			return false;
+		}
+
+		private static void SaveOnlyUntrustedSetting(string scopePath, bool value)
+		{
+			ThreadHelper.ThrowIfNotOnUIThread();
+			try
+			{
+				if (MSBuildGuardPackage.Instance is not MSBuildGuardPackage package)
+				{
+					return;
+				}
+
+				var settingsManager = new ShellSettingsManager(package);
+				var store = settingsManager.GetWritableSettingsStore(SettingsScope.UserSettings);
+
+				if (!store.CollectionExists(SecurityReviewSettingsCollection))
+				{
+					store.CreateCollection(SecurityReviewSettingsCollection);
+				}
+
+				var propertyName = GetRegistryPropertyName(scopePath);
+				store.SetBoolean(SecurityReviewSettingsCollection, propertyName, value);
+			}
+			catch (Exception ex)
+			{
+				Trace.WriteLine($"[MSBuildGuard] Failed to save OnlyUntrustedIssues setting for scope '{scopePath}': {ex}");
+			}
+		}
+
+		private static string GetRegistryPropertyName(string scopePath)
+		{
+			if (string.IsNullOrWhiteSpace(scopePath))
+			{
+				return AllProjectsPath.ToLowerInvariant();
+			}
+			return scopePath.Replace('\\', '/').ToLowerInvariant();
 		}
 	}
 }
