@@ -324,3 +324,9 @@ Lower-priority layers cannot weaken stricter machine policy requirements.
 Module-specific documentation is split into dedicated files:
 
 - [Visual Studio extension documentation](documentation/VisualStudioExtension.md)
+
+
+## Visual Studio Unified Settings Migration Guide
+A complete blueprint for transitioning from legacy `DialogPage` options to modern Unified Settings in Visual Studio extensions.
+
+[Read the guide](documentation/unified_settings_migration_guide.md)

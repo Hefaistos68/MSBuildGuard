@@ -30,5 +30,6 @@
   </Prerequisites>
   <Assets>
     <Asset Type="Microsoft.VisualStudio.VsPackage" Path="|%CurrentProject%;PkgdefProjectOutputGroup|" d:Source="Project" />
+    <Asset Type="Microsoft.VisualStudio.UnifiedSettings" Path="UnifiedSettings\msbuildguard.registration.json" />
   </Assets>
 </PackageManifest>

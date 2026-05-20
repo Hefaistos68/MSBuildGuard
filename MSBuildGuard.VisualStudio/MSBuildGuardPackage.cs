@@ -22,7 +22,8 @@ namespace MSBuildGuard.VisualStudio
 	[ProvideAutoLoad(VSConstants.UICONTEXT.ShellInitialized_string, PackageAutoLoadFlags.BackgroundLoad)]
 	[ProvideToolWindow(typeof(ToolWindows.SolutionSecurityReviewToolWindow), Style = VsDockStyle.MDI)]
 	[ProvideToolWindow(typeof(ToolWindows.PolicyEditorToolWindow), Style = VsDockStyle.MDI)]
-	[ProvideOptionPage(typeof(Options.MSBuildGuardOptionsPage), "MSBuild Guard", "General", 0, 0, true)]
+	[ProvideOptionPage(typeof(Options.MSBuildGuardOptionsPage), "MSBuild Guard", "General", 0, 0, true, IsInUnifiedSettings = true)]
+	[ProvideSettingsManifest(PackageRelativeManifestFile = "UnifiedSettings\\msbuildguard.registration.json")]
 	[ProvideMenuResource("Menus.ctmenu", 1)]
 	[Guid(PackageGuids.PackageString)]
 	[SuppressMessage("Design", "CA1001:Types that own disposable fields should be disposable", Justification = "Disposed through the AsyncPackage disposal lifecycle.")]
@@ -93,19 +94,6 @@ namespace MSBuildGuard.VisualStudio
 			{
 				return this.uiFeedbackService;
 			}
-		}
-
-		/// <summary>
-		/// Gets the persisted MSBuild Guard options page.
-		/// </summary>
-		/// <returns>The options page instance.</returns>
-		internal Options.MSBuildGuardOptionsPage GetOptionsPage()
-		{
-			ThreadHelper.ThrowIfNotOnUIThread();
-
-			var page = (Options.MSBuildGuardOptionsPage)this.GetDialogPage(typeof(Options.MSBuildGuardOptionsPage));
-
-			return page;
 		}
 
 		/// <summary>
