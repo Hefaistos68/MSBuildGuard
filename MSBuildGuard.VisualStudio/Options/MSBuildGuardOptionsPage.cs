@@ -1,13 +1,16 @@
+using System;
 using System.ComponentModel;
-using System.Drawing.Design;
+using System.Runtime.InteropServices;
 using Microsoft.VisualStudio.Shell;
-using Microsoft.VisualStudio.Shell.Interop;
 
 namespace MSBuildGuard.VisualStudio.Options
 {
 	/// <summary>
-	/// Represents persisted Visual Studio options for MSBuild Guard.
+	/// Represents persisted Visual Studio options placeholder for MSBuild Guard.
+	/// Enables the Tools > Options tree node registration linked to Unified Settings.
 	/// </summary>
+	[Guid("a706a1c4-02be-4c9f-b6c8-1a95159ea9d2")]
+	[ComVisible(true)]
 	public sealed class MSBuildGuardOptionsPage : DialogPage
 	{
 		/// <summary>
@@ -24,41 +27,6 @@ namespace MSBuildGuard.VisualStudio.Options
 		/// Defines the default list of reflection and interop indicators.
 		/// </summary>
 		private const string DefaultReflectionInteropIndicators = "System.Reflection;Assembly.Load;Activator.CreateInstance;GetType(;dynamic ;DllImport;Marshal.GetDelegateForFunctionPointer;LoadLibrary";
-
-		/// <summary>
-		/// Defines the unified setting key for <see cref="AutoOpenSecurityReviewOnOpen"/>.
-		/// </summary>
-		internal const string AutoOpenSecurityReviewOnOpenSettingName = "extensions.msbuildguard.general.autoOpenSecurityReviewOnOpen";
-
-		/// <summary>
-		/// Defines the unified setting key for <see cref="ScanNuGetPackages"/>.
-		/// </summary>
-		internal const string ScanNuGetPackagesSettingName = "extensions.msbuildguard.general.scanNuGetPackages";
-
-		/// <summary>
-		/// Defines the unified setting key for <see cref="AllowSharingTrustsInRepositories"/>.
-		/// </summary>
-		internal const string AllowSharingTrustsInRepositoriesSettingName = "extensions.msbuildguard.trustManagement.allowSharingTrustsInRepositories";
-
-		/// <summary>
-		/// Defines the unified setting key for <see cref="FileTypesToScan"/>.
-		/// </summary>
-		internal const string FileTypesToScanSettingName = "extensions.msbuildguard.scanning.fileTypesToScan";
-
-		/// <summary>
-		/// Defines the unified setting key for <see cref="ProcessCreationIndicators"/>.
-		/// </summary>
-		internal const string ProcessCreationIndicatorsSettingName = "extensions.msbuildguard.ruleIndicators.processCreationIndicators";
-
-		/// <summary>
-		/// Defines the unified setting key for <see cref="ReflectionInteropIndicators"/>.
-		/// </summary>
-		internal const string ReflectionInteropIndicatorsSettingName = "extensions.msbuildguard.ruleIndicators.reflectionInteropIndicators";
-
-		/// <summary>
-		/// Defines the unified setting key for <see cref="AdditionalBlockedAssemblies"/>.
-		/// </summary>
-		internal const string AdditionalBlockedAssembliesSettingName = "extensions.msbuildguard.ruleIndicators.additionalBlockedAssemblies";
 
 		/// <summary>
 		/// Gets or sets a value indicating whether security review windows should auto-open when a solution or project is opened.
@@ -122,24 +90,6 @@ namespace MSBuildGuard.VisualStudio.Options
 		[Description("Semicolon-separated assembly names that should be treated as blocked when referenced.")]
 		[DefaultValue("")]
 		public string AdditionalBlockedAssemblies { get; set; } = string.Empty;
-
-		/// <summary>
-		/// Gets or sets the assembly trust management action.
-		/// </summary>
-		[Category("Trust Management")]
-		[DisplayName("Manage assembly trusts")]
-		[Description("Open the Manage Assembly Trusts dialog.")]
-		[Editor(typeof(ManageAssemblyTrustsEditor), typeof(UITypeEditor))]
-		public string ManageAssemblyTrustsAction { get; set; } = "Open...";
-
-		/// <summary>
-		/// Gets or sets the signer trust management action.
-		/// </summary>
-		[Category("Trust Management")]
-		[DisplayName("Manage signer trusts")]
-		[Description("Open the Manage Signer Trusts dialog.")]
-		[Editor(typeof(ManageSignerTrustsEditor), typeof(UITypeEditor))]
-		public string ManageSignerTrustsAction { get; set; } = "Open...";
 
 		/// <inheritdoc/>
 		protected override void OnApply(PageApplyEventArgs e)

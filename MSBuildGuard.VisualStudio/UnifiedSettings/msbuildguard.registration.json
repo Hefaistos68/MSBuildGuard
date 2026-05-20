@@ -101,10 +101,12 @@
   },
   "categories": {
     "extensions.msbuildguard": {
-      "title": "MSBuild Guard"
+      "title": "MSBuild Guard",
+      "legacyOptionPageId": "a706a1c4-02be-4c9f-b6c8-1a95159ea9d2"
     },
     "extensions.msbuildguard.general": {
-      "title": "General"
+      "title": "General",
+      "legacyOptionPageId": "a706a1c4-02be-4c9f-b6c8-1a95159ea9d2"
     },
     "extensions.msbuildguard.scanning": {
       "title": "Scanning"
