@@ -1116,7 +1116,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 
 		private const string SecurityReviewSettingsCollection = @"MSBuildGuard\SecurityReview\OnlyUntrustedIssues";
 
-		private static bool ReadOnlyUntrustedSetting(string scopePath)
+		private bool ReadOnlyUntrustedSetting(string scopePath)
 		{
 			ThreadHelper.ThrowIfNotOnUIThread();
 			try
@@ -1128,11 +1128,40 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 
 				var settingsManager = new ShellSettingsManager(package);
 				var store = settingsManager.GetReadOnlySettingsStore(SettingsScope.UserSettings);
-				
-				var propertyName = GetRegistryPropertyName(scopePath);
-				if (store.CollectionExists(SecurityReviewSettingsCollection) && store.PropertyExists(SecurityReviewSettingsCollection, propertyName))
+
+				if (!store.CollectionExists(SecurityReviewSettingsCollection))
 				{
-					return store.GetBoolean(SecurityReviewSettingsCollection, propertyName, false);
+					return false;
+				}
+
+				// 1. Check Project scope if it is distinct from All and Solution
+				var isAll = string.Equals(scopePath, AllProjectsPath, StringComparison.OrdinalIgnoreCase);
+				var isSolution = !string.IsNullOrWhiteSpace(this.CurrentTargetPath) && string.Equals(scopePath, this.CurrentTargetPath, StringComparison.OrdinalIgnoreCase);
+
+				if (!isAll && !isSolution)
+				{
+					var projectProperty = GetRegistryPropertyName(scopePath);
+					if (store.PropertyExists(SecurityReviewSettingsCollection, projectProperty))
+					{
+						return store.GetBoolean(SecurityReviewSettingsCollection, projectProperty, false);
+					}
+				}
+
+				// 2. Fall back to Solution scope if it is not the All scope and we have a Solution path
+				if (!isAll && !string.IsNullOrWhiteSpace(this.CurrentTargetPath))
+				{
+					var solutionProperty = GetRegistryPropertyName(this.CurrentTargetPath);
+					if (store.PropertyExists(SecurityReviewSettingsCollection, solutionProperty))
+					{
+						return store.GetBoolean(SecurityReviewSettingsCollection, solutionProperty, false);
+					}
+				}
+
+				// 3. Fall back to All scope
+				var allProperty = GetRegistryPropertyName(AllProjectsPath);
+				if (store.PropertyExists(SecurityReviewSettingsCollection, allProperty))
+				{
+					return store.GetBoolean(SecurityReviewSettingsCollection, allProperty, false);
 				}
 			}
 			catch (Exception ex)
