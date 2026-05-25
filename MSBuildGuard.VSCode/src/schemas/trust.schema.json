@@ -1,0 +1,99 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MSBuild Guard Trust Store Schema",
+  "description": "Validation schema for MSBuild Guard trust stores.",
+  "type": "object",
+  "required": ["version", "decisions"],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1,
+      "description": "The trust store schema version. Default is 1."
+    },
+    "decisions": {
+      "type": "array",
+      "description": "List of trust and exception decisions evaluated by MSBuild Guard.",
+      "items": {
+        "type": "object",
+        "required": ["decisionId", "scope", "subjectHash", "decision", "reason"],
+        "properties": {
+          "decisionId": {
+            "type": "string",
+            "description": "A unique identifier (GUID or string) representing this decision."
+          },
+          "scope": {
+            "type": "string",
+            "enum": ["File", "Repository", "Baseline", "Finding", "Assembly", "Signer"],
+            "description": "The scope of the trust decision. Matches the fingerprinting resolution strategy."
+          },
+          "subjectHash": {
+            "type": "string",
+            "description": "The target hash, rule fingerprint, package identifier (e.g. package@version), or signer key being approved."
+          },
+          "decision": {
+            "type": "string",
+            "enum": ["Trust", "TrustUntilChanged", "Deny", "DismissFinding"],
+            "description": "The kind of decision applied to this subject."
+          },
+          "reason": {
+            "type": "string",
+            "description": "An audit-compliant reason explaining why this trust was granted."
+          },
+          "assemblySigner": {
+            "type": "string",
+            "description": "Optional certificate signer display name (for Assembly or Signer scopes)."
+          },
+          "assemblyIssuer": {
+            "type": "string",
+            "description": "Optional certificate issuer (for Signer or Assembly scopes)."
+          },
+          "assemblySubject": {
+            "type": "string",
+            "description": "Optional certificate subject DN details."
+          },
+          "assemblyThumbprint": {
+            "type": "string",
+            "description": "Optional certificate hex thumbprint."
+          },
+          "assemblySerialNumber": {
+            "type": "string",
+            "description": "Optional certificate serial number."
+          },
+          "repositoryRemote": {
+            "type": "string",
+            "description": "Optional remote repository URL filter constraint."
+          },
+          "branch": {
+            "type": "string",
+            "description": "Optional branch name constraint."
+          },
+          "commitSha": {
+            "type": "string",
+            "description": "Optional Git commit hash constraint."
+          },
+          "policyProfile": {
+            "type": "string",
+            "description": "Optional specific policy profile target."
+          },
+          "userSid": {
+            "type": "string",
+            "description": "The Security Identifier (SID) or username of the approving identity."
+          },
+          "createdAtUtc": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO date-time indicating when the decision was recorded."
+          },
+          "expiresAtUtc": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Optional ISO date-time specifying when this decision expires and is no longer trusted."
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

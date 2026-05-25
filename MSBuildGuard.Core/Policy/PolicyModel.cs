@@ -39,34 +39,35 @@ namespace MSBuildGuard.Core.Policy
 		public PolicyAction UnapprovedPackageSourceAction { get; set; } = PolicyAction.RequireApproval;
 
 		/// <summary>
-		/// Gets minimum action requirements by severity.
+		/// Gets or sets minimum action requirements by severity.
 		/// </summary>
-		public IDictionary<FindingSeverity, PolicyAction> MinimumActionBySeverity { get; } = new Dictionary<FindingSeverity, PolicyAction>();
+		[System.Text.Json.Serialization.JsonConverter(typeof(CaseInsensitiveEnumDictionaryConverter<FindingSeverity, PolicyAction>))]
+		public IDictionary<FindingSeverity, PolicyAction> MinimumActionBySeverity { get; set; } = new Dictionary<FindingSeverity, PolicyAction>();
 
 		/// <summary>
-		/// Gets explicit action overrides by rule id.
+		/// Gets or sets explicit action overrides by rule id.
 		/// </summary>
-		public IDictionary<string, PolicyRuleSetting> Rules { get; } = new Dictionary<string, PolicyRuleSetting>(StringComparer.OrdinalIgnoreCase);
+		public IDictionary<string, PolicyRuleSetting> Rules { get; set; } = new Dictionary<string, PolicyRuleSetting>(StringComparer.OrdinalIgnoreCase);
 
 		/// <summary>
-		/// Gets include file patterns.
+		/// Gets or sets include file patterns.
 		/// </summary>
-		public IList<string> Include { get; } = new List<string>();
+		public IList<string> Include { get; set; } = new List<string>();
 
 		/// <summary>
-		/// Gets exclude file patterns.
+		/// Gets or sets exclude file patterns.
 		/// </summary>
-		public IList<string> Exclude { get; } = new List<string>();
+		public IList<string> Exclude { get; set; } = new List<string>();
 
 		/// <summary>
-		/// Gets the allowed package source labels or URLs.
+		/// Gets or sets the allowed package source labels or URLs.
 		/// </summary>
-		public IList<string> AllowedPackageSources { get; } = new List<string>();
+		public IList<string> AllowedPackageSources { get; set; } = new List<string>();
 
 		/// <summary>
-		/// Gets the blocked package source labels or URLs.
+		/// Gets or sets the blocked package source labels or URLs.
 		/// </summary>
-		public IList<string> BlockedPackageSources { get; } = new List<string>();
+		public IList<string> BlockedPackageSources { get; set; } = new List<string>();
 	}
 
 	/// <summary>

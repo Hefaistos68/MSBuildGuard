@@ -93,6 +93,11 @@ namespace MSBuildGuard.Core.Policy
 			report.RecommendedAction = MaxRecommendedAction(scoreRecommendedAction, MapRecommendedAction(highestPolicyAction));
 		}
 
+		/// <summary>
+		/// Maps a numeric risk score to a recommended action.
+		/// </summary>
+		/// <param name="riskScore">The risk score to map.</param>
+		/// <returns>The recommended action corresponding to the risk score.</returns>
 		private static RecommendedAction MapRecommendedAction(int riskScore)
 		{
 			if (riskScore >= 100)
@@ -113,6 +118,11 @@ namespace MSBuildGuard.Core.Policy
 			return RecommendedAction.Allow;
 		}
 
+		/// <summary>
+		/// Maps a policy action to its corresponding recommended action.
+		/// </summary>
+		/// <param name="policyAction">The policy action to map.</param>
+		/// <returns>The mapped recommended action.</returns>
 		private static RecommendedAction MapRecommendedAction(PolicyAction policyAction)
 		{
 			switch (policyAction)
@@ -128,11 +138,22 @@ namespace MSBuildGuard.Core.Policy
 			}
 		}
 
+		/// <summary>
+		/// Selects the most restrictive recommended action between two options.
+		/// </summary>
+		/// <param name="left">The first recommended action.</param>
+		/// <param name="right">The second recommended action.</param>
+		/// <returns>The more restrictive recommended action.</returns>
 		private static RecommendedAction MaxRecommendedAction(RecommendedAction left, RecommendedAction right)
 		{
 			return (RecommendedAction)Math.Max((int)left, (int)right);
 		}
 
+		/// <summary>
+		/// Computes a risk score modifier based on the severity of a finding.
+		/// </summary>
+		/// <param name="severity">The severity of the finding.</param>
+		/// <returns>The risk score value associated with the severity.</returns>
 		private static int SeverityScore(FindingSeverity severity)
 		{
 			switch (severity)
@@ -153,6 +174,11 @@ namespace MSBuildGuard.Core.Policy
 			}
 		}
 
+		/// <summary>
+		/// Computes additional risk score modifiers based on package provenance and asset kinds.
+		/// </summary>
+		/// <param name="finding">The finding to evaluate.</param>
+		/// <returns>The calculated provenance score modifier.</returns>
 		private static int PackageProvenanceScore(Finding finding)
 		{
 			var score = 0;
@@ -179,6 +205,12 @@ namespace MSBuildGuard.Core.Policy
 			return score;
 		}
 
+		/// <summary>
+		/// Resolves the policy action for a finding based on its package source constraints.
+		/// </summary>
+		/// <param name="policy">The policy document containing package source rules.</param>
+		/// <param name="finding">The finding to evaluate.</param>
+		/// <returns>The policy action based on package source rules.</returns>
 		private static PolicyAction ResolvePackageSourcePolicyAction(PolicyDocument policy, Finding finding)
 		{
 			if (string.IsNullOrWhiteSpace(finding.PackageId))
@@ -216,6 +248,12 @@ namespace MSBuildGuard.Core.Policy
 			return policy.UnapprovedPackageSourceAction;
 		}
 
+		/// <summary>
+		/// Determines whether a given package source matches any of the configured sources.
+		/// </summary>
+		/// <param name="configuredSources">The list of configured package sources.</param>
+		/// <param name="packageSource">The package source to check.</param>
+		/// <returns><c>true</c> if a match is found; otherwise, <c>false</c>.</returns>
 		private static bool IsPackageSourceMatch(System.Collections.Generic.IEnumerable<string> configuredSources, string packageSource)
 		{
 			var normalizedPackageSource = NormalizePackageSource(packageSource);
@@ -236,6 +274,11 @@ namespace MSBuildGuard.Core.Policy
 			return false;
 		}
 
+		/// <summary>
+		/// Normalizes a package source string by trimming whitespace and trailing slashes.
+		/// </summary>
+		/// <param name="packageSource">The package source string to normalize.</param>
+		/// <returns>The normalized package source string.</returns>
 		private static string NormalizePackageSource(string packageSource)
 		{
 			if (string.IsNullOrWhiteSpace(packageSource))
@@ -246,11 +289,24 @@ namespace MSBuildGuard.Core.Policy
 			return packageSource.Trim().TrimEnd('/', '\\');
 		}
 
+		/// <summary>
+		/// Selects the most restrictive policy action between two options.
+		/// </summary>
+		/// <param name="left">The first policy action.</param>
+		/// <param name="right">The second policy action.</param>
+		/// <returns>The more restrictive policy action.</returns>
 		private static PolicyAction MaxPolicyAction(PolicyAction left, PolicyAction right)
 		{
 			return (PolicyAction)Math.Max((int)left, (int)right);
 		}
 
+		/// <summary>
+		/// Resolves the reason description for the applied policy action.
+		/// </summary>
+		/// <param name="policy">The policy document containing strict mode settings.</param>
+		/// <param name="finding">The finding being evaluated.</param>
+		/// <param name="resolvedAction">The final resolved policy action.</param>
+		/// <returns>A string describing the reason for the policy action decision.</returns>
 		private static string ResolvePolicyActionReason(PolicyDocument policy, Finding finding, PolicyAction resolvedAction)
 		{
 			if (finding.ScannerPolicyAction == resolvedAction)

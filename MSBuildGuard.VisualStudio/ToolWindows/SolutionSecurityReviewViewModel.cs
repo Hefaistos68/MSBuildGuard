@@ -209,14 +209,20 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			{
 				var fileRecord = report.FilesScanned.FirstOrDefault(item => string.Equals(item.Path, finding.FilePath, StringComparison.OrdinalIgnoreCase));
 				var findingProjectPath = !string.IsNullOrWhiteSpace(finding.IntroducedViaProject) ? finding.IntroducedViaProject : string.Empty;
-				TrustStoreDocument? projectTrustStore = null;
+				var projectTrustStore  = (TrustStoreDocument?)null;
+
 
 				if (!string.IsNullOrWhiteSpace(findingProjectPath))
 				{
-					if (!projectTrustStoreCache.TryGetValue(findingProjectPath, out projectTrustStore))
+					var absoluteFindingProjectPath = Path.IsPathRooted(findingProjectPath)
+						? Path.GetFullPath(findingProjectPath)
+						: Path.GetFullPath(Path.Combine(Path.GetDirectoryName(solutionPath) ?? string.Empty, findingProjectPath));
+
+
+					if (!projectTrustStoreCache.TryGetValue(absoluteFindingProjectPath, out projectTrustStore))
 					{
-						projectTrustStore = trustStoreService.Load(trustStoreService.GetProjectTrustPath(findingProjectPath));
-						projectTrustStoreCache[findingProjectPath] = projectTrustStore;
+						projectTrustStore = trustStoreService.Load(trustStoreService.GetProjectTrustPath(absoluteFindingProjectPath));
+						projectTrustStoreCache[absoluteFindingProjectPath] = projectTrustStore;
 					}
 				}
 
@@ -276,8 +282,8 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 
 					if (!signatureCache.TryGetValue(cacheKey, out var signature))
 					{
-						var dllPath = Services.AssemblySignatureService.ResolveAssemblyFilePathFromPackageId(finding.PackageId, finding.PackageVersion);
-						signature = new Services.AssemblySignatureService().ReadSignature(dllPath);
+						var dllPath = AssemblySignatureService.ResolveAssemblyFilePathFromPackageId(finding.PackageId, finding.PackageVersion);
+						signature = new AssemblySignatureService().ReadSignature(dllPath);
 						signatureCache[cacheKey] = signature;
 					}
 
@@ -391,7 +397,6 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			});
 
 			var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-			var nonBuildableItemNameIndex = BuildNonBuildableItemNameIndex(solutionPath);
 
 			if (loadedProjectPaths != null)
 			{
@@ -402,13 +407,14 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 						continue;
 					}
 
-					var displayName = IsBuildableProjectPath(projectPath)
-						? Path.GetFileNameWithoutExtension(projectPath)
-						: ResolveNonBuildableItemDisplayName(nonBuildableItemNameIndex, projectPath);
+					if (!IsBuildableProjectPath(projectPath))
+					{
+						continue;
+					}
 
 					this.ProjectOptions.Add(new SolutionProjectOptionViewModel
 					{
-						Name = displayName,
+						Name = Path.GetFileNameWithoutExtension(projectPath),
 						Path = projectPath
 					});
 				}
@@ -492,15 +498,16 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				return;
 			}
 
-			var selectedProjectPath = this.selectedProject.Path;
-			var projectDirectory = Path.GetDirectoryName(selectedProjectPath) ?? string.Empty;
+			var projectName = this.selectedProject.Name;
+
 
 			foreach (var finding in this.allFindings)
 			{
-				if (!BelongsToProject(finding, selectedProjectPath, projectDirectory))
+				if (!BelongsToProject(finding, projectName))
 				{
 					continue;
 				}
+
 
 				if (this.onlyUntrustedIssues && finding.IsTrusted)
 				{
@@ -517,7 +524,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 					Severity   = FindingSeverity.None.ToString(),
 					RuleId     = "MBG000",
 					Title      = "No issues detected",
-					FilePath   = selectedProjectPath,
+					FilePath   = this.selectedProject.Path,
 					Line       = 1,
 					PolicyAction = "Trusted",
 					IsTrusted  = true,
@@ -526,7 +533,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			}
 
 			ComputeRiskScores(this.Findings, out var projectRiskScore, out var projectTrustedRiskScore);
-			this.Summary.TargetPath        = selectedProjectPath;
+			this.Summary.TargetPath        = this.selectedProject.Path;
 			this.Summary.RiskScore         = projectRiskScore;
 			this.Summary.TrustedRiskScore  = projectTrustedRiskScore;
 			this.Summary.RecommendedAction = MapRecommendedAction(projectRiskScore).ToString();
@@ -642,44 +649,20 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		}
 
 		/// <summary>
-		/// Determines whether a finding belongs to the specified project.
-		/// Package-sourced findings are matched via <see cref="FindingViewModel.IntroducedViaProject"/>;
-		/// file-level findings are matched by exact project file path or by a path-separator-bounded
-		/// directory prefix check for files inside the project directory.
+		/// Determines whether a finding belongs to the specified project by checking the "File" display column.
 		/// </summary>
 		/// <param name="finding">The finding to test.</param>
-		/// <param name="projectPath">The absolute path of the project file.</param>
-		/// <param name="projectDirectory">The directory containing the project file.</param>
+		/// <param name="projectName">The name of the selected project.</param>
 		/// <returns><c>true</c> when the finding belongs to the project; otherwise <c>false</c>.</returns>
-		private static bool BelongsToProject(FindingViewModel finding, string projectPath, string projectDirectory)
+		private static bool BelongsToProject(FindingViewModel finding, string projectName)
 		{
-			// Package-sourced findings carry the originating project path directly.
-			if (!string.IsNullOrWhiteSpace(finding.IntroducedViaProject))
+			if (string.IsNullOrWhiteSpace(projectName))
 			{
-				return string.Equals(finding.IntroducedViaProject, projectPath, StringComparison.OrdinalIgnoreCase);
+				return false;
 			}
 
-			// File-level findings: the finding file is the project file itself.
-			if (string.Equals(finding.FilePath, projectPath, StringComparison.OrdinalIgnoreCase))
-			{
-				return true;
-			}
 
-			// Findings in files under the project directory (e.g. imported .props/.targets).
-			if (!string.IsNullOrWhiteSpace(projectDirectory))
-			{
-				var dir = projectDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-				var filePath = finding.FilePath;
-
-				if (filePath.Length > dir.Length
-					&& filePath.StartsWith(dir, StringComparison.OrdinalIgnoreCase)
-					&& (filePath[dir.Length] == Path.DirectorySeparatorChar || filePath[dir.Length] == Path.AltDirectorySeparatorChar))
-				{
-					return true;
-				}
-			}
-
-			return false;
+			return finding.FilePathDisplay.IndexOf(projectName, StringComparison.OrdinalIgnoreCase) >= 0;
 		}
 
 		/// <summary>
@@ -987,11 +970,11 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			var currentProjectPath = this.selectedProject != null && !string.Equals(this.selectedProject.Path, AllProjectsPath, StringComparison.OrdinalIgnoreCase)
 				? this.selectedProject.Path
 				: string.Empty;
-			var assemblyPath     = MSBuildGuard.VisualStudio.Services.AssemblySignatureService.ResolveAssemblyFilePath(finding.FilePath);
+			var assemblyPath     = AssemblySignatureService.ResolveAssemblyFilePath(finding.FilePath);
 
 			if (!string.IsNullOrWhiteSpace(finding.PackageId) && !string.IsNullOrWhiteSpace(finding.PackageVersion))
 			{
-				var packageAssemblyPath = MSBuildGuard.VisualStudio.Services.AssemblySignatureService.ResolveAssemblyFilePathFromPackageId(finding.PackageId, finding.PackageVersion);
+				var packageAssemblyPath = AssemblySignatureService.ResolveAssemblyFilePathFromPackageId(finding.PackageId, finding.PackageVersion);
 
 				if (!string.IsNullOrWhiteSpace(packageAssemblyPath))
 				{

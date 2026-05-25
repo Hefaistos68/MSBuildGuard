@@ -6,6 +6,7 @@ using System.Windows;
 using Microsoft.VisualStudio.PlatformUI;
 using MSBuildGuard.VisualStudio.Models;
 using MSBuildGuard.VisualStudio.Services;
+using MSBuildGuard.Core.Trust;
 
 namespace MSBuildGuard.VisualStudio.ToolWindows
 {

@@ -1,0 +1,159 @@
+{
+  "name": "msbuildguard",
+  "displayName": "MSBuild Guard",
+  "description": "Sleek, cross-platform security analysis extension that scans MSBuild project files before execution and prevents malicious code delivery.",
+  "icon": "resources/shield-icon.png",
+  "version": "0.0.1",
+  "preview": true,
+  "publisher": "Hefaistos68",
+  "author": {
+    "name": "Hefaistos68",
+    "email": "dev@hefaistos68.dev",
+    "url": "https://github.com/Hefaistos68"
+  },
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Hefaistos68/MSBuildGuard"
+  },
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters",
+    "Other"
+  ],
+  "activationEvents": [
+    "onLanguage:csharp",
+    "workspaceContains:**/*.sln",
+    "workspaceContains:**/*.slnx",
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "msbuildguard-container",
+          "title": "MSBuild Guard",
+          "icon": "resources/shield-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "msbuildguard-container": [
+        {
+          "type": "webview",
+          "id": "msbuildguard.securityReview",
+          "name": "Security Review",
+          "icon": "resources/shield-icon.svg"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "msbuildguard.scan",
+        "category": "MSBuild Guard",
+        "title": "Scan Solution / Project"
+      },
+      {
+        "command": "msbuildguard.showReview",
+        "category": "MSBuild Guard",
+        "title": "Show Security Review Dashboard"
+      },
+      {
+        "command": "msbuildguard.createBaseline",
+        "category": "MSBuild Guard",
+        "title": "Create Trusted Baseline..."
+      },
+      {
+        "command": "msbuildguard.editPolicy",
+        "category": "MSBuild Guard",
+        "title": "Configure Rules & Policy Editor..."
+      },
+      {
+        "command": "msbuildguard.manageAssemblyTrusts",
+        "category": "MSBuild Guard",
+        "title": "Manage Trusted Assemblies..."
+      },
+      {
+        "command": "msbuildguard.manageSignerTrusts",
+        "category": "MSBuild Guard",
+        "title": "Manage Trusted Certificate Signers..."
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "msbuildguard.scan",
+          "group": "navigation",
+          "when": "resourceExtname == '.sln' || resourceExtname == '.slnx' || resourceExtname == '.csproj' || resourceExtname == '.fsproj' || resourceExtname == '.vbproj' || resourceExtname == '.targets' || resourceExtname == '.props'"
+        }
+      ]
+    },
+    "configuration": {
+      "type": "object",
+      "title": "MSBuild Guard",
+      "properties": {
+        "msbuildguard.autoOpenSecurityReview": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically opens the Security Review pane when a scan requires user attention."
+        },
+        "msbuildguard.onlyUntrustedIssues": {
+          "type": "boolean",
+          "default": false,
+          "description": "Only show untrusted issues in the security review dashboard."
+        },
+        "msbuildguard.scanNuGetPackages": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enables package asset file watchers and NuGet restore-triggered rescans."
+        },
+        "msbuildguard.fileTypesToScan": {
+          "type": "string",
+          "default": ".csproj;.vbproj;.fsproj;.proj;.props;.targets;.sln;.slnx",
+          "description": "Semicolon-separated list of build and project file extensions to scan."
+        },
+        "msbuildguard.processCreationIndicators": {
+          "type": "string",
+          "default": "System.Diagnostics.Process;Process.Start(;CreateProcess(;cmd.exe;powershell;pwsh",
+          "description": "Semicolon-separated list of risky process creation APIs and shell executables."
+        },
+        "msbuildguard.reflectionInteropIndicators": {
+          "type": "string",
+          "default": "System.Reflection;Assembly.Load;Activator.CreateInstance;GetType(;dynamic ;DllImport;Marshal.GetDelegateForFunctionPointer;LoadLibrary",
+          "description": "Semicolon-separated list of reflection, dynamic loading, and interop indicators."
+        },
+        "msbuildguard.additionalBlockedAssemblies": {
+          "type": "string",
+          "default": "",
+          "description": "Semicolon-separated list of additional assembly names to block in NuGet assets."
+        }
+      }
+    },
+    "jsonValidation": [
+      {
+        "fileMatch": "**/policy.json",
+        "url": "./src/schemas/policy.schema.json"
+      },
+      {
+        "fileMatch": "**/trust.json",
+        "url": "./src/schemas/trust.schema.json"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "npx @vscode/vsce package --pre-release",
+    "publish": "npx @vscode/vsce publish --pre-release"
+  },
+  "devDependencies": {
+    "@types/node": "^16.18.34",
+    "@types/vscode": "^1.75.0",
+    "typescript": "^4.9.5"
+  }
+}

@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <!-- Background glowing gradient -->
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#00f2fe" stop-opacity="0.15" />
+      <stop offset="100%" stop-color="#4facfe" stop-opacity="0" />
+    </radialGradient>
+    
+    <!-- Shield main surface gradient -->
+    <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4facfe" />
+      <stop offset="100%" stop-color="#00f2fe" />
+    </linearGradient>
+
+    <!-- Metallic border gradient -->
+    <linearGradient id="borderGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.8" />
+      <stop offset="40%" stop-color="#ffffff" stop-opacity="0.3" />
+      <stop offset="100%" stop-color="#00f2fe" stop-opacity="0.9" />
+    </linearGradient>
+  </defs>
+
+  <!-- Ambient Glow -->
+  <circle cx="64" cy="64" r="60" fill="url(#glow)" />
+
+  <!-- The Shield Body -->
+  <path d="M64,14 C90,14 106,24 106,24 C106,64 88,96 64,114 C40,96 22,64 22,24 C22,24 38,14 64,14 Z" 
+        fill="url(#shieldGrad)" 
+        stroke="url(#borderGrad)" 
+        stroke-width="5" 
+        stroke-linejoin="round"
+        filter="drop-shadow(0px 8px 16px rgba(0, 242, 254, 0.3))" />
+
+  <!-- Inline Core Shield Detail (Internal Plate) -->
+  <path d="M64,22 C84,22 96,30 96,30 C96,62 82,88 64,103 C46,88 32,62 32,30 C32,30 44,22 64,22 Z" 
+        fill="#0f172a" 
+        fill-opacity="0.75" />
+
+  <!-- High-tech security grid / target checkmark -->
+  <path d="M52,66 L60,74 L76,52" 
+        fill="none" 
+        stroke="#ffffff" 
+        stroke-width="6" 
+        stroke-linecap="round" 
+        stroke-linejoin="round"
+        filter="drop-shadow(0px 0px 8px #00f2fe)" />
+</svg>

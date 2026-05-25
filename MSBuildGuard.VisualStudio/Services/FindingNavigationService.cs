@@ -34,8 +34,16 @@ namespace MSBuildGuard.VisualStudio.Services
 
 			var targetLine   = Math.Max(0, line - 1);
 			var targetColumn = Math.Max(0, column - 1);
+			IVsWindowFrame windowFrame;
 
-			VsShellUtilities.OpenDocument(serviceProvider, filePath, Guid.Empty, out _, out _, out var windowFrame);
+			try
+			{
+				VsShellUtilities.OpenDocument(serviceProvider, filePath, VSConstants.LOGVIEWID_Code, out _, out _, out windowFrame);
+			}
+			catch (Exception)
+			{
+				return;
+			}
 
 			if (windowFrame == null)
 			{

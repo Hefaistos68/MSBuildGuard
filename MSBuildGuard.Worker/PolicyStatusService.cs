@@ -2,12 +2,12 @@ using System;
 using System.IO;
 using MSBuildGuard.Core.Policy;
 
-namespace MSBuildGuard.VisualStudio.Services
+namespace MSBuildGuard.Worker
 {
 	/// <summary>
-	/// Resolves effective policy information for display in Visual Studio.
+	/// Resolves effective policy information by loading and merging policies across scopes.
 	/// </summary>
-	internal sealed class PolicyStatusService
+	public sealed class PolicyStatusService
 	{
 		private readonly PolicyService policyService;
 
@@ -62,6 +62,11 @@ namespace MSBuildGuard.VisualStudio.Services
 			}
 		}
 
+		/// <summary>
+		/// Determines whether the specified path points to a C# (.csproj), VB (.vbproj), or F# (.fsproj) project file.
+		/// </summary>
+		/// <param name="path">The file path to evaluate.</param>
+		/// <returns><c>true</c> if the path has a project file extension; otherwise, <c>false</c>.</returns>
 		private static bool IsProjectFilePath(string? path)
 		{
 			if (string.IsNullOrWhiteSpace(path))
@@ -90,10 +95,10 @@ namespace MSBuildGuard.VisualStudio.Services
 		}
 
 		/// <summary>
-		/// Loads policy if the file exists.
+		/// Attempts to load and parse a policy document from the specified file path if it exists.
 		/// </summary>
-		/// <param name="policyPath">Path to policy file.</param>
-		/// <returns>Policy document or null.</returns>
+		/// <param name="policyPath">The path to the policy file.</param>
+		/// <returns>The loaded <see cref="PolicyDocument"/> if found; otherwise, <c>null</c>.</returns>
 		private PolicyDocument? TryLoadPolicy(string policyPath)
 		{
 			if (string.IsNullOrWhiteSpace(policyPath) || !File.Exists(policyPath))
@@ -101,7 +106,9 @@ namespace MSBuildGuard.VisualStudio.Services
 				return null;
 			}
 
-			return this.policyService.Load(policyPath);
+			var document = this.policyService.Load(policyPath);
+
+			return document;
 		}
 	}
 }

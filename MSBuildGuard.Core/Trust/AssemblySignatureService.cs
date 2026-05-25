@@ -4,12 +4,12 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography.X509Certificates;
 
-namespace MSBuildGuard.VisualStudio.Services
+namespace MSBuildGuard.Core.Trust
 {
 	/// <summary>
 	/// Provides Authenticode signature inspection for assembly files.
 	/// </summary>
-	internal sealed class AssemblySignatureService
+	public sealed class AssemblySignatureService
 	{
 		/// <summary>
 		/// Resolves the path to an actual PE assembly file (.dll or .exe) given a file path that may
@@ -41,6 +41,7 @@ namespace MSBuildGuard.VisualStudio.Services
 			}
 
 			var preferredName = Path.GetFileNameWithoutExtension(filePath);
+
 			return FindBestAssemblyFile(packageRoot, preferredName);
 		}
 
@@ -95,7 +96,7 @@ namespace MSBuildGuard.VisualStudio.Services
 				}
 
 				using var certificate2 = certificate;
-				var signer = certificate2.GetNameInfo(X509NameType.SimpleName, false);
+				var signer             = certificate2.GetNameInfo(X509NameType.SimpleName, false);
 
 				if (string.IsNullOrWhiteSpace(signer))
 				{
@@ -142,11 +143,13 @@ namespace MSBuildGuard.VisualStudio.Services
 				}
 
 				certificate = new X509Certificate2(rawCertificate);
+
 				return true;
 			}
 			catch
 			{
 				certificate = null;
+
 				return false;
 			}
 		}
@@ -192,6 +195,7 @@ namespace MSBuildGuard.VisualStudio.Services
 				data.FileInfoPointer = fileInfoPointer;
 
 				var result = WinVerifyTrust(IntPtr.Zero, WinTrustActionGenericVerifyV2, ref data);
+
 				return result == 0;
 			}
 			catch
@@ -330,13 +334,12 @@ namespace MSBuildGuard.VisualStudio.Services
 
 			return 3;
 		}
-
 	}
 
 	/// <summary>
 	/// Represents assembly signature identity fields extracted from Authenticode metadata.
 	/// </summary>
-	internal sealed class AssemblySignatureInfo
+	public sealed class AssemblySignatureInfo
 	{
 		/// <summary>
 		/// Gets or sets a value indicating whether the file has an embedded signature blob.

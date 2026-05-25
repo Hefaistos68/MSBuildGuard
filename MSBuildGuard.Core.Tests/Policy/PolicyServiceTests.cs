@@ -159,6 +159,37 @@ namespace MSBuildGuard.Core.Tests.Policy
 		}
 
 		/// <summary>
+		/// Verifies loading a raw JSON policy with string-based enums succeeds.
+		/// </summary>
+		[Test]
+		public void Load_ShouldSucceed_WhenRawJsonHasStringEnums()
+		{
+			var service = new PolicyService();
+			var policyPath = Path.Combine(Path.GetTempPath(), $"policy-string-enums-{Guid.NewGuid():N}.json");
+			var rawJson = "{\r\n  \"Version\": 1,\r\n  \"Mode\": \"warn\",\r\n  \"BaselineRequired\": false,\r\n  \"StrictMode\": false,\r\n  \"IncompleteAnalysisAction\": \"warn\",\r\n  \"UnapprovedPackageSourceAction\": \"requireApproval\",\r\n  \"MinimumActionBySeverity\": {\r\n    \"Info\": \"allow\",\r\n    \"Low\": \"warn\",\r\n    \"Medium\": \"requireApproval\",\r\n    \"High\": \"block\",\r\n    \"Critical\": \"block\"\r\n  },\r\n  \"Rules\": {},\r\n  \"Include\": [],\r\n  \"Exclude\": [],\r\n  \"AllowedPackageSources\": [],\r\n  \"BlockedPackageSources\": []\r\n}";
+
+			try
+			{
+				File.WriteAllText(policyPath, rawJson);
+
+				var policy = service.Load(policyPath);
+
+				policy.ShouldNotBeNull();
+
+				policy.IncompleteAnalysisAction.ShouldBe(PolicyAction.Warn);
+				policy.UnapprovedPackageSourceAction.ShouldBe(PolicyAction.RequireApproval);
+				policy.MinimumActionBySeverity[FindingSeverity.Critical].ShouldBe(PolicyAction.Block);
+			}
+			finally
+			{
+				if (File.Exists(policyPath))
+				{
+					File.Delete(policyPath);
+				}
+			}
+		}
+
+		/// <summary>
 		/// Verifies validation fails when the JSON envelope has been modified without a matching signature.
 		/// </summary>
 		[Test]
@@ -216,6 +247,40 @@ namespace MSBuildGuard.Core.Tests.Policy
 				RemoveCertificate(StoreName.TrustedPeople, StoreLocation.CurrentUser, certificate.Thumbprint);
 			}
 		}
+
+		/// <summary>
+		/// Verifies loading a raw JSON policy with lowercase enum keys succeeds.
+		/// </summary>
+		[Test]
+		public void Load_ShouldSucceed_WhenRawJsonHasLowercaseEnumKeys()
+		{
+			var service = new PolicyService();
+			var policyPath = Path.Combine(Path.GetTempPath(), $"policy-lowercase-enums-{Guid.NewGuid():N}.json");
+			var rawJson = "{\r\n  \"Version\": 1,\r\n  \"Mode\": \"warn\",\r\n  \"BaselineRequired\": false,\r\n  \"StrictMode\": false,\r\n  \"IncompleteAnalysisAction\": \"warn\",\r\n  \"UnapprovedPackageSourceAction\": \"requireApproval\",\r\n  \"MinimumActionBySeverity\": {\r\n    \"info\": \"allow\",\r\n    \"low\": \"warn\",\r\n    \"medium\": \"requireApproval\",\r\n    \"high\": \"block\",\r\n    \"critical\": \"block\"\r\n  },\r\n  \"Rules\": {},\r\n  \"Include\": [],\r\n  \"Exclude\": [],\r\n  \"AllowedPackageSources\": [],\r\n  \"BlockedPackageSources\": []\r\n}";
+
+			try
+			{
+				File.WriteAllText(policyPath, rawJson);
+
+				var policy = service.LoadUnsigned(policyPath);
+
+				policy.ShouldNotBeNull();
+				policy.MinimumActionBySeverity[FindingSeverity.Critical].ShouldBe(PolicyAction.Block);
+				policy.MinimumActionBySeverity[FindingSeverity.High].ShouldBe(PolicyAction.Block);
+				policy.MinimumActionBySeverity[FindingSeverity.Medium].ShouldBe(PolicyAction.RequireApproval);
+				policy.MinimumActionBySeverity[FindingSeverity.Low].ShouldBe(PolicyAction.Warn);
+				policy.MinimumActionBySeverity[FindingSeverity.Info].ShouldBe(PolicyAction.Allow);
+			}
+			finally
+			{
+				if (File.Exists(policyPath))
+				{
+					File.Delete(policyPath);
+				}
+			}
+		}
+
+
 
 		private static X509Certificate2 CreateSelfSignedCertificate()
 		{
