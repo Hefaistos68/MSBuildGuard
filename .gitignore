@@ -372,3 +372,4 @@ FodyWeavers.xsd
 
 /.msbuildguard
 /plans
+/MSBuildGuard.VSCode/*.vsix

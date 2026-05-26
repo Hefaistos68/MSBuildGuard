@@ -2,9 +2,12 @@
   <Metadata>
     <Identity Id="MSBuildGuard.VisualStudio" Version="0.2.0" Language="en-US" Publisher="Hefaistos68" />
     <DisplayName>MSBuild Guard for Visual Studio</DisplayName>
-    <Description xml:space="preserve">MSBuild Security Review Extension</Description>
+    <Description xml:space="preserve">Real-time MSBuild security review, trust workflows, build blocking, and dynamic policy enforcement for Visual Studio.</Description>
     <MoreInfo>https://github.com/Hefaistos68/MSBuildGuard</MoreInfo>
-    <Tags>MSBuild;Security;Guard</Tags>
+    <Icon>Resources\shield-check.png</Icon>
+    <PreviewImage>Resources\Solution-Security-Review.jpg</PreviewImage>
+    <Tags>MSBuild;Security;Guard;Trust;Enforcement</Tags>
+    <Readme>Resources\README.md</Readme>
     <Categories>
       <Category>Code Tools</Category>
     </Categories>

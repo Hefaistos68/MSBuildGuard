@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
+<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
   <PropertyGroup>
     <TargetFramework>net472</TargetFramework>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
@@ -36,8 +36,7 @@
     <RootNamespace>MSBuildGuard.VisualStudio</RootNamespace>
     <Product>MSBuildGuard</Product>
     <Title>MSBuildGuard</Title>
-    <Version>0.2.0</Version>
-    <FileVersion>0.0.3.2</FileVersion>
+    <Version>0.2.0.1</Version>
     <SignAssembly>False</SignAssembly>
     <Authors>Hefaistos68</Authors>
     <Company>Hefaistos68.dev</Company>
@@ -68,6 +67,15 @@
     <!-- Unified Settings -->
     <Content Include="UnifiedSettings\msbuildguard.registration.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <IncludeInVSIX>true</IncludeInVSIX>
+    </Content>
+    <Content Include="Resources\shield-check.png">
+      <IncludeInVSIX>true</IncludeInVSIX>
+    </Content>
+    <Content Include="Resources\README.md">
+      <IncludeInVSIX>true</IncludeInVSIX>
+    </Content>
+    <Content Include="Resources\Solution-Security-Review.jpg">
       <IncludeInVSIX>true</IncludeInVSIX>
     </Content>
     <None Include="source.extension.vsixmanifest">
