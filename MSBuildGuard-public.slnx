@@ -8,6 +8,29 @@
   <Folder Name="/Documentation/">
     <File Path="documentation/VisualStudioExtension.md" />
   </Folder>
+  <Folder Name="/MSBuildGuard.VScode/">
+    <File Path="MSBuildGuard.VSCode/.vscodeignore" />
+    <File Path="MSBuildGuard.VSCode/package-lock.json" />
+    <File Path="MSBuildGuard.VSCode/package.json" />
+    <File Path="MSBuildGuard.VSCode/tsconfig.json" />
+  </Folder>
+  <Folder Name="/MSBuildGuard.VScode/src/">
+    <File Path="MSBuildGuard.VSCode/src/extension.ts" />
+  </Folder>
+  <Folder Name="/MSBuildGuard.VScode/src/schemas/">
+    <File Path="MSBuildGuard.VSCode/src/schemas/policy.schema.json" />
+    <File Path="MSBuildGuard.VSCode/src/schemas/trust.schema.json" />
+  </Folder>
+  <Folder Name="/MSBuildGuard.VScode/src/services/">
+    <File Path="MSBuildGuard.VSCode/src/services/buildEnforcer.ts" />
+    <File Path="MSBuildGuard.VSCode/src/services/diagnosticPublisher.ts" />
+    <File Path="MSBuildGuard.VSCode/src/services/workerClient.ts" />
+  </Folder>
+  <Folder Name="/MSBuildGuard.VScode/src/views/">
+    <File Path="MSBuildGuard.VSCode/src/views/policyEditorView.ts" />
+    <File Path="MSBuildGuard.VSCode/src/views/securityReviewView.ts" />
+    <File Path="MSBuildGuard.VSCode/src/views/trustStoreView.ts" />
+  </Folder>
   <Folder Name="/Solution Configuration/" />
   <Folder Name="/Solution Items/">
     <File Path="LICENSE" />
@@ -18,4 +41,6 @@
   <Project Path="MSBuildGuard.VisualStudio/MSBuildGuard.VisualStudio.csproj">
     <Deploy Solution="Debug|Any CPU" />
   </Project>
+  <Project Path="MSBuildGuard.Worker.Tests/MSBuildGuard.Worker.Tests.csproj" />
+  <Project Path="MSBuildGuard.Worker/MSBuildGuard.Worker.csproj" />
 </Solution>

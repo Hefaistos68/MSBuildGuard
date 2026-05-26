@@ -6,6 +6,7 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Linq;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using MSBuildGuard.Core.Baseline;
 
 namespace MSBuildGuard.Core.Policy
@@ -50,7 +51,9 @@ namespace MSBuildGuard.Core.Policy
 		/// </summary>
 		private static readonly JsonSerializerOptions SerializerOptions = new JsonSerializerOptions
 		{
-			WriteIndented = true
+			WriteIndented               = true,
+			PropertyNameCaseInsensitive = true,
+			Converters                  = { new JsonStringEnumConverter() }
 		};
 
 		/// <summary>
@@ -113,6 +116,31 @@ namespace MSBuildGuard.Core.Policy
 		}
 
 		/// <summary>
+		/// Creates a fail-safe block policy document where all actions are restricted.
+		/// </summary>
+		/// <returns>A new strict block policy document.</returns>
+		public PolicyDocument CreateFailSafeBlockPolicy()
+		{
+			var policy = new PolicyDocument
+			{
+				BaselineRequired              = true,
+				IncompleteAnalysisAction      = PolicyAction.Block,
+				Mode                          = "block",
+				StrictMode                    = true,
+				UnapprovedPackageSourceAction = PolicyAction.Block,
+				Version                       = 1
+			};
+
+			policy.MinimumActionBySeverity[FindingSeverity.Critical] = PolicyAction.Block;
+			policy.MinimumActionBySeverity[FindingSeverity.High]     = PolicyAction.Block;
+			policy.MinimumActionBySeverity[FindingSeverity.Medium]   = PolicyAction.Block;
+			policy.MinimumActionBySeverity[FindingSeverity.Low]      = PolicyAction.Block;
+			policy.MinimumActionBySeverity[FindingSeverity.Info]     = PolicyAction.Block;
+
+			return policy;
+		}
+
+		/// <summary>
 		/// Saves policy content to disk.
 		/// </summary>
 		/// <param name="path">The policy file path.</param>
@@ -163,7 +191,10 @@ namespace MSBuildGuard.Core.Policy
 			var payload = File.ReadAllText(path);
 			var signatureService = new JsonSignatureService();
 
-			if (!signatureService.TryVerifyAndExtract<string>(payload, PolicyEnvelopeSigningKey, out var policyPayload) || string.IsNullOrWhiteSpace(policyPayload))
+			string? policyPayload;
+			var isEnvelopeSigned = signatureService.TryVerifyAndExtract<string>(payload, PolicyEnvelopeSigningKey, out policyPayload) && !string.IsNullOrWhiteSpace(policyPayload);
+
+			if (!isEnvelopeSigned)
 			{
 				throw new InvalidDataException("Policy signature validation failed. Run 'msbuildguard policy sign <policyPath>' after legitimate edits.");
 			}
@@ -196,8 +227,24 @@ namespace MSBuildGuard.Core.Policy
 			var payload = File.ReadAllText(path);
 			var signatureService = new JsonSignatureService();
 
-			if (!signatureService.TryVerifyAndExtract<string>(payload, PolicyEnvelopeSigningKey, out var policyPayload) || string.IsNullOrWhiteSpace(policyPayload))
+			string? policyPayload;
+			var isEnvelopeSigned = signatureService.TryVerifyAndExtract<string>(payload, PolicyEnvelopeSigningKey, out policyPayload) && !string.IsNullOrWhiteSpace(policyPayload);
+
+			if (!isEnvelopeSigned)
 			{
+				try
+				{
+					var directPolicy = JsonSerializer.Deserialize<PolicyDocument>(payload, SerializerOptions);
+
+					if (directPolicy != null)
+					{
+						return directPolicy;
+					}
+				}
+				catch
+				{
+				}
+
 				throw new InvalidDataException("Unable to deserialize policy file.");
 			}
 
@@ -261,6 +308,17 @@ namespace MSBuildGuard.Core.Policy
 			if (!File.Exists(policyPath))
 			{
 				throw new FileNotFoundException("Policy file was not found.", policyPath);
+			}
+
+			var payload = File.ReadAllText(policyPath);
+			var signatureService = new JsonSignatureService();
+			string? policyPayload;
+
+			var isEnvelopeSigned = signatureService.TryVerifyAndExtract<string>(payload, PolicyEnvelopeSigningKey, out policyPayload) && !string.IsNullOrWhiteSpace(policyPayload);
+
+			if (!isEnvelopeSigned)
+			{
+				throw new InvalidDataException("Policy signature validation failed. Run 'msbuildguard policy sign <policyPath>' after legitimate edits.");
 			}
 
 			if (!TryReadSignatureRecord(policyPath, out var signatureRecord))

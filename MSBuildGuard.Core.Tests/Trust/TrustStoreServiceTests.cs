@@ -391,5 +391,38 @@ namespace MSBuildGuard.Core.Tests.Trust
 			merged.Decisions.Any(item => item.SubjectHash == "solution-decision").ShouldBeTrue();
 			merged.Decisions.Any(item => item.SubjectHash == "project-decision").ShouldBeTrue();
 		}
+
+		/// <summary>
+		/// Verifies loading a raw JSON trust store with camelCase properties succeeds.
+		/// </summary>
+		[Test]
+		public void Load_ShouldSucceed_WhenRawJsonHasCamelCaseProperties()
+		{
+			var service = new TrustStoreService();
+			var path = Path.Combine(Path.GetTempPath(), $"trust-raw-{Guid.NewGuid():N}.json");
+			var rawJson = "{\r\n  \"version\": 1,\r\n  \"decisions\": [\r\n    {\r\n      \"decisionId\": \"5cd109faa53d41158955c652300e9ea9\",\r\n      \"scope\": \"Signer\",\r\n      \"subjectHash\": \"EC240824852A50662166EA955B4BAD3E180440AD\",\r\n      \"decision\": \"Trust\",\r\n      \"reason\": \"Trusted\",\r\n      \"userSid\": \"andreas\"\r\n    }\r\n  ]\r\n}";
+
+			try
+			{
+				File.WriteAllText(path, rawJson);
+
+				var store = service.Load(path);
+
+				store.ShouldNotBeNull();
+				store.Version.ShouldBe(1);
+				store.Decisions.Count.ShouldBe(1);
+				store.Decisions[0].DecisionId.ShouldBe("5cd109faa53d41158955c652300e9ea9");
+				store.Decisions[0].Scope.ShouldBe("Signer");
+				store.Decisions[0].SubjectHash.ShouldBe("EC240824852A50662166EA955B4BAD3E180440AD");
+				store.Decisions[0].Decision.ShouldBe("Trust");
+			}
+			finally
+			{
+				if (File.Exists(path))
+				{
+					File.Delete(path);
+				}
+			}
+		}
 	}
 }

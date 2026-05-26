@@ -103,14 +103,6 @@ namespace MSBuildGuard.VisualStudio.Services
 				if (extObject is Project project && !string.IsNullOrWhiteSpace(project.FullName))
 				{
 					projectPaths.Add(project.FullName);
-					continue;
-				}
-
-				hierarchy.GetCanonicalName((uint)VSConstants.VSITEMID_ROOT, out var canonicalName);
-
-				if (!string.IsNullOrWhiteSpace(canonicalName))
-				{
-					projectPaths.Add(canonicalName);
 				}
 			}
 

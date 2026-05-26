@@ -5,6 +5,7 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using MSBuildGuard.Core.Baseline;
 
 namespace MSBuildGuard.Core.Trust
@@ -18,7 +19,9 @@ namespace MSBuildGuard.Core.Trust
 
 		private static readonly JsonSerializerOptions SerializerOptions = new JsonSerializerOptions
 		{
-			WriteIndented = true
+			WriteIndented               = true,
+			PropertyNameCaseInsensitive = true,
+			Converters                  = { new JsonStringEnumConverter() }
 		};
 
 		private static readonly JsonSerializerOptions AuditSerializerOptions = new JsonSerializerOptions
@@ -46,8 +49,42 @@ namespace MSBuildGuard.Core.Trust
 			var payload = File.ReadAllText(path);
 			var signatureService = new JsonSignatureService();
 
-			if (!signatureService.TryVerifyAndExtract<string>(payload, TrustStoreSigningKey, out var trustPayload) || string.IsNullOrWhiteSpace(trustPayload))
+			var isEnvelopeFormat = false;
+
+			try
 			{
+				using var doc = JsonDocument.Parse(payload);
+				isEnvelopeFormat = doc.RootElement.ValueKind == JsonValueKind.Object && doc.RootElement.TryGetProperty("SignatureV1", out _);
+			}
+			catch (JsonException)
+			{
+			}
+
+			string? trustPayload;
+			var isEnvelopeSigned = signatureService.TryVerifyAndExtract<string>(payload, TrustStoreSigningKey, out trustPayload) && !string.IsNullOrWhiteSpace(trustPayload);
+
+			if (isEnvelopeFormat)
+			{
+				if (!isEnvelopeSigned)
+				{
+					throw new InvalidDataException("Trust store signature validation failed. Do not modify the contents of this file manually.");
+				}
+			}
+			else
+			{
+				try
+				{
+					var directTrust = JsonSerializer.Deserialize<TrustStoreDocument>(payload, SerializerOptions);
+
+					if (directTrust != null)
+					{
+						return directTrust;
+					}
+				}
+				catch
+				{
+				}
+
 				throw new InvalidDataException("Trust store signature validation failed. Do not modify the contents of this file manually.");
 			}
 

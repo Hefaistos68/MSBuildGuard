@@ -1,3 +1,4 @@
+using System;
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
@@ -7,6 +8,7 @@ using Microsoft.VisualStudio.Shell;
 using MSBuildGuard.Core;
 using MSBuildGuard.VisualStudio.Models;
 using MSBuildGuard.VisualStudio.Services;
+using MSBuildGuard.Core.Trust;
 
 namespace MSBuildGuard.VisualStudio.ToolWindows
 {
@@ -21,8 +23,20 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		public SolutionSecurityReviewControl()
 		{
 			this.InitializeComponent();
-			this.DataContext = new SolutionSecurityReviewViewModel();
+
+			var viewModel = new SolutionSecurityReviewViewModel();
+
+			viewModel.PropertyChanged += this.OnViewModelPropertyChanged;
+			this.DataContext = viewModel;
 			this.UpdateTrustedColumnVisibility();
+		}
+
+		private void OnViewModelPropertyChanged(object sender, PropertyChangedEventArgs e)
+		{
+			if (string.Equals(e.PropertyName, nameof(SolutionSecurityReviewViewModel.OnlyUntrustedIssues), StringComparison.Ordinal))
+			{
+				this.UpdateTrustedColumnVisibility();
+			}
 		}
 
 		/// <summary>
@@ -182,10 +196,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			dialog.ShowDialog();
 		}
 
-		private void OnOnlyUntrustedIssuesCheckedChanged(object sender, RoutedEventArgs e)
-		{
-			this.UpdateTrustedColumnVisibility();
-		}
+
 
 		private void ApplyDefaultSeveritySort()
 		{

@@ -1,0 +1,67 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MSBuild Guard Policy Schema",
+  "description": "Validation schema for MSBuild Guard policy configurations.",
+  "type": "object",
+  "required": ["version", "mode"],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1,
+      "description": "The policy specification version. Default is 1."
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["warn", "block"],
+      "default": "block",
+      "description": "Determines the enforcement strategy in build automation. In 'warn' mode, violations are logged as warnings but the build is allowed to proceed."
+    },
+    "baselineRequired": {
+      "type": "boolean",
+      "default": true,
+      "description": "If true, an approved baseline file must exist in the repository to trust scanning status."
+    },
+    "minimumActionBySeverity": {
+      "type": "object",
+      "description": "Maps default actions for findings by risk severity levels. Higher layers cannot weaken these constraints.",
+      "properties": {
+        "Critical": { "type": "string", "enum": ["Allow", "Warn", "RequireApproval", "Block"] },
+        "High": { "type": "string", "enum": ["Allow", "Warn", "RequireApproval", "Block"] },
+        "Medium": { "type": "string", "enum": ["Allow", "Warn", "RequireApproval", "Block"] },
+        "Low": { "type": "string", "enum": ["Allow", "Warn", "RequireApproval", "Block"] },
+        "Info": { "type": "string", "enum": ["Allow", "Warn", "RequireApproval", "Block"] }
+      },
+      "additionalProperties": false
+    },
+    "rules": {
+      "type": "object",
+      "description": "Specific override actions for individual MSBuild Guard detection rules (e.g. MBG005).",
+      "patternProperties": {
+        "^MBG\\d{3}$": {
+          "type": "object",
+          "properties": {
+            "action": {
+              "type": "string",
+              "enum": ["Allow", "Warn", "RequireApproval", "Block"],
+              "description": "Override action for this rule."
+            }
+          },
+          "required": ["action"],
+          "additionalProperties": false
+        }
+      }
+    },
+    "include": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Glob patterns of files and folders to include in security scans."
+    },
+    "exclude": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Glob patterns of files and folders to ignore during security scans."
+    }
+  },
+  "additionalProperties": false
+}

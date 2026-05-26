@@ -34,8 +34,17 @@ namespace MSBuildGuard.VisualStudio.Services
 
 			var targetLine   = Math.Max(0, line - 1);
 			var targetColumn = Math.Max(0, column - 1);
+			IVsWindowFrame windowFrame;
 
-			VsShellUtilities.OpenDocument(serviceProvider, filePath, Guid.Empty, out _, out _, out var windowFrame);
+			try
+			{
+				VsShellUtilities.OpenDocument(serviceProvider, filePath, VSConstants.LOGVIEWID_Code, out _, out _, out windowFrame);
+			}
+			catch (Exception)
+			{
+				// projects types that are not standard csproj or similar may not support opening documents in this way, so we just ignore any exceptions and do not navigate.
+				return;
+			}
 
 			if (windowFrame == null)
 			{

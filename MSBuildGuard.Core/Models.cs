@@ -697,6 +697,11 @@ namespace MSBuildGuard.Core
         /// Distinguishes baseline-drift detections (true) from static file-type detections (false).
         /// </summary>
         public bool IsNewInBaseline { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether the finding is trusted.
+        /// </summary>
+        public bool IsTrusted { get; set; }
     }
 
     /// <summary>

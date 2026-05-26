@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -231,8 +232,9 @@ namespace MSBuildGuard.Core.Scanning
         /// Scans the provided path for MSBuild risk indicators and returns a report.
         /// </summary>
         /// <param name="path">The file, folder, or solution path to scan.</param>
+        /// <param name="cancellationToken">Optional cancellation token to cooperatively stop scan progress.</param>
         /// <returns>A populated <see cref="ScanReport"/>.</returns>
-        public ScanReport Scan(string path)
+        public ScanReport Scan(string path, CancellationToken cancellationToken = default)
         {
             if (path == null)
             {
@@ -256,6 +258,8 @@ namespace MSBuildGuard.Core.Scanning
 
             foreach (var record in records)
             {
+                cancellationToken.ThrowIfCancellationRequested();
+
                 report.FilesScanned.Add(record);
 
                 var findings = EvaluateRules(record);
