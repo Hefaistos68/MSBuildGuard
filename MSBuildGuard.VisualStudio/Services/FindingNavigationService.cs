@@ -42,6 +42,7 @@ namespace MSBuildGuard.VisualStudio.Services
 			}
 			catch (Exception)
 			{
+				// projects types that are not standard csproj or similar may not support opening documents in this way, so we just ignore any exceptions and do not navigate.
 				return;
 			}
 
