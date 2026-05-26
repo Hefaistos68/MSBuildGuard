@@ -226,10 +226,18 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 					}
 				}
 
+				var packageId = !string.IsNullOrWhiteSpace(finding.PackageId) ? finding.PackageId : string.Empty;
+				var packageVersion = !string.IsNullOrWhiteSpace(finding.PackageVersion) ? finding.PackageVersion : string.Empty;
+
+				if (string.IsNullOrWhiteSpace(packageId) && TryInferPackageFromPath(finding.FilePath, out var inferredId, out var inferredVersion))
+				{
+					packageId = inferredId;
+					packageVersion = inferredVersion;
+				}
+
 				var issueTrustScopes = new List<string>();
 				var assemblyTrustScopes = new List<string>();
 				var signerTrustScopes = new List<string>();
-
 				var isTrusted = false;
 
 				if (!string.IsNullOrWhiteSpace(finding.Fingerprint) && fileRecord != null)
@@ -254,19 +262,19 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 
 				var isApprovedByAssembly = false;
 
-				if (!string.IsNullOrWhiteSpace(finding.PackageId) && !string.IsNullOrWhiteSpace(finding.PackageVersion))
+				if (!string.IsNullOrWhiteSpace(packageId) && !string.IsNullOrWhiteSpace(packageVersion))
 				{
-					if (trustStoreService.IsFindingApprovedByAssembly(userTrustStore, finding.PackageId, finding.PackageVersion))
+					if (trustStoreService.IsFindingApprovedByAssembly(userTrustStore, packageId, packageVersion))
 					{
 						assemblyTrustScopes.Add("User");
 					}
 
-					if (trustStoreService.IsFindingApprovedByAssembly(solutionTrustStore, finding.PackageId, finding.PackageVersion))
+					if (trustStoreService.IsFindingApprovedByAssembly(solutionTrustStore, packageId, packageVersion))
 					{
 						assemblyTrustScopes.Add("Solution");
 					}
 
-					if (projectTrustStore != null && trustStoreService.IsFindingApprovedByAssembly(projectTrustStore, finding.PackageId, finding.PackageVersion))
+					if (projectTrustStore != null && trustStoreService.IsFindingApprovedByAssembly(projectTrustStore, packageId, packageVersion))
 					{
 						assemblyTrustScopes.Add("Project");
 					}
@@ -276,13 +284,13 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 
 				var isApprovedBySigner = false;
 
-				if (hasSignerTrusts && !string.IsNullOrWhiteSpace(finding.PackageId) && !string.IsNullOrWhiteSpace(finding.PackageVersion))
+				if (hasSignerTrusts && !string.IsNullOrWhiteSpace(packageId) && !string.IsNullOrWhiteSpace(packageVersion))
 				{
-					var cacheKey = $"{finding.PackageId}@{finding.PackageVersion}";
+					var cacheKey = $"{packageId}@{packageVersion}";
 
 					if (!signatureCache.TryGetValue(cacheKey, out var signature))
 					{
-						var dllPath = AssemblySignatureService.ResolveAssemblyFilePathFromPackageId(finding.PackageId, finding.PackageVersion);
+						var dllPath = AssemblySignatureService.ResolveAssemblyFilePathFromPackageId(packageId, packageVersion);
 						signature = new AssemblySignatureService().ReadSignature(dllPath);
 						signatureCache[cacheKey] = signature;
 					}
@@ -308,8 +316,8 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 					}
 				}
 
-				var owningAssembly = !string.IsNullOrWhiteSpace(finding.PackageId) && !string.IsNullOrWhiteSpace(finding.PackageVersion)
-					? $"{finding.PackageId}@{finding.PackageVersion}"
+				var owningAssembly = !string.IsNullOrWhiteSpace(packageId) && !string.IsNullOrWhiteSpace(packageVersion)
+					? $"{packageId}@{packageVersion}"
 					: string.Empty;
 
 				var trustStatusDetails = BuildTrustStatusDetails(issueTrustScopes, assemblyTrustScopes, signerTrustScopes);
@@ -322,8 +330,8 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 					Title                     = finding.Title,
 					FilePath                  = finding.FilePath,
 					NuGetAssetPath            = finding.NuGetAssetPath,
-					PackageId                 = finding.PackageId,
-					PackageVersion            = finding.PackageVersion,
+					PackageId                 = packageId,
+					PackageVersion            = packageVersion,
 					IntroducedViaProject      = finding.IntroducedViaProject,
 					Line                      = finding.StartLine,
 					Fingerprint               = finding.Fingerprint,
@@ -1230,6 +1238,50 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				return AllProjectsPath.ToLowerInvariant();
 			}
 			return scopePath.Replace('\\', '/').ToLowerInvariant();
+		}
+
+		private static bool TryInferPackageFromPath(string filePath, out string packageId, out string packageVersion)
+		{
+			packageId = string.Empty;
+			packageVersion = string.Empty;
+
+			if (string.IsNullOrWhiteSpace(filePath))
+			{
+				return false;
+			}
+
+			var directory = Path.GetDirectoryName(filePath);
+			var candidate = directory;
+
+			for (var depth = 0; depth < 6 && !string.IsNullOrWhiteSpace(candidate) && Directory.Exists(candidate); depth++)
+			{
+				if (Directory.Exists(Path.Combine(candidate, "lib")) ||
+					Directory.Exists(Path.Combine(candidate, "tools")) ||
+					Directory.Exists(Path.Combine(candidate, "runtimes")))
+				{
+					var version = Path.GetFileName(candidate);
+					var parentDir = Path.GetDirectoryName(candidate);
+
+					if (!string.IsNullOrWhiteSpace(version) && !string.IsNullOrWhiteSpace(parentDir))
+					{
+						var id = Path.GetFileName(parentDir);
+
+						if (!string.IsNullOrWhiteSpace(id))
+						{
+							packageId = id;
+							packageVersion = version;
+
+							return true;
+						}
+					}
+
+					break;
+				}
+
+				candidate = Path.GetDirectoryName(candidate);
+			}
+
+			return false;
 		}
 	}
 }
