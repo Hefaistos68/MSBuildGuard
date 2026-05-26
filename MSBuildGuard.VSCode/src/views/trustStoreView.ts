@@ -618,6 +618,16 @@ export class TrustStorePanel {
         let allDecisions = [];
         let searchFilter = "";
 
+        function escapeHtml(unsafe) {
+            if (!unsafe) return "";
+            return unsafe
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
         // Trigger request on DOM load
         window.addEventListener('DOMContentLoaded', () => {
             vscode.postMessage({ command: 'requestInitialData' });
@@ -733,7 +743,7 @@ export class TrustStorePanel {
                 btn.className = 'btn-revoke';
                 btn.innerHTML = '❌ Revoke Trust';
                 btn.addEventListener('click', () => {
-                    if (confirm('Are you sure you want to revoke trust for this ' + d.scope.toLowerCase() + '? This will restore security review warnings/blockers immediately.')) {
+                    if (confirm('Are you sure you want to revoke trust for this ' + (d.scope || 'Finding').toLowerCase() + '? This will restore security review warnings/blockers immediately.')) {
                         vscode.postMessage({
                             command: 'revokeTrust',
                             subjectHash: d.subjectHash,
@@ -762,18 +772,18 @@ export class TrustStorePanel {
 
                 if (d.scope === 'Assembly') {
                     detailsSec.innerHTML = 
-                        '<div class="card-detail-item"><span class="card-detail-label">Version:</span><span class="card-detail-value">' + (d.assemblyVersion || 'Any') + '</span></div>' +
-                        '<div class="card-detail-item"><span class="card-detail-label">Signer:</span><span class="card-detail-value">' + (d.assemblySigner || 'None') + '</span></div>' +
-                        '<div class="card-detail-item"><span class="card-detail-label">Subject Hash:</span><span class="card-detail-value">' + (d.subjectHash || 'None') + '</span></div>';
+                        '<div class="card-detail-item"><span class="card-detail-label">Version:</span><span class="card-detail-value">' + escapeHtml(d.assemblyVersion || 'Any') + '</span></div>' +
+                        '<div class="card-detail-item"><span class="card-detail-label">Signer:</span><span class="card-detail-value">' + escapeHtml(d.assemblySigner || 'None') + '</span></div>' +
+                        '<div class="card-detail-item"><span class="card-detail-label">Subject Hash:</span><span class="card-detail-value">' + escapeHtml(d.subjectHash || 'None') + '</span></div>';
                 } else if (d.scope === 'Signer') {
                     detailsSec.innerHTML = 
-                        '<div class="card-detail-item"><span class="card-detail-label">Issuer:</span><span class="card-detail-value">' + (d.assemblyIssuer || 'None') + '</span></div>' +
-                        '<div class="card-detail-item"><span class="card-detail-label">Serial Number:</span><span class="card-detail-value">' + (d.assemblySerialNumber || 'None') + '</span></div>' +
-                        '<div class="card-detail-item"><span class="card-detail-label">Thumbprint:</span><span class="card-detail-value">' + (d.subjectHash || 'None') + '</span></div>';
+                        '<div class="card-detail-item"><span class="card-detail-label">Issuer:</span><span class="card-detail-value">' + escapeHtml(d.assemblyIssuer || 'None') + '</span></div>' +
+                        '<div class="card-detail-item"><span class="card-detail-label">Serial Number:</span><span class="card-detail-value">' + escapeHtml(d.assemblySerialNumber || 'None') + '</span></div>' +
+                        '<div class="card-detail-item"><span class="card-detail-label">Thumbprint:</span><span class="card-detail-value">' + escapeHtml(d.subjectHash || 'None') + '</span></div>';
                 } else {
                     detailsSec.innerHTML = 
-                        '<div class="card-detail-item"><span class="card-detail-label">Fingerprint:</span><span class="card-detail-value">' + (d.subjectHash || 'None') + '</span></div>' +
-                        '<div class="card-detail-item"><span class="card-detail-label">Repo Remote:</span><span class="card-detail-value">' + (d.repositoryRemote || 'None') + '</span></div>';
+                        '<div class="card-detail-item"><span class="card-detail-label">Fingerprint:</span><span class="card-detail-value">' + escapeHtml(d.subjectHash || 'None') + '</span></div>' +
+                        '<div class="card-detail-item"><span class="card-detail-label">Repo Remote:</span><span class="card-detail-value">' + escapeHtml(d.repositoryRemote || 'None') + '</span></div>';
                 }
                 card.appendChild(detailsSec);
 
@@ -781,7 +791,7 @@ export class TrustStorePanel {
                 const reasonSec = document.createElement('div');
                 reasonSec.className = 'card-reason-section';
                 reasonSec.innerHTML = '<span class="card-reason-icon">🛡️</span>' +
-                                      '<span><strong>Reason:</strong> ' + (d.reason || 'Trusted by security audit.') + '</span>';
+                                      '<span><strong>Reason:</strong> ' + escapeHtml(d.reason || 'Trusted by security audit.') + '</span>';
                 card.appendChild(reasonSec);
 
                 list.appendChild(card);

@@ -196,21 +196,6 @@ namespace MSBuildGuard.Core.Policy
 
 			if (!isEnvelopeSigned)
 			{
-				try
-				{
-					var directPolicy = JsonSerializer.Deserialize<PolicyDocument>(payload, SerializerOptions);
-
-					if (directPolicy != null)
-					{
-						ValidateSignedPolicy(path);
-
-						return directPolicy;
-					}
-				}
-				catch
-				{
-				}
-
 				throw new InvalidDataException("Policy signature validation failed. Run 'msbuildguard policy sign <policyPath>' after legitimate edits.");
 			}
 
@@ -323,6 +308,17 @@ namespace MSBuildGuard.Core.Policy
 			if (!File.Exists(policyPath))
 			{
 				throw new FileNotFoundException("Policy file was not found.", policyPath);
+			}
+
+			var payload = File.ReadAllText(policyPath);
+			var signatureService = new JsonSignatureService();
+			string? policyPayload;
+
+			var isEnvelopeSigned = signatureService.TryVerifyAndExtract<string>(payload, PolicyEnvelopeSigningKey, out policyPayload) && !string.IsNullOrWhiteSpace(policyPayload);
+
+			if (!isEnvelopeSigned)
+			{
+				throw new InvalidDataException("Policy signature validation failed. Run 'msbuildguard policy sign <policyPath>' after legitimate edits.");
 			}
 
 			if (!TryReadSignatureRecord(policyPath, out var signatureRecord))

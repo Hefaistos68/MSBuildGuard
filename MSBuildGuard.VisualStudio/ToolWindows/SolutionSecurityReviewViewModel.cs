@@ -498,12 +498,12 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				return;
 			}
 
-			var projectName = this.selectedProject.Name;
+			var projectPath = this.selectedProject.Path;
 
 
 			foreach (var finding in this.allFindings)
 			{
-				if (!BelongsToProject(finding, projectName))
+				if (!BelongsToProject(finding, projectPath))
 				{
 					continue;
 				}
@@ -649,20 +649,61 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		}
 
 		/// <summary>
-		/// Determines whether a finding belongs to the specified project by checking the "File" display column.
+		/// Determines whether a finding belongs to the specified project by checking stable fields.
 		/// </summary>
 		/// <param name="finding">The finding to test.</param>
-		/// <param name="projectName">The name of the selected project.</param>
+		/// <param name="projectPath">The stable file path of the selected project.</param>
 		/// <returns><c>true</c> when the finding belongs to the project; otherwise <c>false</c>.</returns>
-		private static bool BelongsToProject(FindingViewModel finding, string projectName)
+		private static bool BelongsToProject(FindingViewModel finding, string projectPath)
 		{
-			if (string.IsNullOrWhiteSpace(projectName))
+			if (string.IsNullOrWhiteSpace(projectPath))
 			{
 				return false;
 			}
 
+			var normalizedProjectPath = projectPath.Replace('/', '\\');
 
-			return finding.FilePathDisplay.IndexOf(projectName, StringComparison.OrdinalIgnoreCase) >= 0;
+			// 1. Exact match on IntroducedViaProject for package findings
+			if (!string.IsNullOrWhiteSpace(finding.IntroducedViaProject))
+			{
+				var normalizedIntroduced = finding.IntroducedViaProject.Replace('/', '\\');
+
+				if (string.Equals(normalizedIntroduced, normalizedProjectPath, StringComparison.OrdinalIgnoreCase))
+				{
+					return true;
+				}
+			}
+
+			// 2. Exact match on FilePath
+			if (!string.IsNullOrWhiteSpace(finding.FilePath))
+			{
+				var normalizedFilePath = finding.FilePath.Replace('/', '\\');
+
+				if (string.Equals(normalizedFilePath, normalizedProjectPath, StringComparison.OrdinalIgnoreCase))
+				{
+					return true;
+				}
+
+				// 3. Directory-prefix check on the full FilePath
+				var projectDir = Path.GetDirectoryName(normalizedProjectPath);
+
+				if (!string.IsNullOrEmpty(projectDir))
+				{
+					var normalizedProjectDir = projectDir;
+
+					if (!normalizedProjectDir.EndsWith("\\", StringComparison.Ordinal))
+					{
+						normalizedProjectDir += "\\";
+					}
+
+					if (normalizedFilePath.StartsWith(normalizedProjectDir, StringComparison.OrdinalIgnoreCase))
+					{
+						return true;
+					}
+				}
+			}
+
+			return false;
 		}
 
 		/// <summary>

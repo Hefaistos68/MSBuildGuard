@@ -94,7 +94,7 @@ namespace MSBuildGuard.VisualStudio.Services
 				{
 					cancellationToken.ThrowIfCancellationRequested();
 
-					return this.scanner.Scan(solutionPath);
+					return this.scanner.Scan(solutionPath, cancellationToken);
 				}, cancellationToken);
 
 				ApplyPolicyEvaluation(report, solutionPath);

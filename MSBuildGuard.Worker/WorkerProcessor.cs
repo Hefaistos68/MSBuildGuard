@@ -130,7 +130,7 @@ namespace MSBuildGuard.Worker
 				return CreateErrorResponse(id, WorkerErrorCodes.InvalidArgument, $"Target path '{payload.TargetPath}' does not exist.");
 			}
 
-			var repositoryRoot = Path.GetDirectoryName(targetPath) ?? string.Empty;
+			var repositoryRoot = Directory.Exists(targetPath) ? targetPath : (Path.GetDirectoryName(targetPath) ?? string.Empty);
 
 			var scanner = new MsBuildScanner(
 				fileSystem: null,
@@ -140,7 +140,7 @@ namespace MSBuildGuard.Worker
 				reflectionInteropIndicators: payload.ReflectionInteropIndicators,
 				additionalBlockedAssemblies: payload.AdditionalBlockedAssemblies);
 
-			var report = await Task.Run(() => scanner.Scan(targetPath), cancellationToken).ConfigureAwait(false);
+			var report = await Task.Run(() => scanner.Scan(targetPath, cancellationToken), cancellationToken).ConfigureAwait(false);
 
 			var baselineService = new BaselineService();
 
@@ -216,7 +216,7 @@ namespace MSBuildGuard.Worker
 
 			var outputPath = Path.GetFullPath(payload.OutputPath);
 
-			var repositoryRoot = Path.GetDirectoryName(targetPath) ?? string.Empty;
+			var repositoryRoot = Directory.Exists(targetPath) ? targetPath : (Path.GetDirectoryName(targetPath) ?? string.Empty);
 
 			var scanner = new MsBuildScanner(
 				fileSystem: null,
@@ -226,7 +226,7 @@ namespace MSBuildGuard.Worker
 				reflectionInteropIndicators: payload.ReflectionInteropIndicators,
 				additionalBlockedAssemblies: payload.AdditionalBlockedAssemblies);
 
-			var report = await Task.Run(() => scanner.Scan(targetPath), cancellationToken).ConfigureAwait(false);
+			var report = await Task.Run(() => scanner.Scan(targetPath, cancellationToken), cancellationToken).ConfigureAwait(false);
 			var policy = new PolicyStatusService().GetEffectivePolicy(repositoryRoot, targetPath);
 			var baselineService = new BaselineService();
 			var reviewer = payload.ReviewerIdentity ?? Environment.UserName;
@@ -263,7 +263,10 @@ namespace MSBuildGuard.Worker
 			}
 			else if (trustScope == "solution" || trustScope == "project")
 			{
-				var solutionFile = Directory.EnumerateFiles(targetPath, "*.sln").FirstOrDefault() ?? Directory.EnumerateFiles(targetPath, "*.slnx").FirstOrDefault();
+				var searchRoot = Directory.Exists(targetPath) ? targetPath : (Path.GetDirectoryName(targetPath) ?? string.Empty);
+				var solutionFile = !string.IsNullOrWhiteSpace(searchRoot) && Directory.Exists(searchRoot)
+					? (Directory.EnumerateFiles(searchRoot, "*.sln").FirstOrDefault() ?? Directory.EnumerateFiles(searchRoot, "*.slnx").FirstOrDefault())
+					: null;
 
 				if (solutionFile != null)
 				{
@@ -271,7 +274,9 @@ namespace MSBuildGuard.Worker
 				}
 				else
 				{
-					var projectFile = Directory.EnumerateFiles(targetPath, "*.csproj").FirstOrDefault();
+					var projectFile = !string.IsNullOrWhiteSpace(searchRoot) && Directory.Exists(searchRoot)
+						? Directory.EnumerateFiles(searchRoot, "*.csproj").FirstOrDefault()
+						: null;
 
 					if (projectFile != null)
 					{
@@ -496,7 +501,10 @@ namespace MSBuildGuard.Worker
 			}
 			else if (trustScope == "solution" || trustScope == "project")
 			{
-				var solutionFile = Directory.EnumerateFiles(targetPath, "*.sln").FirstOrDefault() ?? Directory.EnumerateFiles(targetPath, "*.slnx").FirstOrDefault();
+				var searchRoot = Directory.Exists(targetPath) ? targetPath : (Path.GetDirectoryName(targetPath) ?? string.Empty);
+				var solutionFile = !string.IsNullOrWhiteSpace(searchRoot) && Directory.Exists(searchRoot)
+					? (Directory.EnumerateFiles(searchRoot, "*.sln").FirstOrDefault() ?? Directory.EnumerateFiles(searchRoot, "*.slnx").FirstOrDefault())
+					: null;
 
 				if (solutionFile != null)
 				{
@@ -504,7 +512,9 @@ namespace MSBuildGuard.Worker
 				}
 				else
 				{
-					var projectFile = Directory.EnumerateFiles(targetPath, "*.csproj").FirstOrDefault();
+					var projectFile = !string.IsNullOrWhiteSpace(searchRoot) && Directory.Exists(searchRoot)
+						? Directory.EnumerateFiles(searchRoot, "*.csproj").FirstOrDefault()
+						: null;
 
 					if (projectFile != null)
 					{
@@ -570,7 +580,10 @@ namespace MSBuildGuard.Worker
 			}
 			else if (trustScope == "solution" || trustScope == "project")
 			{
-				var solutionFile = Directory.EnumerateFiles(targetPath, "*.sln").FirstOrDefault() ?? Directory.EnumerateFiles(targetPath, "*.slnx").FirstOrDefault();
+				var searchRoot = Directory.Exists(targetPath) ? targetPath : (Path.GetDirectoryName(targetPath) ?? string.Empty);
+				var solutionFile = !string.IsNullOrWhiteSpace(searchRoot) && Directory.Exists(searchRoot)
+					? (Directory.EnumerateFiles(searchRoot, "*.sln").FirstOrDefault() ?? Directory.EnumerateFiles(searchRoot, "*.slnx").FirstOrDefault())
+					: null;
 
 				if (solutionFile != null)
 				{
@@ -578,7 +591,9 @@ namespace MSBuildGuard.Worker
 				}
 				else
 				{
-					var projectFile = Directory.EnumerateFiles(targetPath, "*.csproj").FirstOrDefault();
+					var projectFile = !string.IsNullOrWhiteSpace(searchRoot) && Directory.Exists(searchRoot)
+						? Directory.EnumerateFiles(searchRoot, "*.csproj").FirstOrDefault()
+						: null;
 
 					if (projectFile != null)
 					{
@@ -634,6 +649,8 @@ namespace MSBuildGuard.Worker
 			Dictionary<string, TrustStoreDocument> projectTrustStores)
 		{
 			var trustStoreService = new TrustStoreService();
+			var signatureService  = new AssemblySignatureService();
+			var signatureCache    = new Dictionary<string, AssemblySignatureInfo>(StringComparer.OrdinalIgnoreCase);
 			var activeRiskScore   = 0;
 
 			foreach (var finding in report.Findings)
@@ -673,7 +690,11 @@ namespace MSBuildGuard.Worker
 
 					if (!string.IsNullOrWhiteSpace(dllPath) && File.Exists(dllPath))
 					{
-						var signature = new AssemblySignatureService().ReadSignature(dllPath);
+						if (!signatureCache.TryGetValue(dllPath, out var signature))
+						{
+							signature = signatureService.ReadSignature(dllPath);
+							signatureCache[dllPath] = signature;
+						}
 
 						if (signature.IsSignatureValid && (!string.IsNullOrWhiteSpace(signature.Thumbprint) || !string.IsNullOrWhiteSpace(signature.Subject)))
 						{

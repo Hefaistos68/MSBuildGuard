@@ -172,13 +172,38 @@ namespace MSBuildGuard.Core.Tests.Policy
 			{
 				File.WriteAllText(policyPath, rawJson);
 
-				var policy = service.Load(policyPath);
+				var policy = service.LoadUnsigned(policyPath);
 
 				policy.ShouldNotBeNull();
 
 				policy.IncompleteAnalysisAction.ShouldBe(PolicyAction.Warn);
 				policy.UnapprovedPackageSourceAction.ShouldBe(PolicyAction.RequireApproval);
 				policy.MinimumActionBySeverity[FindingSeverity.Critical].ShouldBe(PolicyAction.Block);
+			}
+			finally
+			{
+				if (File.Exists(policyPath))
+				{
+					File.Delete(policyPath);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Verifies loading fails when the policy JSON content is unsigned.
+		/// </summary>
+		[Test]
+		public void Load_ShouldThrow_WhenPolicyIsUnsigned()
+		{
+			var service = new PolicyService();
+			var policyPath = Path.Combine(Path.GetTempPath(), $"policy-unsigned-{Guid.NewGuid():N}.json");
+			var rawJson = "{\r\n  \"Version\": 1,\r\n  \"Mode\": \"warn\"\r\n}";
+
+			try
+			{
+				File.WriteAllText(policyPath, rawJson);
+
+				Should.Throw<InvalidDataException>(() => service.Load(policyPath));
 			}
 			finally
 			{
@@ -202,8 +227,8 @@ namespace MSBuildGuard.Core.Tests.Policy
 
 			File.WriteAllText(policyPath, "{\"invalid\":true}");
 
-			service.TryValidateSignature(policyPath, out var message).ShouldBeTrue(message);
-			message.ShouldContain("No external policy signature was found");
+			service.TryValidateSignature(policyPath, out var message).ShouldBeFalse();
+			message.ShouldContain("Policy signature validation failed");
 		}
 
 		/// <summary>
