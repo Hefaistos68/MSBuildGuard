@@ -2,12 +2,13 @@
 
 **MSBuild Guard** is a security analysis tool for .NET projects that detects risky or untrusted MSBuild configurations — including imported `.targets`, `.props`, NuGet package assets, wildcard imports, and more — before they can execute arbitrary code on your machine.
 
-It integrates into your workflow through two complementary surfaces:
+It integrates into your workflow through three complementary surfaces:
 
 | Module | Description |
 |---|---|
 | **Scanning Library** | .NET Standard 2.1 library for MSBuild analysis and policy evaluation |
 | **Visual Studio Extension (VSIX)** | Inline security review panel inside Visual Studio 2026+ |
+| **VScode Extension (VSIX)** | Inline security review panel inside VScode |
 
 ---
 
