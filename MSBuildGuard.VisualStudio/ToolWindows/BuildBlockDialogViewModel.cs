@@ -5,6 +5,7 @@ using System.Linq;
 using MSBuildGuard.Core;
 using MSBuildGuard.Core.Trust;
 using MSBuildGuard.VisualStudio.Services;
+using Microsoft.VisualStudio.Shell;
 
 namespace MSBuildGuard.VisualStudio.ToolWindows
 {
@@ -94,10 +95,19 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				throw new ArgumentNullException(nameof(report));
 			}
 
+			ThreadHelper.ThrowIfNotOnUIThread();
+
 			this.TargetPath = report.Target.TargetPath;
 
-			var trustStoreService = new TrustStoreService();
-			var trustStore = trustStoreService.Load(trustStoreService.GetDefaultUserTrustPath());
+			var trustStoreService  = new TrustStoreService();
+			var solutionPath        = SolutionDiscoveryService.GetOpenSolutionPath();
+			var isProject           = report.Target.TargetKind == TargetKind.File &&
+				(report.Target.TargetPath.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase) ||
+				 report.Target.TargetPath.EndsWith(".vbproj", StringComparison.OrdinalIgnoreCase) ||
+				 report.Target.TargetPath.EndsWith(".fsproj", StringComparison.OrdinalIgnoreCase) ||
+				 report.Target.TargetPath.EndsWith(".proj", StringComparison.OrdinalIgnoreCase));
+			var currentProjectPath = isProject ? report.Target.TargetPath : null;
+			var trustStore         = trustStoreService.LoadMergedTrustStore(trustStoreService.GetDefaultUserTrustPath(), solutionPath, currentProjectPath);
 			var hasSignerTrusts = trustStore.Decisions.Any(d => d.ScopeKind == TrustDecisionScopeKind.Signer);
 			var signatureCache = new Dictionary<string, AssemblySignatureService>(StringComparer.OrdinalIgnoreCase);
 			var activeRiskScore = 0;

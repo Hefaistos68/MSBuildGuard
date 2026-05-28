@@ -111,7 +111,10 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			AssemblySubjectTextBlock.Text = signature.HasEmbeddedSignature ? (string.IsNullOrWhiteSpace(this.AssemblySubject) ? "Not available" : this.AssemblySubject) : "Not available";
 
 			this.InitializeScopeOptions();
-			TrustButton.IsEnabled = !string.IsNullOrWhiteSpace(this.AssemblyName) && !string.IsNullOrWhiteSpace(this.AssemblyVersion);
+			TrustButton.IsEnabled = !string.IsNullOrWhiteSpace(this.AssemblyName) &&
+				!string.IsNullOrWhiteSpace(this.AssemblyVersion) &&
+				!string.IsNullOrWhiteSpace(this.AssemblyPath) &&
+				File.Exists(this.AssemblyPath);
 		}
 
 		/// <summary>

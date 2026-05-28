@@ -32,6 +32,31 @@ namespace MSBuildGuard.VisualStudio.Services
 		}
 
 		/// <summary>
+		/// Gets the currently opened solution full path synchronously on the UI thread.
+		/// </summary>
+		/// <returns>The solution full path or null when not available.</returns>
+		public static string? GetOpenSolutionPath()
+		{
+			ThreadHelper.ThrowIfNotOnUIThread();
+
+			var solution = Package.GetGlobalService(typeof(SVsSolution)) as IVsSolution;
+
+			if (solution == null)
+			{
+				return null;
+			}
+
+			solution.GetSolutionInfo(out _, out var solutionPath, out _);
+
+			if (string.IsNullOrWhiteSpace(solutionPath))
+			{
+				return null;
+			}
+
+			return solutionPath;
+		}
+
+		/// <summary>
 		/// Gets the currently opened solution full path.
 		/// </summary>
 		/// <param name="package">Owning package.</param>
