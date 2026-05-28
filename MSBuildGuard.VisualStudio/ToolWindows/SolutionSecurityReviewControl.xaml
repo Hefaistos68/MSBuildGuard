@@ -256,7 +256,7 @@
 			<StackPanel Orientation="Vertical">
 				<StackPanel Orientation="Horizontal">
 					<TextBlock Text="Project:" Style="{StaticResource FieldLabelStyle}" Width="80" VerticalAlignment="Center" Margin="8,0,0,0" />
-					<ComboBox Width="220"
+					<ComboBox MinWidth="220"
 							  Margin="0"
 							  Style="{StaticResource EditorComboStyle}"
 							  ItemsSource="{Binding ProjectOptions}"
@@ -291,7 +291,8 @@
 
 			<Button Grid.Column="1"
 					Content="Scan/Rescan"
-					Width="110"
+					MinWidth="110"
+					Padding="12,6"
 					Margin="10,0,6,0"
 					Style="{StaticResource SecondaryActionButtonStyle}"
 					HorizontalAlignment="Right"
@@ -301,7 +302,8 @@
 
 			<Button Grid.Column="2"
 					Content="Edit Policy"
-					Width="110"
+					MinWidth="110"
+					Padding="12,6"
 					Margin="0,0,8,0"
 					Style="{StaticResource PrimaryActionButtonStyle}"
 					HorizontalAlignment="Right"

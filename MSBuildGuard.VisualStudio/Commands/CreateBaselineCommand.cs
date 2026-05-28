@@ -81,8 +81,15 @@ namespace MSBuildGuard.VisualStudio.Commands
 			}
 
 			var hasOpenSolution = Services.SolutionDiscoveryService.HasOpenSolution();
-			var report = this.package.LatestScanReport;
-			var isGreen = report != null && report.RecommendedAction == RecommendedAction.Allow;
+			var report          = this.package.LatestScanReport;
+			var isGreen         = false;
+
+			if (report != null)
+			{
+				var buildBlockViewModel = new ToolWindows.BuildBlockDialogViewModel(report);
+
+				isGreen = string.Equals(buildBlockViewModel.RecommendedAction, RecommendedAction.Allow.ToString(), StringComparison.OrdinalIgnoreCase);
+			}
 
 			menuCommand.Visible = true;
 			menuCommand.Enabled = hasOpenSolution && isGreen;
@@ -92,11 +99,14 @@ namespace MSBuildGuard.VisualStudio.Commands
 		{
 			await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
 
-			var report = this.package.LatestScanReport;
+			var report              = this.package.LatestScanReport;
+			var buildBlockViewModel = report != null ? new ToolWindows.BuildBlockDialogViewModel(report) : null;
+			var isGreen             = buildBlockViewModel != null && string.Equals(buildBlockViewModel.RecommendedAction, RecommendedAction.Allow.ToString(), StringComparison.OrdinalIgnoreCase);
 
-			if (report == null || report.RecommendedAction != RecommendedAction.Allow)
+			if (report == null || !isGreen)
 			{
 				await this.package.UiFeedbackService.WriteLineAsync("Create Baseline is available only when project security is green.", this.package.DisposalToken);
+
 				return;
 			}
 

@@ -316,11 +316,32 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 					}
 				}
 
-				var owningAssembly = !string.IsNullOrWhiteSpace(packageId) && !string.IsNullOrWhiteSpace(packageVersion)
-					? $"{packageId}@{packageVersion}"
-					: string.Empty;
+				var assemblyPath = string.Empty;
 
-				var trustStatusDetails = BuildTrustStatusDetails(issueTrustScopes, assemblyTrustScopes, signerTrustScopes);
+				if (!string.IsNullOrWhiteSpace(packageId) && !string.IsNullOrWhiteSpace(packageVersion))
+				{
+					var resolvedPath = AssemblySignatureService.ResolveAssemblyFilePathFromPackageId(packageId, packageVersion);
+
+					if (!string.IsNullOrWhiteSpace(resolvedPath) && File.Exists(resolvedPath))
+					{
+						assemblyPath = resolvedPath;
+					}
+				}
+
+				if (string.IsNullOrWhiteSpace(assemblyPath) && !string.IsNullOrWhiteSpace(finding.FilePath))
+				{
+					var resolvedPath = AssemblySignatureService.ResolveAssemblyFilePath(finding.FilePath);
+
+					if (!string.IsNullOrWhiteSpace(resolvedPath) && File.Exists(resolvedPath) &&
+						(resolvedPath.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) ||
+						 resolvedPath.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)))
+					{
+						assemblyPath = resolvedPath;
+					}
+				}
+
+				var owningAssembly       = !string.IsNullOrWhiteSpace(assemblyPath) ? $"{packageId}@{packageVersion}" : string.Empty;
+				var trustStatusDetails   = BuildTrustStatusDetails(issueTrustScopes, assemblyTrustScopes, signerTrustScopes);
 				var isEffectivelyTrusted = isTrusted || isApprovedByAssembly || isApprovedBySigner;
 
 				this.allFindings.Add(new FindingViewModel
@@ -506,17 +527,13 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				return;
 			}
 
-			var projectPath = this.selectedProject.Path;
+			var projectPath     = this.selectedProject.Path;
+			var projectFindings = this.allFindings.Where(finding => BelongsToProject(finding, projectPath)).ToList();
 
+			ComputeRiskScores(projectFindings, out var projectRiskScore, out var projectTrustedRiskScore);
 
-			foreach (var finding in this.allFindings)
+			foreach (var finding in projectFindings)
 			{
-				if (!BelongsToProject(finding, projectPath))
-				{
-					continue;
-				}
-
-
 				if (this.onlyUntrustedIssues && finding.IsTrusted)
 				{
 					continue;
@@ -540,7 +557,6 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				});
 			}
 
-			ComputeRiskScores(this.Findings, out var projectRiskScore, out var projectTrustedRiskScore);
 			this.Summary.TargetPath        = this.selectedProject.Path;
 			this.Summary.RiskScore         = projectRiskScore;
 			this.Summary.TrustedRiskScore  = projectTrustedRiskScore;

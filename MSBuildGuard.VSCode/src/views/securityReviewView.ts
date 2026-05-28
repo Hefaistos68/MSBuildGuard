@@ -1,4 +1,7 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import { ScanReport, Finding } from '../services/workerClient';
 import { setGlobalReviewProvider, getWorkerClient } from '../extension';
 
@@ -72,6 +75,17 @@ export class SecurityReviewViewProvider implements vscode.WebviewViewProvider {
     public refresh(report: ScanReport): void {
         this._latestReport = report;
         if (this._view) {
+            if (report && report.findings) {
+                for (const finding of report.findings) {
+                    if (finding.packageId && finding.packageVersion) {
+                        if (hasPackageAssembly(finding.packageId, finding.packageVersion)) {
+                            finding.owningAssembly = `${finding.packageId}@${finding.packageVersion}`;
+                        } else {
+                            finding.owningAssembly = undefined;
+                        }
+                    }
+                }
+            }
             void this._view.webview.postMessage({ command: 'updateReport', report });
         }
     }
@@ -121,9 +135,9 @@ export class SecurityReviewViewProvider implements vscode.WebviewViewProvider {
                     policyProfile: report.policyProfile || ''
                 });
             } else if (scope === 'Assembly') {
-                const owning = finding.owningAssembly || `${finding.packageId}@${finding.packageVersion}`;
+                const owning = finding.owningAssembly;
                 if (!owning || owning === '@') {
-                    void vscode.window.showErrorMessage('MSBuild Guard: Finding does not originate from a NuGet package asset.');
+                    void vscode.window.showErrorMessage('MSBuild Guard: Finding does not originate from a package with a code assembly.');
                     return;
                 }
                 const split = owning.split('@');
@@ -505,6 +519,23 @@ export class SecurityReviewViewProvider implements vscode.WebviewViewProvider {
         let filterScope = 'all';
         let filterOnlyUntrusted = ${onlyUntrusted};
 
+        function getSeverityRisk(severity) {
+            switch (severity.toLowerCase()) {
+                case 'critical': return 100;
+                case 'high': return 50;
+                case 'medium': return 20;
+                case 'low': return 5;
+                default: return 0;
+            }
+        }
+
+        function mapRecommendedAction(riskScore) {
+            if (riskScore >= 100) return 'Block';
+            if (riskScore >= 50) return 'RequireApproval';
+            if (riskScore >= 20) return 'Warn';
+            return 'Allow';
+        }
+
         function escapeHtml(unsafe) {
             if (!unsafe) return "";
             return unsafe
@@ -563,27 +594,6 @@ export class SecurityReviewViewProvider implements vscode.WebviewViewProvider {
         });
 
         function renderReport(report) {
-            const score = report.riskScore;
-            const action = report.recommendedAction.toLowerCase();
-
-            document.getElementById('widgetScore').innerText = score;
-
-            const badge = document.getElementById('riskBadge');
-            badge.innerText = report.recommendedAction;
-            badge.className = 'risk-badge';
-
-            const btnBaseline = document.getElementById('btnBaseline');
-
-            if (action === 'block' || action === 'requireapproval') {
-                badge.className = 'risk-badge risk-block';
-                btnBaseline.style.display = 'none';
-            } else if (action === 'warn') {
-                badge.className = 'risk-badge risk-warn';
-                btnBaseline.style.display = 'block';
-            } else {
-                badge.className = 'risk-badge risk-safe';
-                btnBaseline.style.display = 'block';
-            }
 
             projectFilterEl.innerHTML = '<option value="all">All Solution Projects</option>';
 
@@ -629,6 +639,43 @@ export class SecurityReviewViewProvider implements vscode.WebviewViewProvider {
                 filtered = filtered.filter(f => f.filePath && (f.filePath.endsWith('.sln') || f.filePath.endsWith('.slnx')));
             } else if (filterScope === 'project') {
                 filtered = filtered.filter(f => f.filePath && !(f.filePath.endsWith('.sln') || f.filePath.endsWith('.slnx')));
+            }
+
+            let activeScore = 0;
+            let trustedScore = 0;
+            filtered.forEach(f => {
+                const isTrusted = f.isTrusted || f.policyAction.toLowerCase() === 'allow';
+                const risk = getSeverityRisk(f.severity);
+                if (isTrusted) {
+                    trustedScore += risk;
+                } else {
+                    activeScore += risk;
+                }
+            });
+
+            const widgetScoreEl = document.getElementById('widgetScore');
+            if (trustedScore > 0) {
+                widgetScoreEl.innerText = activeScore + ' (+' + trustedScore + ')';
+            } else {
+                widgetScoreEl.innerText = activeScore;
+            }
+
+            const activeAction = mapRecommendedAction(activeScore);
+            const badge = document.getElementById('riskBadge');
+            badge.innerText = activeAction;
+
+            const btnBaseline = document.getElementById('btnBaseline');
+            const actionLower = activeAction.toLowerCase();
+
+            if (actionLower === 'block' || actionLower === 'requireapproval') {
+                badge.className = 'risk-badge risk-block';
+                btnBaseline.style.display = 'none';
+            } else if (actionLower === 'warn') {
+                badge.className = 'risk-badge risk-warn';
+                btnBaseline.style.display = 'block';
+            } else {
+                badge.className = 'risk-badge risk-safe';
+                btnBaseline.style.display = 'block';
             }
 
             if (filterOnlyUntrusted) {
@@ -759,7 +806,7 @@ export class SecurityReviewViewProvider implements vscode.WebviewViewProvider {
                                 🛡️ Trust Finding Issue
                             </button>
                             
-                            \${finding.packageId ? \`
+                            \${finding.owningAssembly ? \`
                             <button onclick="submitTrust('Assembly')" class="secondary-button" style="text-align: left; padding: 6px; margin: 0; font-size: 0.7rem; font-weight: 600; display: flex; align-items: center; gap: 4px; background: rgba(16, 185, 129, 0.08); border-color: rgba(16, 185, 129, 0.25);">
                                 📦 Trust NuGet Assembly
                             </button>
@@ -848,4 +895,46 @@ export class SecurityReviewViewProvider implements vscode.WebviewViewProvider {
 </html>
 `;
     }
+}
+
+function hasPackageAssembly(packageId: string, packageVersion: string): boolean {
+    if (!packageId || !packageVersion) {
+        return false;
+    }
+
+    try {
+        const userHome = os.homedir();
+        const nugetCache = path.join(userHome, '.nuget', 'packages', packageId.toLowerCase(), packageVersion.toLowerCase());
+
+        if (!fs.existsSync(nugetCache)) {
+            return false;
+        }
+
+        return scanForAssemblies(nugetCache);
+    } catch {
+        return false;
+    }
+}
+
+function scanForAssemblies(dir: string): boolean {
+    try {
+        const files = fs.readdirSync(dir);
+        for (const file of files) {
+            const fullPath = path.join(dir, file);
+            const stat = fs.statSync(fullPath);
+            if (stat.isDirectory()) {
+                if (scanForAssemblies(fullPath)) {
+                    return true;
+                }
+            } else {
+                const ext = path.extname(file).toLowerCase();
+                if (ext === '.dll' || ext === '.exe') {
+                    return true;
+                }
+            }
+        }
+    } catch {
+        // Ignore read errors
+    }
+    return false;
 }

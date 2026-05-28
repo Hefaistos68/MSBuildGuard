@@ -415,7 +415,7 @@
 					   Style="{StaticResource FieldLabelStyle}"
 					   VerticalAlignment="Center"
 					   Margin="0,0,8,0" />
-			<ComboBox Width="360"
+			<ComboBox MinWidth="360"
 					  Style="{StaticResource EditorComboStyle}"
 					  Margin="0"
 					  ItemsSource="{Binding AvailableProjects}"

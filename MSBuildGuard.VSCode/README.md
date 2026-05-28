@@ -126,3 +126,9 @@ VS Code build enforcement relies on task hook interception and background worker
 ![VS Code Security Review Panel](/documentation/images/vscode-security-review.jpg)
 
 ![VS Code Policy Editor](/documentation/images/vscode-policy-editor.jpg)
+
+## Packaging the VSIX
+
+```shell
+npx @vscode/vsce package --pre-release
+```
