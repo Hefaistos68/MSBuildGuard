@@ -81,15 +81,7 @@ namespace MSBuildGuard.VisualStudio.Commands
 			}
 
 			var hasOpenSolution = Services.SolutionDiscoveryService.HasOpenSolution();
-			var report          = this.package.LatestScanReport;
-			var isGreen         = false;
-
-			if (report != null)
-			{
-				var buildBlockViewModel = new ToolWindows.BuildBlockDialogViewModel(report);
-
-				isGreen = string.Equals(buildBlockViewModel.RecommendedAction, RecommendedAction.Allow.ToString(), StringComparison.OrdinalIgnoreCase);
-			}
+			var isGreen         = this.package.IsLatestReportGreen;
 
 			menuCommand.Visible = true;
 			menuCommand.Enabled = hasOpenSolution && isGreen;
@@ -100,8 +92,7 @@ namespace MSBuildGuard.VisualStudio.Commands
 			await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
 
 			var report              = this.package.LatestScanReport;
-			var buildBlockViewModel = report != null ? new ToolWindows.BuildBlockDialogViewModel(report) : null;
-			var isGreen             = buildBlockViewModel != null && string.Equals(buildBlockViewModel.RecommendedAction, RecommendedAction.Allow.ToString(), StringComparison.OrdinalIgnoreCase);
+			var isGreen             = this.package.IsLatestReportGreen;
 
 			if (report == null || !isGreen)
 			{

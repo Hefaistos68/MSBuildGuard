@@ -518,6 +518,7 @@ export class SecurityReviewViewProvider implements vscode.WebviewViewProvider {
         let filterProject = 'all';
         let filterScope = 'all';
         let filterOnlyUntrusted = ${onlyUntrusted};
+        let overallAction = 'Allow';
 
         function getSeverityRisk(severity) {
             switch (severity.toLowerCase()) {
@@ -594,7 +595,7 @@ export class SecurityReviewViewProvider implements vscode.WebviewViewProvider {
         });
 
         function renderReport(report) {
-
+            overallAction = report.recommendedAction;
             projectFilterEl.innerHTML = '<option value="all">All Solution Projects</option>';
 
             const projects = new Set();
@@ -664,17 +665,22 @@ export class SecurityReviewViewProvider implements vscode.WebviewViewProvider {
             const badge = document.getElementById('riskBadge');
             badge.innerText = activeAction;
 
-            const btnBaseline = document.getElementById('btnBaseline');
             const actionLower = activeAction.toLowerCase();
 
             if (actionLower === 'block' || actionLower === 'requireapproval') {
                 badge.className = 'risk-badge risk-block';
-                btnBaseline.style.display = 'none';
             } else if (actionLower === 'warn') {
                 badge.className = 'risk-badge risk-warn';
-                btnBaseline.style.display = 'block';
             } else {
                 badge.className = 'risk-badge risk-safe';
+            }
+
+            const btnBaseline = document.getElementById('btnBaseline');
+            const overallLower = overallAction.toLowerCase();
+
+            if (overallLower === 'block' || overallLower === 'requireapproval') {
+                btnBaseline.style.display = 'none';
+            } else {
                 btnBaseline.style.display = 'block';
             }
 

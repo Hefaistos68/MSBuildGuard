@@ -340,7 +340,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 					}
 				}
 
-				var owningAssembly       = !string.IsNullOrWhiteSpace(assemblyPath) ? $"{packageId}@{packageVersion}" : string.Empty;
+				var owningAssembly       = !string.IsNullOrWhiteSpace(assemblyPath) && !string.IsNullOrWhiteSpace(packageId) && !string.IsNullOrWhiteSpace(packageVersion) ? $"{packageId}@{packageVersion}" : string.Empty;
 				var trustStatusDetails   = BuildTrustStatusDetails(issueTrustScopes, assemblyTrustScopes, signerTrustScopes);
 				var isEffectivelyTrusted = isTrusted || isApprovedByAssembly || isApprovedBySigner;
 

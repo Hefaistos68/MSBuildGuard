@@ -9,6 +9,7 @@ using Microsoft.VisualStudio;
 using Microsoft.VisualStudio.ComponentModelHost;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
+using Microsoft.VisualStudio.Threading;
 using MSBuildGuard.VisualStudio.Options;
 using Task = System.Threading.Tasks.Task;
 
@@ -40,6 +41,19 @@ namespace MSBuildGuard.VisualStudio
 		/// Stores the latest scan report used by UI surfaces.
 		/// </summary>
 		private Core.ScanReport? latestScanReport;
+
+		private bool isLatestReportGreen;
+		private int latestReportEffectiveRiskScore;
+
+		/// <summary>
+		/// Gets a value indicating whether the current solution security is green (effective recommended action is Allow).
+		/// </summary>
+		internal bool IsLatestReportGreen => this.isLatestReportGreen;
+
+		/// <summary>
+		/// Gets the cached effective risk score for the latest scan report.
+		/// </summary>
+		internal int LatestReportEffectiveRiskScore => this.latestReportEffectiveRiskScore;
 
 		/// <summary>
 		/// Monitors NuGet restore activity and triggers rescans.
@@ -168,7 +182,7 @@ namespace MSBuildGuard.VisualStudio
 			this.latestScanReport = SelectPreferredReport(this.latestScanReport, report);
 			this.JoinableTaskFactory.RunAsync(async delegate
 			{
-				await this.RefreshStatusBarShieldAsync().ConfigureAwait(false);
+				await this.RecalculateEffectiveRiskAsync().ConfigureAwait(false);
 			}).FileAndForget(nameof(MSBuildGuardPackage));
 		}
 
@@ -295,7 +309,7 @@ namespace MSBuildGuard.VisualStudio
 
 			if (this.latestScanReport != null)
 			{
-				effectiveRiskScore = GetEffectiveRiskScore(this.latestScanReport);
+				effectiveRiskScore = this.latestReportEffectiveRiskScore;
 			}
 
 			this.shieldStatusBarControl.UpdateState(this.latestScanReport, effectiveRiskScore);
@@ -704,15 +718,38 @@ namespace MSBuildGuard.VisualStudio
 		}
 
 		/// <summary>
-		/// Computes the effective risk score used by status surfaces for the provided scan report.
+		/// Asynchronously recalculates the effective risk score and green state in the background.
 		/// </summary>
-		/// <param name="report">Scan report used to evaluate the effective risk score.</param>
-		/// <returns>The effective risk score.</returns>
-		private static int GetEffectiveRiskScore(Core.ScanReport report)
+		/// <returns>A task representing the asynchronous recalculation.</returns>
+		internal async Task RecalculateEffectiveRiskAsync()
 		{
+			var report = this.latestScanReport;
+
+			if (report == null)
+			{
+				this.isLatestReportGreen = false;
+				this.latestReportEffectiveRiskScore = 0;
+
+				return;
+			}
+
+			// Switch to a background thread to prevent blocking UI responsiveness!
+			await TaskScheduler.Default;
+
 			var buildBlockViewModel = new ToolWindows.BuildBlockDialogViewModel(report);
 
-			return buildBlockViewModel.RiskScore;
+			this.isLatestReportGreen = string.Equals(buildBlockViewModel.RecommendedAction, Core.RecommendedAction.Allow.ToString(), StringComparison.OrdinalIgnoreCase);
+			this.latestReportEffectiveRiskScore = buildBlockViewModel.RiskScore;
+
+			// Switch back to the UI thread to update controls and trigger VS menu updates
+			await JoinableTaskFactory.SwitchToMainThreadAsync(DisposalToken);
+
+			await this.RefreshStatusBarShieldAsync().ConfigureAwait(false);
+
+			if (await this.GetServiceAsync(typeof(SVsUIShell)) is IVsUIShell uiShell)
+			{
+				uiShell.UpdateCommandUI(1);
+			}
 		}
 
 		/// <summary>
