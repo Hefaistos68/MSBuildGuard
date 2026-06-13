@@ -13,6 +13,13 @@ namespace MSBuildGuard.VisualStudio.Options
 			"MSBuild Guard\\General\\AutoOpenSecurityReviewOnOpen");
 
 		/// <summary>
+		/// Gets the enable baseline onboarding setting metadata.
+		/// </summary>
+		internal static SettingName EnableBaselineOnboarding { get; } = new(
+			"extensions.msbuildguard.general.enableBaselineOnboarding",
+			"MSBuild Guard\\General\\EnableBaselineOnboarding");
+
+		/// <summary>
 		/// Gets the scan NuGet packages setting metadata.
 		/// </summary>
 		internal static SettingName ScanNuGetPackages { get; } = new(

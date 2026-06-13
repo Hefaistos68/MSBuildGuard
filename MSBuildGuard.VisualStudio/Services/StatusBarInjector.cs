@@ -11,9 +11,19 @@ namespace MSBuildGuard.VisualStudio.Services
 	/// </summary>
 	internal static class StatusBarInjector
 	{
+		/// <summary>
+		/// Visual name of the dock panel that hosts the status bar.
+		/// </summary>
 		private const string StatusBarPanelName = "StatusBarPanel";
+
+		/// <summary>
+		/// Delay in milliseconds between retry attempts when the status bar panel is not yet available.
+		/// </summary>
 		private const int StatusBarRetryDelayMilliseconds = 5000;
 
+		/// <summary>
+		/// Cached reference to the located dock panel after first successful discovery.
+		/// </summary>
 		private static DockPanel? panel;
 
 		/// <summary>
@@ -40,6 +50,10 @@ namespace MSBuildGuard.VisualStudio.Services
 			panel.Children.Add(element);
 		}
 
+		/// <summary>
+		/// Polls until the status bar dock panel becomes available in the visual tree.
+		/// </summary>
+		/// <returns>A task that completes when the panel has been located.</returns>
 		private static async Task EnsureUiAsync()
 		{
 			while (panel == null)
@@ -53,6 +67,12 @@ namespace MSBuildGuard.VisualStudio.Services
 			}
 		}
 
+		/// <summary>
+		/// Recursively searches the visual tree for a <see cref="FrameworkElement"/> with the specified name.
+		/// </summary>
+		/// <param name="parent">The root of the visual subtree to search.</param>
+		/// <param name="childName">The target element name to locate.</param>
+		/// <returns>The matching <see cref="DependencyObject"/> when found; otherwise <c>null</c>.</returns>
 		private static DependencyObject? FindChild(DependencyObject? parent, string childName)
 		{
 			if (parent == null)

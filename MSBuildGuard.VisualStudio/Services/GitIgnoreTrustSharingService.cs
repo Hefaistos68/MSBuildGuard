@@ -10,6 +10,9 @@ namespace MSBuildGuard.VisualStudio.Services
 	/// </summary>
 	internal sealed class GitIgnoreTrustSharingService
 	{
+		/// <summary>
+		/// The set of .gitignore lines managed by MSBuild Guard for controlling trust-store sharing in repositories.
+		/// </summary>
 		private static readonly string[] ManagedTrustIgnoreEntries =
 		{
 			".msbuildguard",

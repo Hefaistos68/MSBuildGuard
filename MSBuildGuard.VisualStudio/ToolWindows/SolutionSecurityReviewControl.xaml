@@ -263,7 +263,26 @@
 							  SelectedItem="{Binding SelectedProject, Mode=TwoWay}">
 						<ComboBox.ItemTemplate>
 							<DataTemplate>
-								<TextBlock Text="{Binding Name}" />
+								<StackPanel Orientation="Horizontal">
+									<Ellipse Width="10" Height="10" Margin="0,0,8,0" VerticalAlignment="Center">
+										<Ellipse.Style>
+											<Style TargetType="Ellipse">
+												<Style.Triggers>
+													<DataTrigger Binding="{Binding RiskLevel}" Value="High">
+														<Setter Property="Fill" Value="#EF4444" />
+													</DataTrigger>
+													<DataTrigger Binding="{Binding RiskLevel}" Value="Medium">
+														<Setter Property="Fill" Value="#EAB308" />
+													</DataTrigger>
+													<DataTrigger Binding="{Binding RiskLevel}" Value="Low">
+														<Setter Property="Fill" Value="#10B981" />
+													</DataTrigger>
+												</Style.Triggers>
+											</Style>
+										</Ellipse.Style>
+									</Ellipse>
+									<TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+								</StackPanel>
 							</DataTemplate>
 						</ComboBox.ItemTemplate>
 					</ComboBox>
@@ -345,6 +364,9 @@
 					<MenuItem Header="Trust Owning Assembly"
 							  Click="OnTrustAssemblyClick"
 							  IsEnabled="{Binding PlacementTarget.SelectedItem.CanTrustAssembly, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+					<MenuItem Header="Trust NuGet Package"
+							  Click="OnTrustPackageClick"
+							  IsEnabled="{Binding PlacementTarget.SelectedItem.CanTrustPackage, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
 						<Separator />
 						<MenuItem Header="Assembly Information..."
 								  Click="OnAssemblyInformationClick"

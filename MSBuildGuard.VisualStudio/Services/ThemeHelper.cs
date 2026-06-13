@@ -50,6 +50,10 @@ namespace MSBuildGuard.VisualStudio.Services
 			}
 		}
 
+		/// <summary>
+		/// Applies dark or light mode theming to the given window handle using DWM APIs.
+		/// </summary>
+		/// <param name="hwnd">The native window handle to theme.</param>
 		private static void ApplyThemeToHandle(IntPtr hwnd)
 		{
 			try

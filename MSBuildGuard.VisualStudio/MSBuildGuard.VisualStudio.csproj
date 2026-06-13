@@ -18,7 +18,8 @@
     <VSSDKBuildToolsAutoSetup>true</VSSDKBuildToolsAutoSetup>
     <CreateVsixContainer>true</CreateVsixContainer>
     <GeneratePkgDefFile>true</GeneratePkgDefFile>
-    <DeployExtension>true</DeployExtension>
+    <DeployExtension Condition="'$(MSBuildRuntimeType)' == 'Core'">false</DeployExtension>
+    <DeployExtension Condition="'$(MSBuildRuntimeType)' != 'Core'">true</DeployExtension>
     <UseCodebase>true</UseCodebase>
     <IncludeAssemblyInVSIXContainer>true</IncludeAssemblyInVSIXContainer>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
@@ -36,7 +37,7 @@
     <RootNamespace>MSBuildGuard.VisualStudio</RootNamespace>
     <Product>MSBuildGuard</Product>
     <Title>MSBuildGuard</Title>
-    <Version>0.2.2</Version>
+    <Version>0.2.6</Version>
     <SignAssembly>False</SignAssembly>
     <Authors>Hefaistos68</Authors>
     <Company>Hefaistos68.dev</Company>

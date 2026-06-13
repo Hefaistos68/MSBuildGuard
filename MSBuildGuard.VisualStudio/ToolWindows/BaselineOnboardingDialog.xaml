@@ -1,0 +1,86 @@
+<platformUi:DialogWindow x:Class="MSBuildGuard.VisualStudio.ToolWindows.BaselineOnboardingDialog"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:platformUi="clr-namespace:Microsoft.VisualStudio.PlatformUI;assembly=Microsoft.VisualStudio.Shell.15.0"
+             xmlns:vsshell="clr-namespace:Microsoft.VisualStudio.Shell;assembly=Microsoft.VisualStudio.Shell.15.0"
+             mc:Ignorable="d"
+             Title="Set Up Trusted Baseline"
+             Width="620"
+             Height="530"
+             ResizeMode="NoResize"
+             WindowStartupLocation="CenterOwner"
+             Background="{DynamicResource {x:Static vsshell:VsBrushes.WindowKey}}"
+             Foreground="{DynamicResource {x:Static vsshell:VsBrushes.WindowTextKey}}"
+             platformUi:ThemedDialogStyleLoader.UseDefaultThemedDialogStyles="True">
+    <platformUi:DialogWindow.Resources>
+        <ResourceDictionary>
+            <Style TargetType="TextBlock">
+                <Setter Property="Foreground" Value="{DynamicResource {x:Static vsshell:VsBrushes.WindowTextKey}}"/>
+            </Style>
+            <Style TargetType="CheckBox">
+                <Setter Property="Foreground" Value="{DynamicResource {x:Static vsshell:VsBrushes.WindowTextKey}}"/>
+                <Setter Property="Margin" Value="0,0,0,6"/>
+            </Style>
+        </ResourceDictionary>
+    </platformUi:DialogWindow.Resources>
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="Trusted Baseline Setup" FontSize="16" FontWeight="Bold" Margin="0,0,0,8"/>
+        
+        <TextBlock Grid.Row="1" Text="MSBuild Guard analyzed the solution and identified common, trusted NuGet packages or assemblies. We recommend trusting these publishers and files to initialize your baseline." 
+                   TextWrapping="Wrap" Margin="0,0,0,12"/>
+
+        <Border Grid.Row="2" BorderThickness="1" BorderBrush="{DynamicResource {x:Static vsshell:VsBrushes.PanelBorderKey}}" CornerRadius="3" Margin="0,0,0,12">
+            <ListBox ItemsSource="{Binding Suggestions}" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto" Background="Transparent" BorderThickness="0">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <Grid Margin="4,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <CheckBox IsChecked="{Binding IsSelected}" VerticalAlignment="Top" Margin="4,4,8,0"/>
+                            <StackPanel Grid.Column="1" Orientation="Vertical">
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,3">
+                                    <Border Background="{DynamicResource {x:Static vsshell:VsBrushes.GridHeadingBackgroundKey}}" Padding="6,2" CornerRadius="3" Margin="0,0,8,0">
+                                        <TextBlock Text="{Binding ScopeName}" FontSize="10" FontWeight="Bold" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" VerticalAlignment="Center" FontSize="12"/>
+                                </StackPanel>
+                                <TextBlock Text="{Binding RecommendationReason}" TextWrapping="Wrap" FontSize="11" Opacity="0.8"/>
+                                <TextBlock Text="{Binding ReputationSourceDescription}" FontSize="10" Opacity="0.5" FontStyle="Italic" Margin="0,2,0,0"/>
+                            </StackPanel>
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </Border>
+
+        <StackPanel Grid.Row="3" Orientation="Vertical" Margin="0,0,0,16">
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,12" VerticalAlignment="Center">
+                <TextBlock Text="Trust Scope Level:" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <ComboBox ItemsSource="{Binding AvailableTrustScopes}" SelectedItem="{Binding SelectedTrustScope}" Width="150" VerticalAlignment="Center"/>
+            </StackPanel>
+            <CheckBox IsChecked="{Binding CreateBaselineForRemaining}" Content="Create baseline for remaining (unchecked) findings"/>
+            <CheckBox IsChecked="{Binding DontShowAgain}" Content="Don't show this onboarding prompt again for this solution"/>
+            <CheckBox IsChecked="{Binding DoNotScanAgain}" Content="Do not scan this solution again (completely bypass future scans)"/>
+        </StackPanel>
+
+        <Separator Grid.Row="4" Margin="0,0,0,12" Background="{DynamicResource {x:Static vsshell:VsBrushes.PanelBorderKey}}"/>
+
+        <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="Apply Setup" Padding="16,6" Margin="0,0,8,0" IsDefault="True" Click="ApplyButton_Click"/>
+            <Button Content="Skip" Padding="16,6" IsCancel="True" Click="SkipButton_Click"/>
+        </StackPanel>
+    </Grid>
+</platformUi:DialogWindow>

@@ -41,6 +41,7 @@
   <Project Path="MSBuildGuard.VisualStudio/MSBuildGuard.VisualStudio.csproj">
     <Deploy Solution="Debug|Any CPU" />
   </Project>
+  <Project Path="MSBuildGuard.VisualStudio.Tests/MSBuildGuard.VisualStudio.Tests.csproj" />
   <Project Path="MSBuildGuard.Worker.Tests/MSBuildGuard.Worker.Tests.csproj" />
   <Project Path="MSBuildGuard.Worker/MSBuildGuard.Worker.csproj" />
 </Solution>

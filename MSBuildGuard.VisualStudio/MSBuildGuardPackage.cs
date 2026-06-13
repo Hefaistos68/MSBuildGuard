@@ -1,7 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
+using System.Security.Principal;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -84,6 +87,11 @@ namespace MSBuildGuard.VisualStudio
 		/// Indicates whether package initialization has completed.
 		/// </summary>
 		private bool isInitialized;
+
+		/// <summary>
+		/// Tracks solution paths for which baseline onboarding has been prompted during this session.
+		/// </summary>
+		private readonly System.Collections.Generic.HashSet<string> promptedSolutions = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
 		/// <summary>
 		/// Gets the active package instance.
@@ -204,6 +212,7 @@ namespace MSBuildGuard.VisualStudio
 			await Commands.CreateBaselineCommand.InitializeAsync(this);
 			await Commands.ManageAssemblyTrustsCommand.InitializeAsync(this);
 			await Commands.ManageSignerTrustsCommand.InitializeAsync(this);
+			await Commands.ManagePackageTrustsCommand.InitializeAsync(this);
 
 			this.shieldStatusBarControl = new Services.ShieldStatusBarControl(this);
 			this.shieldStatusBarControl.UpdateState(this.latestScanReport);
@@ -496,6 +505,39 @@ namespace MSBuildGuard.VisualStudio
 		}
 
 		/// <summary>
+		/// Opens the Manage Package Trusts dialog for managing trusted packages by directory hash.
+		/// </summary>
+		/// <returns>A task that completes when the dialog is closed.</returns>
+		internal async Task ShowManagePackageTrustsAsync()
+		{
+			await JoinableTaskFactory.SwitchToMainThreadAsync(DisposalToken);
+
+			var solutionPath = await Services.SolutionDiscoveryService.GetOpenSolutionPathAsync(this);
+
+			var projectPath  = Services.SolutionExplorerProjectDiscoveryService.GetSelectedProjectPath();
+
+			var dialog = new ToolWindows.ManagePackageTrustsDialog(solutionPath ?? string.Empty, projectPath ?? string.Empty)
+			{
+				Owner = Application.Current.MainWindow,
+				WindowStartupLocation = System.Windows.WindowStartupLocation.CenterOwner
+			};
+
+			var result = dialog.ShowDialog();
+
+			if (result == true)
+			{
+				var solutionWindow = await this.GetSolutionSecurityReviewToolWindowAsync(create: false);
+
+				if (solutionWindow?.Content is ToolWindows.SolutionSecurityReviewControl)
+				{
+					await this.RescanSolutionSecurityReviewAsync();
+				}
+			}
+
+			await this.UiFeedbackService.WriteLineAsync("Manage Package Trusts dialog closed.", CancellationToken.None);
+		}
+
+		/// <summary>
 		/// Opens the Manage Signer Trusts dialog for managing trusted certificate signers.
 		/// </summary>
 		/// <returns>A task that completes when the dialog is closed.</returns>
@@ -541,6 +583,28 @@ namespace MSBuildGuard.VisualStudio
 				await this.JoinableTaskFactory.SwitchToMainThreadAsync(this.DisposalToken);
 
 				var options = await this.GetOptionsSnapshotAsync(this.DisposalToken).ConfigureAwait(false);
+				var solutionPath = e.Target.TargetPath;
+				var solutionDir = !string.IsNullOrWhiteSpace(solutionPath) ? Path.GetDirectoryName(solutionPath) : null;
+				var isUnseen = false;
+
+				if (!string.IsNullOrWhiteSpace(solutionDir))
+				{
+					var trustPath = Path.Combine(solutionDir!, ".msbuildguard", "trust.json");
+					var baselinePath = Path.Combine(solutionDir!, ".msbuildguard", "baseline.json");
+
+					if (!File.Exists(trustPath) && !File.Exists(baselinePath))
+					{
+						isUnseen = true;
+					}
+				}
+
+				if (e.Target.TargetKind == Core.TargetKind.Solution && isUnseen && !this.promptedSolutions.Contains(solutionPath) && options.EnableBaselineOnboarding)
+				{
+					this.promptedSolutions.Add(solutionPath);
+					await this.RunOnboardingWorkflowAsync(solutionPath, e);
+
+					return;
+				}
 
 				if (Services.RiskEvaluationService.RequiresUserAttention(e) && options.AutoOpenSecurityReviewOnOpen)
 				{
@@ -733,10 +797,14 @@ namespace MSBuildGuard.VisualStudio
 				return;
 			}
 
+			await JoinableTaskFactory.SwitchToMainThreadAsync(DisposalToken);
+
+			var solutionPath = Services.SolutionDiscoveryService.GetOpenSolutionPath();
+
 			// Switch to a background thread to prevent blocking UI responsiveness!
 			await TaskScheduler.Default;
 
-			var buildBlockViewModel = new ToolWindows.BuildBlockDialogViewModel(report);
+			var buildBlockViewModel = new ToolWindows.BuildBlockDialogViewModel(report, solutionPath);
 
 			this.isLatestReportGreen = string.Equals(buildBlockViewModel.RecommendedAction, Core.RecommendedAction.Allow.ToString(), StringComparison.OrdinalIgnoreCase);
 			this.latestReportEffectiveRiskScore = buildBlockViewModel.RiskScore;
@@ -750,6 +818,394 @@ namespace MSBuildGuard.VisualStudio
 			{
 				uiShell.UpdateCommandUI(1);
 			}
+		}
+
+		/// <summary>
+		/// Executes the onboarding trusted baseline setup workflow.
+		/// </summary>
+		/// <param name="solutionPath">The path of the open solution.</param>
+		/// <param name="report">The scan report.</param>
+		/// <returns>A task that completes when the workflow finishes.</returns>
+		private async Task RunOnboardingWorkflowAsync(string solutionPath, Core.ScanReport report)
+		{
+			await this.JoinableTaskFactory.SwitchToMainThreadAsync(this.DisposalToken);
+
+			this.promptedSolutions.Add(solutionPath);
+
+			var result = Microsoft.VisualStudio.Shell.VsShellUtilities.ShowMessageBox(
+				this,
+				"This solution has not been scanned before by MSBuild Guard. Would you like to quickly set up a trusted baseline of its packages and assemblies?",
+				"MSBuild Guard - Trusted Baseline Onboarding",
+				OLEMSGICON.OLEMSGICON_QUERY,
+				OLEMSGBUTTON.OLEMSGBUTTON_YESNO,
+				OLEMSGDEFBUTTON.OLEMSGDEFBUTTON_FIRST);
+
+			if (result != (int)Microsoft.VisualStudio.VSConstants.MessageBoxResult.IDYES)
+			{
+				return;
+			}
+
+			await this.UiFeedbackService.WriteLineAsync("Generating trusted baseline suggestions...", CancellationToken.None);
+
+			var onboardingService = new Core.Baseline.BaselineOnboardingService();
+			var suggestions = await onboardingService.GenerateSuggestionsAsync(report, this.DisposalToken).ConfigureAwait(true);
+
+			await this.JoinableTaskFactory.SwitchToMainThreadAsync(this.DisposalToken);
+
+			var vm = new ToolWindows.BaselineOnboardingViewModel(suggestions);
+			var dialog = new ToolWindows.BaselineOnboardingDialog(vm)
+			{
+				Owner = System.Windows.Application.Current.MainWindow,
+				WindowStartupLocation = System.Windows.WindowStartupLocation.CenterOwner
+			};
+
+			var dialogResult = dialog.ShowDialog();
+			var trustService = new Core.Trust.TrustStoreService();
+			var solutionTrustPath = trustService.GetSolutionTrustPath(solutionPath);
+
+			if (dialogResult == true)
+			{
+				var selectedSuggestions = vm.Suggestions.Where(s => s.IsSelected).ToList();
+				var userSid = System.Security.Principal.WindowsIdentity.GetCurrent()?.User?.Value ?? "Unknown";
+
+				await this.UiFeedbackService.WriteLineAsync($"Applying {selectedSuggestions.Count} selected trusts...", CancellationToken.None);
+				ApplySelectedSuggestions(solutionPath, vm.SelectedTrustScope, report, selectedSuggestions, userSid);
+
+				if (vm.CreateBaselineForRemaining)
+				{
+					await this.UiFeedbackService.WriteLineAsync("Creating baseline for remaining findings...", CancellationToken.None);
+					CreateRemainingFindingsBaseline(solutionPath, report);
+				}
+
+				if (vm.DoNotScanAgain)
+				{
+					WriteDisableScanMarker(solutionPath);
+				}
+
+				await this.UiFeedbackService.WriteLineAsync("Trusted baseline onboarding complete.", CancellationToken.None);
+
+				Microsoft.VisualStudio.Shell.VsShellUtilities.ShowMessageBox(
+					this,
+					"Trusted baseline onboarding complete. The solution is now configured with the chosen trusts and baseline.",
+					"MSBuild Guard",
+					OLEMSGICON.OLEMSGICON_INFO,
+					OLEMSGBUTTON.OLEMSGBUTTON_OK,
+					OLEMSGDEFBUTTON.OLEMSGDEFBUTTON_FIRST);
+
+				await this.RescanSolutionSecurityReviewAsync();
+			}
+			else
+			{
+				if (vm.DontShowAgain)
+				{
+					WriteEmptyTrustStore(solutionTrustPath);
+				}
+
+				if (vm.DoNotScanAgain)
+				{
+					WriteDisableScanMarker(solutionPath);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Resolves the absolute project path for a finding.
+		/// </summary>
+		/// <param name="solutionPath">The path to the solution file.</param>
+		/// <param name="finding">The scan finding.</param>
+		/// <returns>The resolved project path, or null if it cannot be resolved.</returns>
+		private static string? ResolveProjectPath(string solutionPath, Core.Finding finding)
+		{
+			if (!string.IsNullOrWhiteSpace(finding.IntroducedViaProject))
+			{
+				return Path.IsPathRooted(finding.IntroducedViaProject)
+					? Path.GetFullPath(finding.IntroducedViaProject)
+					: Path.GetFullPath(Path.Combine(Path.GetDirectoryName(solutionPath) ?? string.Empty, finding.IntroducedViaProject));
+			}
+
+			if (finding.FilePath.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase) ||
+				finding.FilePath.EndsWith(".fsproj", StringComparison.OrdinalIgnoreCase) ||
+				finding.FilePath.EndsWith(".vbproj", StringComparison.OrdinalIgnoreCase))
+			{
+				return Path.GetFullPath(finding.FilePath);
+			}
+
+			return null;
+		}
+
+		/// <summary>
+		/// Applies selected trust suggestions to the chosen trust store level.
+		/// </summary>
+		/// <param name="solutionPath">The path to the solution file.</param>
+		/// <param name="selectedScope">The chosen trust scope level (User, Solution, or Project).</param>
+		/// <param name="report">The scan report context.</param>
+		/// <param name="selectedSuggestions">The list of suggestions chosen by the user.</param>
+		/// <param name="userSid">The user's SID.</param>
+		private static void ApplySelectedSuggestions(
+			string solutionPath,
+			string selectedScope,
+			Core.ScanReport report,
+			List<ToolWindows.TrustSuggestionItemViewModel> selectedSuggestions,
+			string userSid)
+		{
+			var trustService = new Core.Trust.TrustStoreService();
+
+			foreach (var item in selectedSuggestions)
+			{
+				var suggestion = item.Suggestion;
+				var targetPaths = new List<string>();
+
+				if (selectedScope.Equals("User", StringComparison.OrdinalIgnoreCase))
+				{
+					targetPaths.Add(trustService.GetDefaultUserTrustPath());
+				}
+				else if (selectedScope.Equals("Solution", StringComparison.OrdinalIgnoreCase))
+				{
+					targetPaths.Add(trustService.GetSolutionTrustPath(solutionPath));
+				}
+				else if (selectedScope.Equals("Project", StringComparison.OrdinalIgnoreCase))
+				{
+					var projectPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+					if (suggestion.Scope == Core.Baseline.TrustSuggestionScope.Package)
+					{
+						var packageId = suggestion.Metadata.TryGetValue("PackageId", out var pid) ? pid : string.Empty;
+
+						if (!string.IsNullOrEmpty(packageId))
+						{
+							foreach (var finding in report.Findings)
+							{
+								if (string.Equals(finding.PackageId, packageId, StringComparison.OrdinalIgnoreCase))
+								{
+									var proj = ResolveProjectPath(solutionPath, finding);
+
+									if (proj != null)
+									{
+										projectPaths.Add(proj);
+									}
+								}
+							}
+						}
+					}
+					else if (suggestion.Scope == Core.Baseline.TrustSuggestionScope.Assembly)
+					{
+						var assemblyName = suggestion.Metadata.TryGetValue("AssemblyName", out var aname) ? aname : string.Empty;
+
+						if (!string.IsNullOrEmpty(assemblyName))
+						{
+							foreach (var finding in report.Findings)
+							{
+								if (finding.FilePath.IndexOf(assemblyName, StringComparison.OrdinalIgnoreCase) >= 0)
+								{
+									var proj = ResolveProjectPath(solutionPath, finding);
+
+									if (proj != null)
+									{
+										projectPaths.Add(proj);
+									}
+								}
+							}
+						}
+					}
+					else if (suggestion.Scope == Core.Baseline.TrustSuggestionScope.Signer)
+					{
+						var thumbprint = suggestion.Metadata.TryGetValue("SignerThumbprint", out var thumb) ? thumb : string.Empty;
+
+						if (!string.IsNullOrEmpty(thumbprint))
+						{
+							foreach (var finding in report.Findings)
+							{
+								if (string.Equals(finding.PackageSignatureState, thumbprint, StringComparison.OrdinalIgnoreCase))
+								{
+									var proj = ResolveProjectPath(solutionPath, finding);
+
+									if (proj != null)
+									{
+										projectPaths.Add(proj);
+									}
+								}
+							}
+						}
+					}
+
+					if (projectPaths.Count == 0)
+					{
+						foreach (var file in report.FilesScanned)
+						{
+							if (file.FileKind == Core.MsBuildFileKind.Project ||
+								file.Path.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase) ||
+								file.Path.EndsWith(".fsproj", StringComparison.OrdinalIgnoreCase) ||
+								file.Path.EndsWith(".vbproj", StringComparison.OrdinalIgnoreCase))
+							{
+								projectPaths.Add(file.Path);
+							}
+						}
+					}
+
+					foreach (var proj in projectPaths)
+					{
+						targetPaths.Add(trustService.GetProjectTrustPath(proj));
+					}
+				}
+				else
+				{
+					targetPaths.Add(trustService.GetSolutionTrustPath(solutionPath));
+				}
+
+				foreach (var targetPath in targetPaths)
+				{
+					if (suggestion.Scope == Core.Baseline.TrustSuggestionScope.Signer)
+					{
+						trustService.AddSignerTrust(
+							targetPath,
+							suggestion.Metadata.TryGetValue("SignerThumbprint", out var thumb) ? thumb : string.Empty,
+							suggestion.Metadata.TryGetValue("SignerSubject", out var subj) ? subj : string.Empty,
+							suggestion.DisplayName,
+							suggestion.Metadata.TryGetValue("SignerIssuer", out var iss) ? iss : string.Empty,
+							suggestion.Metadata.TryGetValue("SignerSerialNumber", out var ser) ? ser : string.Empty,
+							suggestion.RecommendationReason,
+							userSid);
+					}
+					else if (suggestion.Scope == Core.Baseline.TrustSuggestionScope.Package)
+					{
+						trustService.AddPackageTrust(
+							targetPath,
+							suggestion.Metadata.TryGetValue("PackageId", out var pid) ? pid : string.Empty,
+							suggestion.Metadata.TryGetValue("PackageVersion", out var pver) ? pver : string.Empty,
+							suggestion.Metadata.TryGetValue("PackageHash", out var phash) ? phash : string.Empty,
+							suggestion.RecommendationReason,
+							userSid);
+					}
+					else if (suggestion.Scope == Core.Baseline.TrustSuggestionScope.Assembly)
+					{
+						trustService.AddAssemblyTrust(
+							targetPath,
+							suggestion.Metadata.TryGetValue("AssemblyName", out var aname) ? aname : string.Empty,
+							suggestion.Metadata.TryGetValue("AssemblyVersion", out var aver) ? aver : string.Empty,
+							suggestion.RecommendationReason,
+							userSid,
+							suggestion.Metadata.TryGetValue("AssemblySigner", out var asig) ? asig : string.Empty,
+							suggestion.Metadata.TryGetValue("AssemblyIssuer", out var aiss) ? aiss : string.Empty,
+							suggestion.Metadata.TryGetValue("AssemblySubject", out var asubj) ? asubj : string.Empty);
+					}
+				}
+			}
+		}
+
+		/// <summary>
+		/// Creates and saves a baseline document for any findings not currently approved in the trust store.
+		/// </summary>
+		/// <param name="solutionPath">The solution file path.</param>
+		/// <param name="report">The scan report.</param>
+		private static void CreateRemainingFindingsBaseline(string solutionPath, Core.ScanReport report)
+		{
+			var trustService = new Core.Trust.TrustStoreService();
+			var currentTrustStore = trustService.LoadMergedTrustStore(trustService.GetDefaultUserTrustPath(), solutionPath, null);
+			var filteredFindings = report.Findings.Where(f => !IsFindingTrusted(f, currentTrustStore)).ToList();
+			var filteredReport = new Core.ScanReport
+			{
+				ScannerVersion = report.ScannerVersion,
+				ReportVersion = report.ReportVersion,
+				Target = report.Target,
+				PolicyProfile = report.PolicyProfile
+			};
+
+			foreach (var file in report.FilesScanned)
+			{
+				filteredReport.FilesScanned.Add(file);
+			}
+
+			foreach (var finding in filteredFindings)
+			{
+				filteredReport.Findings.Add(finding);
+			}
+
+			var baselineService = new Core.Baseline.BaselineService();
+			var solutionDir = Path.GetDirectoryName(solutionPath);
+
+			if (!string.IsNullOrWhiteSpace(solutionDir))
+			{
+				var baselinePath = Path.Combine(solutionDir!, ".msbuildguard", "baseline.json");
+				var baseline = baselineService.CreateFromReport(filteredReport, "visualstudio", Environment.UserName);
+
+				baselineService.Save(baselinePath, baseline);
+			}
+		}
+
+		private static bool IsFindingTrusted(Core.Finding f, Core.Trust.TrustStoreDocument currentTrustStore)
+		{
+			if (f.IsTrusted)
+			{
+				return true;
+			}
+
+			var trustService = new Core.Trust.TrustStoreService();
+
+			if (trustService.IsFingerprintApproved(currentTrustStore, f.Fingerprint))
+			{
+				return true;
+			}
+
+			if (!string.IsNullOrWhiteSpace(f.PackageId) && !string.IsNullOrWhiteSpace(f.PackageVersion))
+			{
+				if (trustService.IsFindingApprovedByAssembly(currentTrustStore, f.PackageId, f.PackageVersion))
+				{
+					return true;
+				}
+
+				if (f.FilePath.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) || f.FilePath.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+				{
+					var assemblyPath = Core.Trust.AssemblySignatureService.ResolveAssemblyFilePathFromPackageId(f.PackageId, f.PackageVersion);
+					var sig = new Core.Trust.AssemblySignatureService().ReadSignature(assemblyPath);
+
+					if (sig != null && sig.HasEmbeddedSignature && sig.IsSignatureValid &&
+						trustService.IsSignerTrusted(currentTrustStore, sig.Thumbprint, sig.Subject, sig.Issuer, sig.SerialNumber))
+					{
+						return true;
+					}
+				}
+			}
+
+			return false;
+		}
+
+		/// <summary>
+		/// Writes a marker file to disable future scanning of the solution.
+		/// </summary>
+		/// <param name="solutionPath">The solution file path.</param>
+		private static void WriteDisableScanMarker(string solutionPath)
+		{
+			var solutionDir = Path.GetDirectoryName(solutionPath);
+
+			if (!string.IsNullOrWhiteSpace(solutionDir))
+			{
+				var noscanPath = Path.Combine(solutionDir!, ".msbuildguard", "noscan");
+				var directory = Path.GetDirectoryName(noscanPath);
+
+				if (!string.IsNullOrWhiteSpace(directory) && !Directory.Exists(directory))
+				{
+					Directory.CreateDirectory(directory);
+				}
+
+				File.WriteAllText(noscanPath, "Scanning disabled.");
+			}
+		}
+
+		/// <summary>
+		/// Initializes an empty solution-level trust store so onboarding is not prompted again.
+		/// </summary>
+		/// <param name="solutionTrustPath">The solution trust store file path.</param>
+		private static void WriteEmptyTrustStore(string solutionTrustPath)
+		{
+			var trustService = new Core.Trust.TrustStoreService();
+			var directory = Path.GetDirectoryName(solutionTrustPath);
+
+			if (!string.IsNullOrWhiteSpace(directory) && !Directory.Exists(directory))
+			{
+				Directory.CreateDirectory(directory);
+			}
+
+			trustService.Save(solutionTrustPath, new Core.Trust.TrustStoreDocument());
 		}
 
 		/// <summary>

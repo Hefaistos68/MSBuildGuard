@@ -70,6 +70,11 @@ namespace MSBuildGuard.VisualStudio.Commands
 			}).FileAndForget(nameof(OpenSolutionSecurityReviewCommand));
 		}
 
+		/// <summary>
+		/// Updates command visibility and enabled state before the menu is displayed.
+		/// </summary>
+		/// <param name="sender">Event sender.</param>
+		/// <param name="e">Event arguments.</param>
 		private void OnBeforeQueryStatus(object sender, EventArgs e)
 		{
 			ThreadHelper.ThrowIfNotOnUIThread();
@@ -83,6 +88,10 @@ namespace MSBuildGuard.VisualStudio.Commands
 			menuCommand.Enabled = SolutionDiscoveryService.HasOpenSolution();
 		}
 
+		/// <summary>
+		/// Resolves the open solution, runs the scanner, and shows the Solution Security Review tool window.
+		/// </summary>
+		/// <returns>A task that completes when the review window is shown.</returns>
 		private async Task ExecuteAsync()
 		{
 			var solutionPath = await SolutionDiscoveryService.GetOpenSolutionPathAsync(this.package).ConfigureAwait(false);

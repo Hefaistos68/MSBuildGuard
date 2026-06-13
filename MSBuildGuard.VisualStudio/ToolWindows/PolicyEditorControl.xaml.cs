@@ -46,6 +46,10 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			ThreadHelper.JoinableTaskFactory.RunAsync(this.OnSaveClickAsync).FileAndForget(nameof(PolicyEditorControl));
 		}
 
+		/// <summary>
+		/// Asynchronously validates and saves the current policy edits, triggering a rescan if successful.
+		/// </summary>
+		/// <returns>A task that completes when the save workflow finishes.</returns>
 		private async System.Threading.Tasks.Task OnSaveClickAsync()
 		{
 			if (this.DataContext is not PolicyEditorViewModel viewModel)
@@ -89,6 +93,11 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			}
 		}
 
+		/// <summary>
+		/// Handles a mouse click on the policy path label by navigating to the policy file in the editor.
+		/// </summary>
+		/// <param name="sender">Event sender.</param>
+		/// <param name="e">Mouse button event arguments.</param>
 		private void OnPolicyPathClick(object sender, MouseButtonEventArgs e)
 		{
 			ThreadHelper.ThrowIfNotOnUIThread();

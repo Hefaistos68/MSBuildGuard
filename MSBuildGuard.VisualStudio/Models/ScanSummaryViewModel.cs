@@ -245,11 +245,23 @@ namespace MSBuildGuard.VisualStudio.Models
 			}
 		}
 
+		/// <summary>
+		/// Raises the <see cref="PropertyChanged"/> event for the specified property name.
+		/// </summary>
+		/// <param name="propertyName">Name of the property that changed.</param>
 		private void OnPropertyChanged([CallerMemberName] string propertyName = "")
 		{
 			this.PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
 		}
 
+		/// <summary>
+		/// Sets the backing field and raises <see cref="PropertyChanged"/> when the value differs.
+		/// </summary>
+		/// <typeparam name="T">Property value type.</typeparam>
+		/// <param name="storage">Reference to the backing field.</param>
+		/// <param name="value">New value to assign.</param>
+		/// <param name="propertyName">Caller property name, automatically supplied by the compiler.</param>
+		/// <returns><c>true</c> when the value changed and the event was raised; otherwise <c>false</c>.</returns>
 		private bool SetProperty<T>(ref T storage, T value, [CallerMemberName] string propertyName = "")
 		{
 			if (EqualityComparer<T>.Default.Equals(storage, value))

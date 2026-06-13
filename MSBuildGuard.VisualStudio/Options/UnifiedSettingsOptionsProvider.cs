@@ -73,6 +73,7 @@ namespace MSBuildGuard.VisualStudio.Options
 			var store = settingsManager.GetReadOnlySettingsStore(SettingsScope.UserSettings);
 
 			snapshot.AutoOpenSecurityReviewOnOpen = ReadBoolean(store, SettingsNames.AutoOpenSecurityReviewOnOpen, snapshot.AutoOpenSecurityReviewOnOpen);
+			snapshot.EnableBaselineOnboarding = ReadBoolean(store, SettingsNames.EnableBaselineOnboarding, snapshot.EnableBaselineOnboarding);
 			snapshot.ScanNuGetPackages = ReadBoolean(store, SettingsNames.ScanNuGetPackages, snapshot.ScanNuGetPackages);
 			snapshot.AllowSharingTrustsInRepositories = ReadBoolean(store, SettingsNames.AllowSharingTrustsInRepositories, snapshot.AllowSharingTrustsInRepositories);
 			snapshot.FileTypesToScan = ReadString(store, SettingsNames.FileTypesToScan, snapshot.FileTypesToScan);
@@ -86,6 +87,7 @@ namespace MSBuildGuard.VisualStudio.Options
 		private static bool AreEquivalent(MSBuildGuardOptionsSnapshot left, MSBuildGuardOptionsSnapshot right)
 		{
 			return left.AutoOpenSecurityReviewOnOpen == right.AutoOpenSecurityReviewOnOpen &&
+				left.EnableBaselineOnboarding == right.EnableBaselineOnboarding &&
 				left.ScanNuGetPackages == right.ScanNuGetPackages &&
 				left.AllowSharingTrustsInRepositories == right.AllowSharingTrustsInRepositories &&
 				string.Equals(left.FileTypesToScan, right.FileTypesToScan, StringComparison.Ordinal) &&

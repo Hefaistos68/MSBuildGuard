@@ -166,6 +166,18 @@ export class SecurityReviewViewProvider implements vscode.WebviewViewProvider {
                     assemblySigner: finding.packageSignatureState,
                     reason
                 });
+            } else if (scope === 'Package') {
+                if (!finding.packageId || !finding.packageVersion) {
+                    void vscode.window.showErrorMessage('MSBuild Guard: Finding does not originate from a NuGet package.');
+                    return;
+                }
+                await workerClient.addTrustAsync(targetPath, {
+                    scope: 'Package',
+                    trustScope,
+                    assemblyName: finding.packageId,
+                    assemblyVersion: finding.packageVersion,
+                    reason
+                });
             }
 
             void vscode.window.showInformationMessage(`Successfully added ${scope} trust to ${trustScope} store.`);
@@ -819,10 +831,16 @@ export class SecurityReviewViewProvider implements vscode.WebviewViewProvider {
                             \` : ''}
 
                             \${finding.packageSignatureState ? \`
-                            <button onclick="submitTrust('Signer')" class="secondary-button" style="text-align: left; padding: 6px; margin: 0; font-size: 0.7rem; font-weight: 600; display: flex; align-items: center; gap: 4px; background: rgba(245, 158, 11, 0.08); border-color: rgba(245, 158, 11, 0.25);">
-                                ✍️ Trust Signer Certificate
-                            </button>
-                            \` : ''}
+                             <button onclick="submitTrust('Signer')" class="secondary-button" style="text-align: left; padding: 6px; margin: 0; font-size: 0.7rem; font-weight: 600; display: flex; align-items: center; gap: 4px; background: rgba(245, 158, 11, 0.08); border-color: rgba(245, 158, 11, 0.25);">
+                                 ✍️ Trust Signer Certificate
+                             </button>
+                             \` : ''}
+
+                             \${finding.packageId ? \`
+                             <button onclick="submitTrust('Package')" class="secondary-button" style="text-align: left; padding: 6px; margin: 0; font-size: 0.7rem; font-weight: 600; display: flex; align-items: center; gap: 4px; background: rgba(59, 130, 246, 0.08); border-color: rgba(59, 130, 246, 0.25);">
+                                 📦 Trust NuGet Package
+                             </button>
+                             \` : ''}
                         </div>
                     </div>
                 \`;

@@ -3,7 +3,7 @@
   "displayName": "MSBuild Guard",
   "description": "Sleek, cross-platform security analysis extension that scans MSBuild project files before execution and prevents malicious code delivery.",
   "icon": "resources/shield-icon.png",
-  "version": "0.0.3",
+  "version": "0.0.5",
   "preview": true,
   "publisher": "Hefaistos68",
   "author": {
@@ -96,6 +96,11 @@
       "type": "object",
       "title": "MSBuild Guard",
       "properties": {
+        "msbuildguard.enableBaselineOnboarding": {
+          "type": "boolean",
+          "default": true,
+          "description": "Intelligently suggests baseline trust settings when loading a new workspace for the first time."
+        },
         "msbuildguard.autoOpenSecurityReview": {
           "type": "boolean",
           "default": true,

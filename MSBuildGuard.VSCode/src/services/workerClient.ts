@@ -167,6 +167,41 @@ export class WorkerClient implements vscode.Disposable {
         return response.result as ScanReport;
     }
 
+    public async getOnboardingSuggestionsAsync(targetPath: string, options: {
+        fileTypesToScan?: string[];
+        processCreationIndicators?: string[];
+        reflectionInteropIndicators?: string[];
+        additionalBlockedAssemblies?: string[];
+    }, timeoutMs = 30000): Promise<any[]> {
+        if (this.disposed) {
+            throw new Error('MSBuildGuard worker client is disposed.');
+        }
+
+        const id = `req-${++this.sequence}`;
+        const request: WorkerRequest = {
+            version: '1.0',
+            id,
+            method: 'getOnboardingSuggestions',
+            payload: {
+                targetPath,
+                fileTypesToScan: options.fileTypesToScan,
+                processCreationIndicators: options.processCreationIndicators,
+                reflectionInteropIndicators: options.reflectionInteropIndicators,
+                additionalBlockedAssemblies: options.additionalBlockedAssemblies
+            }
+        };
+
+        const response = await this.sendAsync(request, timeoutMs);
+        if (!response.success || !response.result) {
+            const message = response.error?.details
+                ? `${response.error.message} (${response.error.details})`
+                : (response.error?.message ?? 'Worker returned an unknown failure.');
+            throw new Error(`Failed to retrieve onboarding suggestions: ${message}`);
+        }
+
+        return response.result as any[];
+    }
+
     public async createBaselineAsync(targetPath: string, reviewerIdentity: string, outputPath: string, timeoutMs = 30000): Promise<void> {
         if (this.disposed) {
             throw new Error('MSBuildGuard worker client is disposed.');

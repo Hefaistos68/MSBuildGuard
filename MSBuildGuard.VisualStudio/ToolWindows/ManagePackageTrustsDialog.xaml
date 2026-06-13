@@ -1,0 +1,115 @@
+<platformUi:DialogWindow x:Class="MSBuildGuard.VisualStudio.ToolWindows.ManagePackageTrustsDialog"
+              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+              xmlns:platformUi="clr-namespace:Microsoft.VisualStudio.PlatformUI;assembly=Microsoft.VisualStudio.Shell.15.0"
+              xmlns:vsshell="clr-namespace:Microsoft.VisualStudio.Shell;assembly=Microsoft.VisualStudio.Shell.15.0"
+              mc:Ignorable="d"
+              Title="Manage Package Trusts"
+              Width="980"
+              Height="500"
+              WindowStartupLocation="CenterOwner"
+              Loaded="Window_Loaded"
+              Background="{DynamicResource {x:Static vsshell:VsBrushes.WindowKey}}"
+              Foreground="{DynamicResource {x:Static vsshell:VsBrushes.WindowTextKey}}"
+              platformUi:ThemedDialogStyleLoader.UseDefaultThemedDialogStyles="True">
+    <platformUi:DialogWindow.Resources>
+        <ResourceDictionary>
+            <Style TargetType="TextBlock">
+                <Setter Property="Foreground" Value="{DynamicResource {x:Static vsshell:VsBrushes.WindowTextKey}}"/>
+            </Style>
+            <Style TargetType="ContextMenu" BasedOn="{StaticResource {x:Static vsshell:VsResourceKeys.ContextMenuStyleKey}}" />
+            <Style TargetType="DataGrid">
+                <Setter Property="Background" Value="{DynamicResource {x:Static vsshell:VsBrushes.WindowKey}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource {x:Static vsshell:VsBrushes.WindowTextKey}}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource {x:Static vsshell:VsBrushes.PanelBorderKey}}"/>
+                <Setter Property="HorizontalGridLinesBrush" Value="{DynamicResource {x:Static vsshell:VsBrushes.PanelBorderKey}}"/>
+                <Setter Property="VerticalGridLinesBrush" Value="{DynamicResource {x:Static vsshell:VsBrushes.PanelBorderKey}}"/>
+                <Setter Property="RowBackground" Value="{DynamicResource {x:Static vsshell:VsBrushes.WindowKey}}"/>
+                <Setter Property="AlternatingRowBackground" Value="{DynamicResource {x:Static vsshell:VsBrushes.WindowKey}}"/>
+                <Setter Property="HeadersVisibility" Value="Column"/>
+            </Style>
+            <Style TargetType="DataGridColumnHeader">
+                <Setter Property="Background" Value="{DynamicResource {x:Static vsshell:VsBrushes.GridHeadingBackgroundKey}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource {x:Static vsshell:VsBrushes.GridHeadingTextKey}}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource {x:Static vsshell:VsBrushes.PanelBorderKey}}"/>
+                <Setter Property="BorderThickness" Value="0,0,1,1"/>
+                <Setter Property="Padding" Value="6,4"/>
+            </Style>
+            <Style TargetType="DataGridRow">
+                <Setter Property="Background" Value="{DynamicResource {x:Static vsshell:VsBrushes.WindowKey}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource {x:Static vsshell:VsBrushes.WindowTextKey}}"/>
+            </Style>
+            <Style TargetType="DataGridCell">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="Foreground" Value="{DynamicResource {x:Static vsshell:VsBrushes.WindowTextKey}}"/>
+                <Style.Triggers>
+                    <Trigger Property="IsSelected" Value="True">
+                        <Setter Property="Background" Value="{DynamicResource {x:Static vsshell:VsBrushes.HighlightKey}}"/>
+                        <Setter Property="Foreground" Value="{DynamicResource {x:Static vsshell:VsBrushes.HighlightTextKey}}"/>
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+        </ResourceDictionary>
+    </platformUi:DialogWindow.Resources>
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="Manage Package Trusts" FontSize="16" FontWeight="Bold" Margin="0,0,0,4"/>
+        <StackPanel Grid.Row="1" Orientation="Vertical" Margin="0,0,0,12">
+            <TextBlock Text="Trusted packages have all findings automatically approved based on directory-level hash integrity." TextWrapping="Wrap" Foreground="{DynamicResource {x:Static vsshell:VsBrushes.GrayTextKey}}" Margin="0,0,0,8"/>
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                <TextBlock Text="Scope:" VerticalAlignment="Center" FontWeight="Bold" Margin="0,0,8,0" Width="50"/>
+                <ComboBox x:Name="ScopeComboBox" Width="180" SelectionChanged="ScopeComboBox_SelectionChanged"/>
+            </StackPanel>
+            <StackPanel x:Name="ProjectSelectorPanel" Orientation="Horizontal" Visibility="Collapsed">
+                <TextBlock Text="Project:" VerticalAlignment="Center" FontWeight="Bold" Margin="0,0,8,0" Width="50"/>
+                <ComboBox x:Name="ProjectScopeComboBox" Width="360" DisplayMemberPath="Name" SelectedValuePath="Path" SelectionChanged="ProjectScopeComboBox_SelectionChanged"/>
+            </StackPanel>
+        </StackPanel>
+
+        <DataGrid Grid.Row="2" x:Name="TrustedPackagesGrid" AutoGenerateColumns="False" Margin="0,0,0,12" CanUserSortColumns="False" CanUserReorderColumns="False" CanUserAddRows="False" Loaded="TrustedPackagesGrid_Loaded">
+            <DataGrid.ContextMenu>
+                <ContextMenu>
+                    <MenuItem Header="Move trust to User scope" Tag="User" Click="MoveTrustToScopeMenuItem_Click"/>
+                    <MenuItem Header="Move trust to Solution scope" Tag="Solution" Click="MoveTrustToScopeMenuItem_Click"/>
+                    <MenuItem x:Name="MoveToProjectScopeMenuItem" Header="Move trust to Project scope">
+                        <MenuItem.ItemsSource>
+                            <Binding ElementName="ProjectScopeComboBox" Path="ItemsSource"/>
+                        </MenuItem.ItemsSource>
+                        <MenuItem.ItemContainerStyle>
+                            <Style TargetType="MenuItem">
+                                <Setter Property="Header" Value="{Binding Name}"/>
+                                <Setter Property="Tag" Value="{Binding Path}"/>
+                                <EventSetter Event="Click" Handler="MoveTrustToProjectScopeMenuItem_Click"/>
+                            </Style>
+                        </MenuItem.ItemContainerStyle>
+                    </MenuItem>
+                </ContextMenu>
+            </DataGrid.ContextMenu>
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Package ID" Binding="{Binding Name}" Width="250" IsReadOnly="True"/>
+                <DataGridTextColumn Header="Version" Binding="{Binding Version}" Width="150" IsReadOnly="True"/>
+                <DataGridTextColumn Header="Folder Hash" Binding="{Binding Hash}" Width="250" IsReadOnly="True"/>
+                <DataGridTextColumn Header="Reason" Binding="{Binding Reason}" Width="*" IsReadOnly="True"/>
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,0,0,12">
+            <Button x:Name="AddButton" Content="Add..." Padding="16,8" Margin="0,0,8,0" Click="AddButton_Click"/>
+            <Button x:Name="RemoveButton" Content="Remove" Padding="16,8" Margin="0,0,0,0" Click="RemoveButton_Click" IsEnabled="False"/>
+        </StackPanel>
+
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button x:Name="SaveButton" Content="Save" Padding="16,8" Margin="0,0,8,0" Click="SaveButton_Click"/>
+            <Button x:Name="CancelButton" Content="Cancel" Padding="16,8" Margin="0,0,0,0" Click="CancelButton_Click" IsCancel="True"/>
+        </StackPanel>
+    </Grid>
+</platformUi:DialogWindow>

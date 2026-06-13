@@ -418,6 +418,71 @@ namespace MSBuildGuard.Core.Trust
 		}
 
 		/// <summary>
+		/// Adds a NuGet package-level trust decision using the computed directory hash.
+		/// </summary>
+		/// <param name="path">Trust store path.</param>
+		/// <param name="packageId">Package ID.</param>
+		/// <param name="packageVersion">Package version.</param>
+		/// <param name="packageHash">Precalculated directory hash.</param>
+		/// <param name="reason">Trust reason.</param>
+		/// <param name="userSid">Acting user identity.</param>
+		/// <param name="expiresAtUtc">Optional expiration timestamp.</param>
+		public void AddPackageTrust(
+			string path,
+			string packageId,
+			string packageVersion,
+			string packageHash,
+			string reason,
+			string userSid,
+			DateTimeOffset? expiresAtUtc = null)
+		{
+			if (path == null)
+			{
+				throw new ArgumentNullException(nameof(path));
+			}
+
+			if (packageId == null)
+			{
+				throw new ArgumentNullException(nameof(packageId));
+			}
+
+			if (packageVersion == null)
+			{
+				throw new ArgumentNullException(nameof(packageVersion));
+			}
+
+			if (packageHash == null)
+			{
+				throw new ArgumentNullException(nameof(packageHash));
+			}
+
+			if (reason == null)
+			{
+				throw new ArgumentNullException(nameof(reason));
+			}
+
+			if (userSid == null)
+			{
+				throw new ArgumentNullException(nameof(userSid));
+			}
+
+			var entry = new TrustDecisionEntry
+			{
+				DecisionId     = Guid.NewGuid().ToString("N"),
+				Scope          = "Package",
+				SubjectHash    = packageHash,
+				AssemblySigner = $"{packageId}@{packageVersion}".ToLowerInvariant(),
+				Decision       = "Trust",
+				Reason         = reason,
+				UserSid        = userSid,
+				CreatedAtUtc   = DateTimeOffset.UtcNow,
+				ExpiresAtUtc   = expiresAtUtc
+			};
+
+			AddDecision(path, entry);
+		}
+
+		/// <summary>
 		/// Removes assembly trust decisions that match the provided assembly name and version.
 		/// </summary>
 		/// <param name="path">Trust store path.</param>
@@ -578,6 +643,57 @@ namespace MSBuildGuard.Core.Trust
 			}
 
 			return IsAssemblyApproved(store, packageId, packageVersion);
+		}
+
+		/// <summary>
+		/// Determines whether a finding is approved by package-level directory hash trust.
+		/// </summary>
+		/// <param name="store">Trust store document.</param>
+		/// <param name="packageId">Package ID.</param>
+		/// <param name="packageVersion">Package version.</param>
+		/// <returns><see langword="true"/> when the package is approved and the hash matches; otherwise <see langword="false"/>.</returns>
+		public bool IsFindingApprovedByPackage(TrustStoreDocument store, string packageId, string packageVersion)
+		{
+			if (store == null)
+			{
+				throw new ArgumentNullException(nameof(store));
+			}
+
+			if (string.IsNullOrWhiteSpace(packageId) || string.IsNullOrWhiteSpace(packageVersion))
+			{
+				return false;
+			}
+
+			var subjectKey = $"{packageId}@{packageVersion}".ToLowerInvariant();
+
+			var packageDecision = store.Decisions.FirstOrDefault(entry =>
+				entry.ScopeKind == TrustDecisionScopeKind.Package &&
+				string.Equals(entry.AssemblySigner, subjectKey, StringComparison.OrdinalIgnoreCase) &&
+				IsApprovalDecision(entry) &&
+				!IsExpired(entry));
+
+			if (packageDecision == null)
+			{
+				return false;
+			}
+
+			var userHome = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
+			var packageDir = Path.Combine(userHome, ".nuget", "packages", packageId.ToLowerInvariant(), packageVersion.ToLowerInvariant());
+
+			if (!Directory.Exists(packageDir))
+			{
+				return false;
+			}
+
+			var currentHash = CalculatePackageDirectoryHash(packageDir);
+
+			if (string.IsNullOrWhiteSpace(currentHash))
+			{
+				return false;
+			}
+
+			return string.Equals(packageDecision.SubjectHash, currentHash, StringComparison.OrdinalIgnoreCase);
 		}
 
 		/// <summary>
@@ -1053,6 +1169,69 @@ namespace MSBuildGuard.Core.Trust
 						throw new InvalidOperationException($"Audit trail integrity compromised at event {i}: chain hash mismatch. Event may have been deleted or reordered.");
 					}
 				}
+			}
+		}
+
+		/// <summary>
+		/// Calculates a deterministic cryptographic hash of a package directory by traversing all files,
+		/// sorting them by relative path, hashing each file's content, and combining them.
+		/// </summary>
+		/// <param name="packageDirectoryPath">The absolute path to the package directory.</param>
+		/// <returns>A SHA256 hex string representing the package directory state, or empty string on error.</returns>
+		public static string CalculatePackageDirectoryHash(string packageDirectoryPath)
+		{
+			if (string.IsNullOrWhiteSpace(packageDirectoryPath) || !Directory.Exists(packageDirectoryPath))
+			{
+
+				return string.Empty;
+			}
+
+			try
+			{
+				var files = Directory.GetFiles(packageDirectoryPath, "*", SearchOption.AllDirectories);
+
+				var relativeFiles = new List<(string RelativePath, string AbsolutePath)>();
+
+				foreach (var file in files)
+				{
+					var relativePath = file.Substring(packageDirectoryPath.Length)
+						.TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+						.Replace('\\', '/');
+
+					relativeFiles.Add((relativePath, file));
+				}
+
+				relativeFiles.Sort((x, y) => string.Compare(x.RelativePath, y.RelativePath, StringComparison.Ordinal));
+
+				using (var sha256 = SHA256.Create())
+				{
+					var builder = new StringBuilder();
+
+					foreach (var fileInfo in relativeFiles)
+					{
+						byte[] fileHash;
+
+						using (var stream = File.OpenRead(fileInfo.AbsolutePath))
+						{
+							fileHash = sha256.ComputeHash(stream);
+						}
+
+						var fileHashHex = BitConverter.ToString(fileHash).Replace("-", "").ToLowerInvariant();
+
+						builder.Append(fileInfo.RelativePath).Append(':').Append(fileHashHex).Append('\n');
+					}
+
+					var combinedBytes = Encoding.UTF8.GetBytes(builder.ToString());
+
+					var finalHash = sha256.ComputeHash(combinedBytes);
+
+					return BitConverter.ToString(finalHash).Replace("-", "").ToLowerInvariant();
+				}
+			}
+			catch
+			{
+
+				return string.Empty;
 			}
 		}
 	}

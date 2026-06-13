@@ -46,6 +46,11 @@ namespace MSBuildGuard.VisualStudio
 		public const int ManageSignerTrustsCommandId = 0x0109;
 
 		/// <summary>
+		/// Manage package trusts command id.
+		/// </summary>
+		public const int ManagePackageTrustsCommandId = 0x010A;
+
+		/// <summary>
 		/// Policy editor tool window id.
 		/// </summary>
 		public const int PolicyEditorToolWindowId = 0x0201;

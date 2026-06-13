@@ -37,6 +37,17 @@ MSBuild Guard for Visual Studio provides inline project risk visibility and trus
 - If baseline already exists, overwrite confirmation is required.
 - Baseline is persisted via shared Core baseline service.
 
+## Trusted Baseline Onboarding
+
+When a new, unseen solution or project (without `.msbuildguard/trust.json` or `.msbuildguard/baseline.json`) is loaded in Visual Studio, MSBuild Guard offers a **Trusted Baseline Onboarding** workflow:
+- **Automatic Prompts**: Users are asked if they would like to quickly set up a trusted baseline for the newly opened solution.
+- **Intelligent suggestions**: The dialog parses packages and assemblies to suggest signer trust (e.g., packages signed by Microsoft Corporation) or package trust for verified NuGet packages with high download volume.
+- **Review for Unsigned/Unverified Packages**: Unsigned packages with no verified publisher identity (e.g. `Shouldly`) are displayed as **unselected** package-level suggestions, allowing users to manually review and explicitly opt-in to trust them.
+- **Action selections**:
+  - **Create baseline for remaining findings**: Automatically saves any unchecked issues into a baseline file.
+  - **Don't show again**: Creates an empty `trust.json` store so onboarding won't be prompted for this solution.
+  - **Do not scan again**: Saves a local `.msbuildguard/noscan` file that bypasses scanning completely on future solution loads.
+
 ## Integration model
 
 The extension consumes shared Core scanner/policy/baseline/trust services. It is designed to avoid relying on project evaluation/build to decide whether MSBuild content is safe.
@@ -69,6 +80,8 @@ The extension exposes a Visual Studio options page at:
 
 Current settings:
 
+- **Enable onboarding workflow** (`true` by default)
+  - Controls whether the baseline onboarding wizard prompt appears for unseen solutions.
 - **Auto-open Security Review** (`true` by default)
   - Automatically opens Project Security Review when a scan requires attention.
 - **Scan NuGet packages** (`true` by default)

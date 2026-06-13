@@ -118,6 +118,9 @@ namespace MSBuildGuard.VisualStudio.Services
 			statusbar.SetText(label);
 		}
 
+		/// <summary>
+		/// Releases the semaphore gate and marks this instance as disposed.
+		/// </summary>
 		public void Dispose()
 		{
 			if (this.disposed)
@@ -129,6 +132,11 @@ namespace MSBuildGuard.VisualStudio.Services
 			this.paneGate.Dispose();
 		}
 
+		/// <summary>
+		/// Lazily initializes the MSBuild Guard output pane, creating it if it does not yet exist.
+		/// </summary>
+		/// <param name="cancellationToken">Cancellation token for the operation.</param>
+		/// <returns>A task that completes when the pane is ready.</returns>
 		private async Task EnsureOutputPaneAsync(CancellationToken cancellationToken)
 		{
 			if (this.outputPane != null)
@@ -166,6 +174,11 @@ namespace MSBuildGuard.VisualStudio.Services
 			}
 		}
 
+		/// <summary>
+		/// Retrieves the Visual Studio status bar service.
+		/// </summary>
+		/// <param name="cancellationToken">Cancellation token for the operation.</param>
+		/// <returns>The <see cref="IVsStatusbar"/> service, or <c>null</c> when unavailable.</returns>
 		private async Task<IVsStatusbar?> GetStatusBarAsync(CancellationToken cancellationToken)
 		{
 			await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);

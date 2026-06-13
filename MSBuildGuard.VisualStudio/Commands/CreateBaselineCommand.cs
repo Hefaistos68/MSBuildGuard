@@ -87,6 +87,10 @@ namespace MSBuildGuard.VisualStudio.Commands
 			menuCommand.Enabled = hasOpenSolution && isGreen;
 		}
 
+		/// <summary>
+		/// Performs the baseline creation workflow: validates state, prompts for overwrite if needed, and writes the baseline file.
+		/// </summary>
+		/// <returns>A task that completes when the operation finishes.</returns>
 		private async Task ExecuteAsync()
 		{
 			await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();

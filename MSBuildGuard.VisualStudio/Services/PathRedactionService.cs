@@ -10,6 +10,9 @@ namespace MSBuildGuard.VisualStudio.Services
 	/// </summary>
 	internal static class PathRedactionService
 	{
+		/// <summary>
+		/// Known special-folder root paths used for message redaction (prefix matching).
+		/// </summary>
 		private static readonly string[] CandidatePathRoots = new[]
 		{
 			Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
@@ -20,6 +23,9 @@ namespace MSBuildGuard.VisualStudio.Services
 			Environment.GetFolderPath(Environment.SpecialFolder.Desktop)
 		};
 
+		/// <summary>
+		/// Maps each known folder root to its canonical environment-variable token for path display.
+		/// </summary>
 		private static readonly Dictionary<string, string> RootTokenMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
 		{
 			{ Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "%USERPROFILE%" },
@@ -97,6 +103,14 @@ namespace MSBuildGuard.VisualStudio.Services
 			return redacted;
 		}
 
+		/// <summary>
+		/// Replaces all occurrences of <paramref name="oldValue"/> in <paramref name="source"/> with
+		/// <paramref name="newValue"/> using an ordinal case-insensitive comparison.
+		/// </summary>
+		/// <param name="source">The source string to search.</param>
+		/// <param name="oldValue">The substring to replace.</param>
+		/// <param name="newValue">The replacement value.</param>
+		/// <returns>The string with all occurrences replaced.</returns>
 		private static string ReplaceOrdinalIgnoreCase(string source, string oldValue, string newValue)
 		{
 			if (string.IsNullOrEmpty(source) || string.IsNullOrEmpty(oldValue))

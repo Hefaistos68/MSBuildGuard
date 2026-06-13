@@ -7,6 +7,7 @@ import { BuildEnforcer } from './services/buildEnforcer';
 import { SecurityReviewViewProvider } from './views/securityReviewView';
 import { PolicyEditorPanel } from './views/policyEditorView';
 import { TrustStorePanel } from './views/trustStoreView';
+import { OnboardingPanel } from './views/onboardingView';
 
 let workerClient: WorkerClient | null = null;
 let diagnosticPublisher: DiagnosticPublisher | null = null;
@@ -16,8 +17,11 @@ let outputChannel: vscode.OutputChannel | null = null;
 
 let latestReport: ScanReport | null = null;
 let activeReviewProvider: any = null; // Will be set once review view provider is registered
+let extensionContext: vscode.ExtensionContext | null = null;
+const promptedSolutions = new Set<string>();
 
 export function activate(context: vscode.ExtensionContext) {
+    extensionContext = context;
     outputChannel = vscode.window.createOutputChannel('MSBuild Guard Log');
     outputChannel.appendLine('MSBuild Guard extension activating...');
 
@@ -149,6 +153,23 @@ async function runScan(targetUri?: vscode.Uri): Promise<void> {
 
         const report = await workerClient.scanAsync(targetPath, options);
         latestReport = report;
+
+        const isSolution = report.target.targetKind.toLowerCase() === 'solution';
+        const enableOnboarding = config.get<boolean>('enableBaselineOnboarding', true);
+
+        if (isSolution && enableOnboarding && !promptedSolutions.has(targetPath) && extensionContext) {
+            const solutionDir = path.dirname(targetPath);
+            const trustPath = path.join(solutionDir, '.msbuildguard', 'trust.json');
+            const baselinePath = path.join(solutionDir, '.msbuildguard', 'baseline.json');
+
+            if (!fs.existsSync(trustPath) && !fs.existsSync(baselinePath)) {
+                promptedSolutions.add(targetPath);
+                outputChannel.appendLine(`Triggering Trusted Baseline Onboarding for: ${targetPath}`);
+                OnboardingPanel.createOrShow(extensionContext.extensionUri, workerClient, targetPath, options, report);
+                updateStatusBarState('idle');
+                return;
+            }
+        }
 
         outputChannel.appendLine(`Scan completed: ${report.findings.length} findings identified.`);
         

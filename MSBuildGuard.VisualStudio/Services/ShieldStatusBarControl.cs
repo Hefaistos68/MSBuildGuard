@@ -95,6 +95,12 @@ namespace MSBuildGuard.VisualStudio.Services
 			};
 		}
 
+		/// <summary>
+		/// Determines the security level from an optional pre-computed risk score, falling back to the report.
+		/// </summary>
+		/// <param name="report">The current scan report.</param>
+		/// <param name="effectiveRiskScore">Optional trust-adjusted risk score. When provided it takes precedence over the report's recommended action.</param>
+		/// <returns>The <see cref="SecurityLevel"/> that should be displayed.</returns>
 		private static SecurityLevel GetSecurityLevel(ScanReport? report, int? effectiveRiskScore)
 		{
 			if (effectiveRiskScore.HasValue)
@@ -115,6 +121,11 @@ namespace MSBuildGuard.VisualStudio.Services
 			return GetSecurityLevel(report);
 		}
 
+		/// <summary>
+		/// Determines the security level from the report's recommended action.
+		/// </summary>
+		/// <param name="report">The current scan report, or <c>null</c> when no scan has run.</param>
+		/// <returns>The <see cref="SecurityLevel"/> that should be displayed.</returns>
 		private static SecurityLevel GetSecurityLevel(ScanReport? report)
 		{
 			if (report == null)
@@ -135,6 +146,11 @@ namespace MSBuildGuard.VisualStudio.Services
 			return SecurityLevel.Green;
 		}
 
+		/// <summary>
+		/// Handles left mouse button click by opening the Solution Security Review tool window.
+		/// </summary>
+		/// <param name="sender">Event sender.</param>
+		/// <param name="e">Mouse button event arguments.</param>
 		private void OnMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
 		{
 			ThreadHelper.ThrowIfNotOnUIThread();

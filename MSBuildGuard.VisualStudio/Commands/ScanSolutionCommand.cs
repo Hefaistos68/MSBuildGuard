@@ -49,6 +49,11 @@ namespace MSBuildGuard.VisualStudio.Commands
 			_ = new ScanSolutionCommand(package, commandService);
 		}
 
+		/// <summary>
+		/// Updates command visibility and enabled state before the menu is displayed.
+		/// </summary>
+		/// <param name="sender">Event sender.</param>
+		/// <param name="e">Event arguments.</param>
 		private void OnBeforeQueryStatus(object sender, EventArgs e)
 		{
 			ThreadHelper.ThrowIfNotOnUIThread();
