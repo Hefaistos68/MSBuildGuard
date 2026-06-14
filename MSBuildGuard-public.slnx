@@ -16,6 +16,7 @@
     <File Path="MSBuildGuard.VSCode/tsconfig.json" />
   </Folder>
   <Folder Name="/MSBuildGuard.VScode/src/">
+    <File Path="MSBuildGuard.VSCode/README.md" />
     <File Path="MSBuildGuard.VSCode/src/extension.ts" />
   </Folder>
   <Folder Name="/MSBuildGuard.VScode/src/schemas/">
