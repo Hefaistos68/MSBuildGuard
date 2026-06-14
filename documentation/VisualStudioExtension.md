@@ -129,6 +129,9 @@ Visual Studio integration is best-effort pre-build protection in IDE workflows.
 
 ## Screenshots
 
+The onboarding dialog that appears when a new solution is opened, offering to create a trusted baseline from the current scan results.
+![Onboarding Dialog](images/onboarding-dialog.jpg)
+
 
 The main review grid for the current solution, including severity, policy action, trusted status, and the reasoning panel for the selected finding.
 

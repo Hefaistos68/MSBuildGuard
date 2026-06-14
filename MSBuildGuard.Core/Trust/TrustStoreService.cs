@@ -29,6 +29,8 @@ namespace MSBuildGuard.Core.Trust
 			WriteIndented = false
 		};
 
+		private readonly Dictionary<string, string> packageDirectoryHashCache = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
 		/// <summary>
 		/// Loads trust store content from disk.
 		/// </summary>
@@ -686,7 +688,7 @@ namespace MSBuildGuard.Core.Trust
 				return false;
 			}
 
-			var currentHash = CalculatePackageDirectoryHash(packageDir);
+			var currentHash = this.GetCachedPackageDirectoryHash(packageDir);
 
 			if (string.IsNullOrWhiteSpace(currentHash))
 			{
@@ -1232,6 +1234,33 @@ namespace MSBuildGuard.Core.Trust
 			{
 
 				return string.Empty;
+			}
+		}
+
+		/// <summary>
+		/// Gets the cached directory hash for a package directory, calculating it first if not cached.
+		/// </summary>
+		/// <param name="packageDirectoryPath">Path to package directory.</param>
+		/// <returns>The calculated or cached package hash.</returns>
+		private string GetCachedPackageDirectoryHash(string packageDirectoryPath)
+		{
+			if (string.IsNullOrWhiteSpace(packageDirectoryPath))
+			{
+				return string.Empty;
+			}
+
+			lock (this.packageDirectoryHashCache)
+			{
+				if (this.packageDirectoryHashCache.TryGetValue(packageDirectoryPath, out var cachedHash))
+				{
+					return cachedHash;
+				}
+
+				var hash = CalculatePackageDirectoryHash(packageDirectoryPath);
+
+				this.packageDirectoryHashCache[packageDirectoryPath] = hash;
+
+				return hash;
 			}
 		}
 	}

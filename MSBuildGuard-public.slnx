@@ -7,6 +7,7 @@
   </Configurations>
   <Folder Name="/Documentation/">
     <File Path="documentation/VisualStudioExtension.md" />
+    <File Path="MSBuildGuard.VSCode/VScodeExtension.md" />
   </Folder>
   <Folder Name="/MSBuildGuard.VScode/">
     <File Path="MSBuildGuard.VSCode/.vscodeignore" />

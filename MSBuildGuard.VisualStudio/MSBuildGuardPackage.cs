@@ -927,7 +927,9 @@ namespace MSBuildGuard.VisualStudio
 				finding.FilePath.EndsWith(".fsproj", StringComparison.OrdinalIgnoreCase) ||
 				finding.FilePath.EndsWith(".vbproj", StringComparison.OrdinalIgnoreCase))
 			{
-				return Path.GetFullPath(finding.FilePath);
+				return Path.IsPathRooted(finding.FilePath)
+					? Path.GetFullPath(finding.FilePath)
+					: Path.GetFullPath(Path.Combine(Path.GetDirectoryName(solutionPath) ?? string.Empty, finding.FilePath));
 			}
 
 			return null;

@@ -237,7 +237,9 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 
 			if (!string.IsNullOrWhiteSpace(finding.FilePath))
 			{
-				var absoluteFilePath = Path.GetFullPath(finding.FilePath);
+				var absoluteFilePath = Path.IsPathRooted(finding.FilePath)
+					? Path.GetFullPath(finding.FilePath)
+					: Path.GetFullPath(Path.Combine(Path.GetDirectoryName(solutionPath) ?? string.Empty, finding.FilePath));
 
 				if (string.Equals(absoluteFilePath, projectPath, StringComparison.OrdinalIgnoreCase))
 				{

@@ -12,6 +12,7 @@ namespace MSBuildGuard.Core.Tests.Baseline
 	/// Tests for <see cref="BaselineOnboardingService"/>.
 	/// </summary>
 	[TestFixture]
+	[Explicit("Requires internet access and local NuGet package cache.")]
 	public sealed class BaselineOnboardingServiceTests
 	{
 		/// <summary>
@@ -37,7 +38,7 @@ namespace MSBuildGuard.Core.Tests.Baseline
 			result.ShouldNotBeNull();
 
 			// Should contain a package trust recommendation (or signer if local cache exists and it was signed)
-			result.Count.ShouldBeGreaterThanOrEqualTo(0);
+			result.Count.ShouldBeGreaterThan(0);
 
 			if (result.Count > 0)
 			{

@@ -149,7 +149,17 @@ export class BuildEnforcer implements vscode.Disposable {
             if ('args' in execution && Array.isArray(execution.args)) {
                 args = execution.args.map(arg => typeof arg === 'string' ? arg : (arg.value || ''));
             } else if ('commandLine' in execution && typeof execution.commandLine === 'string') {
-                args = execution.commandLine.split(/\s+/);
+                const commandLine = execution.commandLine;
+                const regex = /"[^"\\]*(?:\\.[^"\\]*)*"|'[^'\\]*(?:\\.[^'\\]*)*'|[^\s]+/g;
+                const matches = commandLine.match(regex);
+                if (matches) {
+                    args = matches.map(arg => {
+                        if ((arg.startsWith('"') && arg.endsWith('"')) || (arg.startsWith("'") && arg.endsWith("'"))) {
+                            return arg.slice(1, -1);
+                        }
+                        return arg;
+                    });
+                }
             }
 
             for (const arg of args) {

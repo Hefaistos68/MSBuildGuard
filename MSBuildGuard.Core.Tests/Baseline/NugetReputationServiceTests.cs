@@ -11,6 +11,7 @@ namespace MSBuildGuard.Core.Tests.Baseline
 	/// Tests for <see cref="NugetReputationService"/>.
 	/// </summary>
 	[TestFixture]
+	[Explicit("Requires internet access.")]
 	public sealed class NugetReputationServiceTests
 	{
 		/// <summary>
