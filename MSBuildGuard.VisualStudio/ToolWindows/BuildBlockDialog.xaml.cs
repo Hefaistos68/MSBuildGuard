@@ -24,12 +24,22 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			this.DataContext = viewModel;
 		}
 
+		/// <summary>
+		/// Handles the Proceed button click by setting <see cref="UserChoseToProceed"/> and closing the dialog.
+		/// </summary>
+		/// <param name="sender">Event sender.</param>
+		/// <param name="e">Routed event arguments.</param>
 		private void OnProceedClick(object sender, RoutedEventArgs e)
 		{
 			this.UserChoseToProceed = true;
 			this.Close();
 		}
 
+		/// <summary>
+		/// Handles the Cancel button click by keeping <see cref="UserChoseToProceed"/> as <c>false</c> and closing the dialog.
+		/// </summary>
+		/// <param name="sender">Event sender.</param>
+		/// <param name="e">Routed event arguments.</param>
 		private void OnCancelClick(object sender, RoutedEventArgs e)
 		{
 			this.UserChoseToProceed = false;

@@ -31,6 +31,11 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			this.UpdateTrustedColumnVisibility();
 		}
 
+		/// <summary>
+		/// Handles view model property changes to update column visibility when the filter changes.
+		/// </summary>
+		/// <param name="sender">Event sender.</param>
+		/// <param name="e">Property changed event arguments.</param>
 		private void OnViewModelPropertyChanged(object sender, PropertyChangedEventArgs e)
 		{
 			if (string.Equals(e.PropertyName, nameof(SolutionSecurityReviewViewModel.OnlyUntrustedIssues), StringComparison.Ordinal))
@@ -74,6 +79,11 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			}
 		}
 
+		/// <summary>
+		/// Handles the Edit Policy button click by opening the Policy Editor tool window.
+		/// </summary>
+		/// <param name="sender">Event sender.</param>
+		/// <param name="e">Routed event arguments.</param>
 		private void OnEditPolicyClick(object sender, RoutedEventArgs e)
 		{
 			ThreadHelper.JoinableTaskFactory.RunAsync(async delegate
@@ -85,6 +95,11 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			}).FileAndForget(nameof(SolutionSecurityReviewControl));
 		}
 
+		/// <summary>
+		/// Handles the Rescan button click by triggering a full solution rescan.
+		/// </summary>
+		/// <param name="sender">Event sender.</param>
+		/// <param name="e">Routed event arguments.</param>
 		private void OnRescanClick(object sender, RoutedEventArgs e)
 		{
 			ThreadHelper.JoinableTaskFactory.RunAsync(async delegate
@@ -96,6 +111,11 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			}).FileAndForget(nameof(SolutionSecurityReviewControl));
 		}
 
+		/// <summary>
+		/// Handles double-click on a findings row by navigating to the finding's source location in the editor.
+		/// </summary>
+		/// <param name="sender">Event sender (the findings data grid).</param>
+		/// <param name="e">Mouse button event arguments.</param>
 		private void OnFindingsMouseDoubleClick(object sender, MouseButtonEventArgs e)
 		{
 			ThreadHelper.ThrowIfNotOnUIThread();
@@ -118,6 +138,11 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			FindingNavigationService.Navigate(package, finding.FilePath, finding.Line, 1);
 		}
 
+		/// <summary>
+		/// Handles the Trust Finding button click by adding a fingerprint-based trust decision.
+		/// </summary>
+		/// <param name="sender">Event sender.</param>
+		/// <param name="e">Routed event arguments.</param>
 		private void OnTrustFindingClick(object sender, RoutedEventArgs e)
 		{
 			ThreadHelper.JoinableTaskFactory.RunAsync(async delegate
@@ -136,6 +161,11 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			}).FileAndForget(nameof(SolutionSecurityReviewControl));
 		}
 
+		/// <summary>
+		/// Handles the Remove Trust button click by deleting the trust decision for the selected finding.
+		/// </summary>
+		/// <param name="sender">Event sender.</param>
+		/// <param name="e">Routed event arguments.</param>
 		private void OnRemoveTrustFindingClick(object sender, RoutedEventArgs e)
 		{
 			ThreadHelper.JoinableTaskFactory.RunAsync(async delegate
@@ -153,6 +183,11 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			}).FileAndForget(nameof(SolutionSecurityReviewControl));
 		}
 
+		/// <summary>
+		/// Handles the Trust Assembly button click by opening the Trust Assembly dialog.
+		/// </summary>
+		/// <param name="sender">Event sender.</param>
+		/// <param name="e">Routed event arguments.</param>
 		private void OnTrustAssemblyClick(object sender, RoutedEventArgs e)
 		{
 			ThreadHelper.JoinableTaskFactory.RunAsync(async delegate
@@ -170,6 +205,33 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			}).FileAndForget(nameof(SolutionSecurityReviewControl));
 		}
 
+		/// <summary>
+		/// Handles the Trust Package button click by opening the Trust Package dialog.
+		/// </summary>
+		/// <param name="sender">Event sender.</param>
+		/// <param name="e">Routed event arguments.</param>
+		private void OnTrustPackageClick(object sender, RoutedEventArgs e)
+		{
+			ThreadHelper.JoinableTaskFactory.RunAsync(async delegate
+			{
+				if (this.DataContext is not SolutionSecurityReviewViewModel viewModel ||
+					viewModel.SelectedFinding is not FindingViewModel finding ||
+					!finding.CanTrustPackage ||
+					MSBuildGuardPackage.Instance is not MSBuildGuardPackage package)
+				{
+					return;
+				}
+
+				await new VisualStudioTrustDecisionService().TrustPackageAsync(finding, "Trusted from Solution Security Review");
+				await package.RescanSolutionSecurityReviewAsync();
+			}).FileAndForget(nameof(SolutionSecurityReviewControl));
+		}
+
+		/// <summary>
+		/// Handles the Assembly Information button click by opening the Assembly Information dialog.
+		/// </summary>
+		/// <param name="sender">Event sender.</param>
+		/// <param name="e">Routed event arguments.</param>
 		private void OnAssemblyInformationClick(object sender, RoutedEventArgs e)
 		{
 			if (this.DataContext is not SolutionSecurityReviewViewModel viewModel ||
@@ -198,6 +260,9 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 
 
 
+		/// <summary>
+		/// Applies a descending severity sort to the findings grid collection view.
+		/// </summary>
 		private void ApplyDefaultSeveritySort()
 		{
 			var view = CollectionViewSource.GetDefaultView(this.FindingsGrid.ItemsSource);
@@ -214,6 +279,9 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			}
 		}
 
+		/// <summary>
+		/// Toggles visibility of the Trusted column based on the current filter state.
+		/// </summary>
 		private void UpdateTrustedColumnVisibility()
 		{
 			if (this.DataContext is not SolutionSecurityReviewViewModel viewModel)

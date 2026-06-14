@@ -17,7 +17,10 @@ namespace MSBuildGuard.Core.Trust
 		Assembly,
 
 		/// <summary>Trust granted to all assemblies signed by a specific certificate signer.</summary>
-		Signer
+		Signer,
+
+		/// <summary>Trust granted to a NuGet package based on its directory-level file hash.</summary>
+		Package
 	}
 
 	/// <summary>
@@ -151,6 +154,11 @@ namespace MSBuildGuard.Core.Trust
 				if (string.Equals(this.Scope, "Signer", StringComparison.OrdinalIgnoreCase))
 				{
 					return TrustDecisionScopeKind.Signer;
+				}
+
+				if (string.Equals(this.Scope, "Package", StringComparison.OrdinalIgnoreCase))
+				{
+					return TrustDecisionScopeKind.Package;
 				}
 
 				return TrustDecisionScopeKind.Unknown;

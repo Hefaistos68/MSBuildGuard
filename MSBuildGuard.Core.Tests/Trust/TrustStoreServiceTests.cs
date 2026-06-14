@@ -424,5 +424,122 @@ namespace MSBuildGuard.Core.Tests.Trust
 				}
 			}
 		}
+
+		/// <summary>
+		/// Verifies that package directory hash calculation is deterministic.
+		/// </summary>
+		[Test]
+		public void CalculatePackageDirectoryHash_ShouldBeDeterministic()
+		{
+			var service = new TrustStoreService();
+			var path = Path.Combine(Path.GetTempPath(), $"pkg-deterministic-{Guid.NewGuid():N}");
+
+			try
+			{
+				Directory.CreateDirectory(path);
+
+				var file1 = Path.Combine(path, "a.props");
+				var file2 = Path.Combine(path, "build", "b.targets");
+
+				Directory.CreateDirectory(Path.Combine(path, "build"));
+
+				File.WriteAllText(file1, "content-a");
+				File.WriteAllText(file2, "content-b");
+
+				var hash1 = TrustStoreService.CalculatePackageDirectoryHash(path);
+				var hash2 = TrustStoreService.CalculatePackageDirectoryHash(path);
+
+				hash1.ShouldNotBeEmpty();
+				hash1.ShouldBe(hash2);
+			}
+			finally
+			{
+				if (Directory.Exists(path))
+				{
+					Directory.Delete(path, true);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Verifies that modifying a file in a package directory alters the calculated hash.
+		/// </summary>
+		[Test]
+		public void CalculatePackageDirectoryHash_ShouldChange_WhenFileIsModified()
+		{
+			var service = new TrustStoreService();
+			var path = Path.Combine(Path.GetTempPath(), $"pkg-modify-{Guid.NewGuid():N}");
+
+			try
+			{
+				Directory.CreateDirectory(path);
+
+				var file1 = Path.Combine(path, "a.props");
+
+				File.WriteAllText(file1, "content-a");
+
+				var originalHash = TrustStoreService.CalculatePackageDirectoryHash(path);
+
+				File.WriteAllText(file1, "content-modified");
+
+				var modifiedHash = TrustStoreService.CalculatePackageDirectoryHash(path);
+
+				originalHash.ShouldNotBe(modifiedHash);
+			}
+			finally
+			{
+				if (Directory.Exists(path))
+				{
+					Directory.Delete(path, true);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Verifies that package trust decisions approve or reject matching NuGet packages.
+		/// </summary>
+		[Test]
+		public void IsFindingApprovedByPackage_ShouldApproveOrRejectMatchingPackages()
+		{
+			var service = new TrustStoreService();
+			var store = new TrustStoreDocument();
+			var packageId = "NUnit";
+			var packageVersion = "4.6.0";
+			var userHome = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+			var packageDir = Path.Combine(userHome, ".nuget", "packages", packageId.ToLowerInvariant(), packageVersion.ToLowerInvariant());
+
+			if (!Directory.Exists(packageDir))
+			{
+				Assert.Ignore("NUnit package directory not found in global cache.");
+			}
+
+			var expectedHash = TrustStoreService.CalculatePackageDirectoryHash(packageDir);
+
+			store.Decisions.Add(new TrustDecisionEntry
+			{
+				DecisionId     = Guid.NewGuid().ToString("N"),
+				Scope          = "Package",
+				SubjectHash    = expectedHash,
+				AssemblySigner = $"{packageId}@{packageVersion}".ToLowerInvariant(),
+				Decision       = "Trust",
+				CreatedAtUtc   = DateTimeOffset.UtcNow
+			});
+
+			service.IsFindingApprovedByPackage(store, packageId, packageVersion).ShouldBeTrue();
+
+			var otherStore = new TrustStoreDocument();
+
+			otherStore.Decisions.Add(new TrustDecisionEntry
+			{
+				DecisionId     = Guid.NewGuid().ToString("N"),
+				Scope          = "Package",
+				SubjectHash    = "wrong-hash",
+				AssemblySigner = $"{packageId}@{packageVersion}".ToLowerInvariant(),
+				Decision       = "Trust",
+				CreatedAtUtc   = DateTimeOffset.UtcNow
+			});
+
+			service.IsFindingApprovedByPackage(otherStore, packageId, packageVersion).ShouldBeFalse();
+		}
 	}
 }

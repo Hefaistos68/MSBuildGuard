@@ -51,6 +51,17 @@ MSBuild Guard for VS Code provides cross-platform inline project risk visibility
 - **Rescanning on Creation**: Upon successful creation, the extension will automatically rescan the workspace to apply the baseline, which immediately hides baseline-matching findings and establishes a trusted baseline state.
 - **Confirmation Overwrites**: If a baseline already exists at the target location, the extension will prompt you to confirm before overwriting the existing baseline record.
 
+## Trusted Baseline Onboarding
+
+When you open a workspace containing a solution that has never been scanned by MSBuild Guard before (no `.msbuildguard/trust.json` and no `.msbuildguard/baseline.json` files present), MSBuild Guard will launch a beautiful **Trusted Baseline Onboarding** dashboard to guide you through establishing a clean security baseline:
+- **Intelligent Trust Suggestions**: MSBuild Guard scans the solution and suggests pre-approving high-reputation NuGet packages (verified on NuGet.org or signed by Microsoft) and valid Authenticode-signed assemblies.
+- **Opt-in Review for Unverified Code**: If packages do not have a verified publisher or a valid signature, they are displayed as **unselected** suggestions. This alerts you to review them manually instead of silently ignoring them or auto-trusting unverified dependencies.
+- **Setup Actions**:
+  - **Apply Setup**: Approves the selected packages/signers/assemblies in the solution's `trust.json` store.
+  - **Create baseline for remaining findings**: Automatically saves any unchecked issues into a baseline file so that they don't block subsequent builds, keeping active development clean.
+  - **Do not scan again**: Writes a `.msbuildguard/noscan` marker that completely bypasses scanning for this workspace on future loads.
+  - **Skip**: Closes the wizard. If "Don't show again" is toggled, it creates an empty `trust.json` store to mark the solution as "seen" so you won't be prompted again.
+
 ## Integration model
 
 The extension spawns `MSBuildGuard.Worker.dll` as a persistent background worker process and communicates with it using a JSON-RPC channel via standard input/output streams. The scanner parses and evaluates build assets, MSBuild logic, and certificate signatures directly to protect code *before* a full compilation or project evaluation is executed.
@@ -77,6 +88,9 @@ The extension spawns `MSBuildGuard.Worker.dll` as a persistent background worker
 
 The extension contributes several workspace and global configurations accessible via `File` → `Preferences` → `Settings` (under the `MSBuild Guard` section):
 
+- **Enable Baseline Onboarding** (`msbuildguard.enableBaselineOnboarding`):
+  - *Default*: `true`
+  - *Description*: Intelligently suggests baseline trust settings when loading a new workspace for the first time.
 - **Auto-open Security Review** (`msbuildguard.autoOpenSecurityReview`):
   - *Default*: `true`
   - *Description*: Automatically opens the Security Review pane when a scan requires user attention.

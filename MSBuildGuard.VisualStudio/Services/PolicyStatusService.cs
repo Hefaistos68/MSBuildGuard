@@ -62,6 +62,11 @@ namespace MSBuildGuard.VisualStudio.Services
 			}
 		}
 
+		/// <summary>
+		/// Determines whether the given path refers to a project file (.csproj, .vbproj, or .fsproj).
+		/// </summary>
+		/// <param name="path">The path to inspect.</param>
+		/// <returns><c>true</c> when the path has a recognized project file extension; otherwise <c>false</c>.</returns>
 		private static bool IsProjectFilePath(string? path)
 		{
 			if (string.IsNullOrWhiteSpace(path))

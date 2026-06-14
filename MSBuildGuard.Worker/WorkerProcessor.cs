@@ -70,6 +70,10 @@ namespace MSBuildGuard.Worker
 					case WorkerProtocol.MethodScan:
 						return await HandleScanAsync(requestId, request.Payload!, cancellationToken).ConfigureAwait(false);
 
+					case WorkerProtocol.MethodGetOnboardingSuggestions:
+
+						return await HandleGetOnboardingSuggestionsAsync(requestId, request.Payload!, cancellationToken).ConfigureAwait(false);
+
 					case WorkerProtocol.MethodCreateBaseline:
 						return await HandleCreateBaselineAsync(requestId, request.Payload!, cancellationToken).ConfigureAwait(false);
 
@@ -131,6 +135,17 @@ namespace MSBuildGuard.Worker
 			}
 
 			var repositoryRoot = Directory.Exists(targetPath) ? targetPath : (Path.GetDirectoryName(targetPath) ?? string.Empty);
+			var noscanPath = Path.Combine(repositoryRoot, ".msbuildguard", "noscan");
+
+			if (File.Exists(noscanPath))
+			{
+				var emptyReport = new ScanReport();
+
+				emptyReport.Target.TargetPath = targetPath;
+				emptyReport.Target.TargetKind = targetPath.EndsWith(".sln", StringComparison.OrdinalIgnoreCase) || targetPath.EndsWith(".slnx", StringComparison.OrdinalIgnoreCase) ? TargetKind.Solution : TargetKind.File;
+
+				return WorkerResponse.SuccessResponse(id, emptyReport);
+			}
 
 			var scanner = new MsBuildScanner(
 				fileSystem: null,
@@ -194,6 +209,39 @@ namespace MSBuildGuard.Worker
 		}
 
 		/// <summary>
+		/// Handles generating onboarding suggestions for a solution or project.
+		/// </summary>
+		/// <param name="id">The correlation request identifier.</param>
+		/// <param name="payload">The request payload containing targetPath.</param>
+		/// <param name="cancellationToken">Cancellation token for the operation.</param>
+		/// <returns>A task returning the onboarding suggestions.</returns>
+		private static async Task<WorkerResponse> HandleGetOnboardingSuggestionsAsync(string id, RequestPayload payload, CancellationToken cancellationToken)
+		{
+			var targetPath = Path.GetFullPath(payload.TargetPath);
+
+			if (!File.Exists(targetPath) && !Directory.Exists(targetPath))
+			{
+				return CreateErrorResponse(id, WorkerErrorCodes.InvalidArgument, $"Target path '{payload.TargetPath}' does not exist.");
+			}
+
+			var scanner = new MsBuildScanner(
+				fileSystem: null,
+				activityLogger: null,
+				msBuildExtensions: payload.FileTypesToScan,
+				processCreationIndicators: payload.ProcessCreationIndicators,
+				reflectionInteropIndicators: payload.ReflectionInteropIndicators,
+				additionalBlockedAssemblies: payload.AdditionalBlockedAssemblies);
+
+			var report = await Task.Run(() => scanner.Scan(targetPath, cancellationToken), cancellationToken).ConfigureAwait(false);
+
+			var onboardingService = new BaselineOnboardingService();
+
+			var suggestions = await onboardingService.GenerateSuggestionsAsync(report, cancellationToken).ConfigureAwait(false);
+
+			return WorkerResponse.SuccessResponse(id, suggestions);
+		}
+
+		/// <summary>
 		/// Handles trusted baseline creation, runs project scan, constructs a baseline model, and saves it to the output destination.
 		/// </summary>
 		/// <param name="id">The correlation request identifier.</param>
@@ -227,10 +275,63 @@ namespace MSBuildGuard.Worker
 				additionalBlockedAssemblies: payload.AdditionalBlockedAssemblies);
 
 			var report = await Task.Run(() => scanner.Scan(targetPath, cancellationToken), cancellationToken).ConfigureAwait(false);
+
 			var policy = new PolicyStatusService().GetEffectivePolicy(repositoryRoot, targetPath);
+
+			var trustService = new TrustStoreService();
+
+			var userTrustPath = trustService.GetDefaultUserTrustPath();
+
+			var solutionPath = targetPath.EndsWith(".sln", StringComparison.OrdinalIgnoreCase) || targetPath.EndsWith(".slnx", StringComparison.OrdinalIgnoreCase) ? targetPath : null;
+
+			var projectPath = targetPath.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase) || targetPath.EndsWith(".fsproj", StringComparison.OrdinalIgnoreCase) || targetPath.EndsWith(".vbproj", StringComparison.OrdinalIgnoreCase) ? targetPath : null;
+
+			var trustStore = trustService.LoadMergedTrustStore(userTrustPath, solutionPath, projectPath);
+
+			var userTrustStore = trustService.Load(userTrustPath);
+
+			var solutionTrustStore = !string.IsNullOrWhiteSpace(solutionPath) ? trustService.Load(trustService.GetSolutionTrustPath(solutionPath)) : new TrustStoreDocument();
+
+			var projectTrustStores = new Dictionary<string, TrustStoreDocument>(StringComparer.OrdinalIgnoreCase);
+
+			foreach (var file in report.FilesScanned)
+			{
+				if (file.Path.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase) ||
+					file.Path.EndsWith(".fsproj", StringComparison.OrdinalIgnoreCase) ||
+					file.Path.EndsWith(".vbproj", StringComparison.OrdinalIgnoreCase))
+				{
+					projectTrustStores[file.Path] = trustService.Load(trustService.GetProjectTrustPath(file.Path));
+				}
+			}
+
+			EvaluateFindingsTrust(report, trustStore, userTrustStore, solutionTrustStore, projectTrustStores);
+
+			var filteredReport = new ScanReport
+			{
+				ScannerVersion = report.ScannerVersion,
+				ReportVersion = report.ReportVersion,
+				Target = report.Target,
+				PolicyProfile = report.PolicyProfile
+			};
+
+			foreach (var file in report.FilesScanned)
+			{
+				filteredReport.FilesScanned.Add(file);
+			}
+
+			foreach (var finding in report.Findings)
+			{
+				if (!finding.IsTrusted)
+				{
+					filteredReport.Findings.Add(finding);
+				}
+			}
+
 			var baselineService = new BaselineService();
+
 			var reviewer = payload.ReviewerIdentity ?? Environment.UserName;
-			var baseline = baselineService.CreateFromReport(report, policy.Version.ToString(), reviewer);
+
+			var baseline = baselineService.CreateFromReport(filteredReport, policy.Version.ToString(), reviewer);
 
 			baselineService.Save(outputPath, baseline);
 
@@ -337,6 +438,34 @@ namespace MSBuildGuard.Worker
 					payload.AssemblySigner ?? string.Empty,
 					payload.AssemblyIssuer ?? string.Empty,
 					payload.AssemblySerialNumber ?? string.Empty,
+					payload.Reason ?? "Trusted via VS Code Security Review",
+					userSid,
+					payload.ExpiresAtUtc);
+			}
+			else if (string.Equals(scope, "Package", StringComparison.OrdinalIgnoreCase))
+			{
+				var packageId = payload.AssemblyName ?? string.Empty;
+				var packageVersion = payload.AssemblyVersion ?? string.Empty;
+				var userHome = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+				var packageDir = Path.Combine(userHome, ".nuget", "packages", packageId.ToLowerInvariant(), packageVersion.ToLowerInvariant());
+
+				if (!Directory.Exists(packageDir))
+				{
+					return CreateErrorResponse(id, WorkerErrorCodes.InvalidArgument, $"NuGet package folder does not exist at '{packageDir}'.");
+				}
+
+				var packageHash = TrustStoreService.CalculatePackageDirectoryHash(packageDir);
+
+				if (string.IsNullOrWhiteSpace(packageHash))
+				{
+					return CreateErrorResponse(id, WorkerErrorCodes.AnalysisFailed, "Failed to compute package directory hash.");
+				}
+
+				trustStoreService.AddPackageTrust(
+					trustStorePath,
+					packageId,
+					packageVersion,
+					packageHash,
 					payload.Reason ?? "Trusted via VS Code Security Review",
 					userSid,
 					payload.ExpiresAtUtc);
@@ -718,7 +847,30 @@ namespace MSBuildGuard.Worker
 					}
 				}
 
-				var isEffectivelyTrusted = isFingerprintTrusted || isApprovedByAssembly || isApprovedBySigner;
+				var isApprovedByPackage = false;
+
+				if (!string.IsNullOrWhiteSpace(finding.PackageId) && !string.IsNullOrWhiteSpace(finding.PackageVersion))
+				{
+					if (trustStoreService.IsFindingApprovedByPackage(userTrustStore, finding.PackageId, finding.PackageVersion) ||
+						trustStoreService.IsFindingApprovedByPackage(solutionTrustStore, finding.PackageId, finding.PackageVersion))
+					{
+						isApprovedByPackage = true;
+					}
+					else
+					{
+						foreach (var projStore in projectTrustStores.Values)
+						{
+							if (trustStoreService.IsFindingApprovedByPackage(projStore, finding.PackageId, finding.PackageVersion))
+							{
+								isApprovedByPackage = true;
+
+								break;
+							}
+						}
+					}
+				}
+
+				var isEffectivelyTrusted = isFingerprintTrusted || isApprovedByAssembly || isApprovedBySigner || isApprovedByPackage;
 				finding.IsTrusted        = isEffectivelyTrusted;
 
 				if (!isEffectivelyTrusted)

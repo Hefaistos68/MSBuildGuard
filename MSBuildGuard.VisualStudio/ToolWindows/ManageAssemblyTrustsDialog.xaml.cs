@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Linq;
 using System.Reflection;
 using System.Security.Principal;
@@ -20,13 +19,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 	/// </summary>
 	public partial class ManageAssemblyTrustsDialog : DialogWindow
 	{
-		private readonly string solutionPath;
-		private readonly string projectPath;
-		private readonly ObservableCollection<SolutionProjectOptionViewModel> projectOptions = new();
-		private ObservableCollection<AssemblyTrustItem> trustedAssemblies = new();
-		private string trustStorePath = string.Empty;
-		private bool hasChanges = false;
-		private bool hasMovedTrust = false;
+		private readonly ManageAssemblyTrustsHelper helper;
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="ManageAssemblyTrustsDialog"/> class.
@@ -35,9 +28,8 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		/// <param name="projectPath">Current project path.</param>
 		public ManageAssemblyTrustsDialog(string solutionPath = "", string projectPath = "")
 		{
-			this.solutionPath = solutionPath ?? string.Empty;
-			this.projectPath  = projectPath ?? string.Empty;
-			InitializeComponent();
+			this.helper = new ManageAssemblyTrustsHelper(solutionPath, projectPath);
+			this.InitializeComponent();
 			MSBuildGuard.VisualStudio.Services.ThemeHelper.ApplyTitleBarTheme(this);
 		}
 
@@ -48,98 +40,93 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		{
 			ThreadHelper.ThrowIfNotOnUIThread();
 
-			InitializeProjectOptions();
-			InitializeScopeOptions();
-			LoadTrustedAssemblies();
-			TrustedAssembliesGrid.ItemsSource = trustedAssemblies;
-			TrustedAssembliesGrid.SelectionChanged += (s, args) => UpdateRemoveButtonState();
-		}
-
-		private void TrustedAssembliesGrid_Loaded(object sender, RoutedEventArgs e)
-		{
-			if (TrustedAssembliesGrid.ContextMenu != null)
-			{
-				TrustedAssembliesGrid.ContextMenu.Opened -= TrustedAssembliesContextMenu_Opened;
-				TrustedAssembliesGrid.ContextMenu.Opened += TrustedAssembliesContextMenu_Opened;
-			}
-		}
-
-		private void InitializeScopeOptions()
-		{
-			var scopes = new List<TrustScope> { TrustScope.User };
-
-			if (!string.IsNullOrWhiteSpace(this.solutionPath))
-			{
-				scopes.Add(TrustScope.Solution);
-			}
-
-			if (projectOptions.Count > 0)
-			{
-				scopes.Add(TrustScope.Project);
-			}
-
-			ScopeComboBox.ItemsSource = scopes;
-			ScopeComboBox.SelectedItem = TrustScope.User;
-			ProjectScopeComboBox.ItemsSource = projectOptions;
-
-			if (projectOptions.Count > 0)
-			{
-				var preferred = projectOptions.FirstOrDefault(option => string.Equals(option.Path, this.projectPath, StringComparison.OrdinalIgnoreCase));
-				ProjectScopeComboBox.SelectedItem = preferred ?? projectOptions.First();
-			}
-		}
-
-		private void InitializeProjectOptions()
-		{
-			ThreadHelper.ThrowIfNotOnUIThread();
-
-			projectOptions.Clear();
-
-			if (string.IsNullOrWhiteSpace(this.solutionPath))
-			{
-				return;
-			}
+			IReadOnlyList<string> loadedProjectPaths = Array.Empty<string>();
 
 			try
 			{
-				var loadedPaths = SolutionExplorerProjectDiscoveryService.GetLoadedProjectPaths();
-
-				foreach (var loadedPath in loadedPaths.Where(path => !string.IsNullOrWhiteSpace(path)).Distinct(StringComparer.OrdinalIgnoreCase))
-				{
-					projectOptions.Add(new SolutionProjectOptionViewModel
-					{
-						Name = System.IO.Path.GetFileNameWithoutExtension(loadedPath),
-						Path = loadedPath
-					});
-				}
+				loadedProjectPaths = SolutionExplorerProjectDiscoveryService.GetLoadedProjectPaths();
 			}
 			catch
 			{
 				// Keep project selector empty when project discovery is unavailable.
 			}
+
+			this.helper.InitializeProjectOptions(loadedProjectPaths);
+			this.InitializeScopeOptions();
+			this.LoadTrustedAssemblies();
+
+			TrustedAssembliesGrid.ItemsSource = this.helper.TrustedAssemblies;
+			TrustedAssembliesGrid.SelectionChanged += (s, args) => this.UpdateRemoveButtonState();
 		}
 
-		private void ScopeComboBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+		/// <summary>
+		/// Wires context menu open handlers when the trusted assemblies grid is loaded.
+		/// </summary>
+		private void TrustedAssembliesGrid_Loaded(object sender, RoutedEventArgs e)
 		{
-			if (!IsLoaded)
+			if (TrustedAssembliesGrid.ContextMenu != null)
+			{
+				TrustedAssembliesGrid.ContextMenu.Opened -= this.TrustedAssembliesContextMenu_Opened;
+				TrustedAssembliesGrid.ContextMenu.Opened += this.TrustedAssembliesContextMenu_Opened;
+			}
+		}
+
+		/// <summary>
+		/// Initializes available trust scopes and related project selector state.
+		/// </summary>
+		private void InitializeScopeOptions()
+		{
+			var scopes = new List<TrustScope> { TrustScope.User };
+
+			if (!string.IsNullOrWhiteSpace(this.helper.SolutionPath))
+			{
+				scopes.Add(TrustScope.Solution);
+			}
+
+			if (this.helper.ProjectOptions.Count > 0)
+			{
+				scopes.Add(TrustScope.Project);
+			}
+
+			ScopeComboBox.ItemsSource  = scopes;
+			ScopeComboBox.SelectedItem = TrustScope.User;
+			ProjectScopeComboBox.ItemsSource = this.helper.ProjectOptions;
+
+			if (this.helper.ProjectOptions.Count > 0)
+			{
+				var preferred = this.helper.ProjectOptions.FirstOrDefault(option => string.Equals(option.Path, this.helper.ProjectPath, StringComparison.OrdinalIgnoreCase));
+
+				ProjectScopeComboBox.SelectedItem = preferred ?? this.helper.ProjectOptions.First();
+			}
+		}
+
+		/// <summary>
+		/// Handles scope selection changes and reloads assembly trusts for the selected scope.
+		/// </summary>
+		private void ScopeComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+		{
+			if (!this.IsLoaded)
 			{
 				return;
 			}
 
-			ProjectSelectorPanel.Visibility = GetSelectedScope() == TrustScope.Project ? Visibility.Visible : Visibility.Collapsed;
-			hasChanges = false;
-			LoadTrustedAssemblies();
+			ProjectSelectorPanel.Visibility = this.GetSelectedScope() == TrustScope.Project ? Visibility.Visible : Visibility.Collapsed;
+			this.helper.ClearChanges();
+			this.LoadTrustedAssemblies();
 		}
 
+		/// <summary>
+		/// Handles project selection changes for project-scoped trust management.
+		/// </summary>
 		private void ProjectScopeComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
 		{
-			if (!IsLoaded || GetSelectedScope() != TrustScope.Project)
+			if (!this.IsLoaded || this.GetSelectedScope() != TrustScope.Project)
 			{
 				return;
 			}
 
-			hasChanges = false;
-			LoadTrustedAssemblies();
+			this.helper.ClearChanges();
+			this.LoadTrustedAssemblies();
 		}
 
 		/// <summary>
@@ -147,99 +134,14 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		/// </summary>
 		private void LoadTrustedAssemblies()
 		{
-			trustedAssemblies.Clear();
-
 			try
 			{
-				var trustStoreService = new TrustStoreService();
-				trustStorePath = ResolveTrustStorePath(trustStoreService, GetSelectedScope(), this.solutionPath, GetSelectedProjectPathForScope());
-
-				if (!System.IO.File.Exists(trustStorePath))
-				{
-					// Trust store doesn't exist yet - that's fine, just empty
-					return;
-				}
-
-				var document = trustStoreService.Load(trustStorePath);
-
-				if (document?.Decisions == null || document.Decisions.Count == 0)
-				{
-					// No decisions in store - that's fine, just empty
-					return;
-				}
-
-				// Debug: Check what scopes exist in the store
-				var allScopes = document.Decisions.Select(d => d.Scope).Distinct().ToList();
-
-				var assemblyTrusts = document.Decisions
-						.Where(d => d.ScopeKind == TrustDecisionScopeKind.Assembly || 
-									string.Equals(d.Scope, "Assembly", StringComparison.OrdinalIgnoreCase))
-						.GroupBy(d => d.SubjectHash)
-						.Select(g =>
-						{
-							var signer      = g.Select(item => item.AssemblySigner).FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)) ?? string.Empty;
-							var issuer      = g.Select(item => item.AssemblyIssuer).FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)) ?? string.Empty;
-							var subjectName = g.Select(item => item.AssemblySubject).FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)) ?? string.Empty;
-
-							// If signature data was never saved (e.g. trust created before the fix),
-							// resolve the assembly from the NuGet cache and re-read it now.
-							if (string.IsNullOrWhiteSpace(signer) && string.IsNullOrWhiteSpace(issuer))
-							{
-								var name    = ExtractAssemblyName(g.Key);
-								var version = ExtractAssemblyVersion(g.Key);
-								var dllPath = AssemblySignatureService.ResolveAssemblyFilePathFromPackageId(name, version);
-
-								if (!string.IsNullOrWhiteSpace(dllPath))
-								{
-									var sig = new AssemblySignatureService().ReadSignature(dllPath);
-									signer      = sig.Signer;
-									issuer      = sig.Issuer;
-									subjectName = sig.Subject;
-								}
-							}
-
-							return new AssemblyTrustItem
-							{
-								Name        = ExtractAssemblyName(g.Key),
-								Version     = ExtractAssemblyVersion(g.Key),
-								Signer      = signer,
-								Issuer      = issuer,
-								SubjectName = subjectName,
-								Reason      = g.FirstOrDefault()?.Reason ?? string.Empty,
-								Subject     = g.Key
-							};
-						})
-					.OrderBy(a => a.Name)
-					.ThenBy(a => a.Version)
-					.ToList();
-
-				foreach (var trust in assemblyTrusts)
-				{
-					trustedAssemblies.Add(trust);
-				}
+				this.helper.LoadTrustedAssemblies(this.GetSelectedScope(), this.GetSelectedProjectPathForScope());
 			}
 			catch (Exception ex)
 			{
 				MessageBox.Show($"Error loading trusted assemblies: {ex.Message}", "Load Error", MessageBoxButton.OK, MessageBoxImage.Error);
 			}
-		}
-
-		/// <summary>
-		/// Extracts the assembly name from the subject identifier (name@version format).
-		/// </summary>
-		private static string ExtractAssemblyName(string subject)
-		{
-			var parts = subject.Split('@');
-			return parts.Length > 0 ? parts[0] : subject;
-		}
-
-		/// <summary>
-		/// Extracts the assembly version from the subject identifier (name@version format).
-		/// </summary>
-		private static string ExtractAssemblyVersion(string subject)
-		{
-			var parts = subject.Split('@');
-			return parts.Length > 1 ? parts[1] : string.Empty;
 		}
 
 		/// <summary>
@@ -255,7 +157,6 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		/// </summary>
 		private void AddButton_Click(object sender, RoutedEventArgs e)
 		{
-			// Prompt user to select an assembly file
 			var openFileDialog = new OpenFileDialog
 			{
 				Title       = "Select Assembly File",
@@ -268,16 +169,15 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				return;
 			}
 
-			var assemblyPath = openFileDialog.FileName;
-
-			// Extract assembly information from the selected file
+			var assemblyPath     = openFileDialog.FileName;
 			string assemblyName;
 			string assemblyVersion;
-			var signature = new AssemblySignatureService().ReadSignature(assemblyPath);
+			var signature        = new AssemblySignatureService().ReadSignature(assemblyPath);
 
 			try
 			{
 				var assemblyName_obj = AssemblyName.GetAssemblyName(assemblyPath);
+
 				assemblyName    = assemblyName_obj.Name ?? string.Empty;
 				assemblyVersion = assemblyName_obj.Version?.ToString() ?? "Unknown";
 			}
@@ -288,6 +188,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 					"Error Reading Assembly",
 					MessageBoxButton.OK,
 					MessageBoxImage.Error);
+
 				return;
 			}
 
@@ -298,22 +199,22 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 					"Invalid Assembly",
 					MessageBoxButton.OK,
 					MessageBoxImage.Warning);
+
 				return;
 			}
 
-			// Show trust confirmation dialog
 			var trustDialog = new TrustAssemblyDialog
 			{
-				AssemblyName           = assemblyName,
-				AssemblyVersion        = assemblyVersion,
-				AssemblyPath           = assemblyPath,
-				AssemblySigner         = signature.Signer,
-				AssemblyIssuer         = signature.Issuer,
-				AssemblySubject        = signature.Subject,
-				SolutionPath           = this.solutionPath,
-				ProjectPath            = this.projectPath,
-				Owner                  = this,
-				WindowStartupLocation  = WindowStartupLocation.CenterOwner
+				AssemblyName          = assemblyName,
+				AssemblyVersion       = assemblyVersion,
+				AssemblyPath          = assemblyPath,
+				AssemblySigner        = signature.Signer,
+				AssemblyIssuer        = signature.Issuer,
+				AssemblySubject       = signature.Subject,
+				SolutionPath          = this.helper.SolutionPath,
+				ProjectPath           = this.helper.ProjectPath,
+				Owner                 = this,
+				WindowStartupLocation = WindowStartupLocation.CenterOwner
 			};
 
 			var result = trustDialog.ShowDialog();
@@ -323,7 +224,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				return;
 			}
 
-			var existingTrust = trustedAssemblies.FirstOrDefault(a => a.Name == assemblyName && a.Version == assemblyVersion);
+			var existingTrust = this.helper.TrustedAssemblies.FirstOrDefault(a => a.Name == assemblyName && a.Version == assemblyVersion);
 
 			if (existingTrust != null)
 			{
@@ -332,22 +233,17 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 					"Duplicate",
 					MessageBoxButton.OK,
 					MessageBoxImage.Information);
+
 				return;
 			}
 
-			var newTrust = new AssemblyTrustItem
-			{
-				Name        = assemblyName,
-				Version     = assemblyVersion,
-				Signer      = trustDialog.AssemblySigner,
-				Issuer      = trustDialog.AssemblyIssuer,
-				SubjectName = trustDialog.AssemblySubject,
-				Reason      = trustDialog.TrustReason,
-				Subject     = $"{assemblyName}@{assemblyVersion}"
-			};
-
-			trustedAssemblies.Add(newTrust);
-			hasChanges = true;
+			this.helper.AddTrustedAssembly(
+				assemblyName,
+				assemblyVersion,
+				trustDialog.AssemblySigner,
+				trustDialog.AssemblyIssuer,
+				trustDialog.AssemblySubject,
+				trustDialog.TrustReason);
 		}
 
 		/// <summary>
@@ -371,11 +267,13 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				return;
 			}
 
-			trustedAssemblies.Remove(selectedTrust);
-			hasChanges = true;
-			UpdateRemoveButtonState();
+			this.helper.RemoveTrustedAssembly(selectedTrust);
+			this.UpdateRemoveButtonState();
 		}
 
+		/// <summary>
+		/// Triggers scope relocation from context menu.
+		/// </summary>
 		private void MoveTrustToScopeMenuItem_Click(object sender, RoutedEventArgs e)
 		{
 			if (sender is not MenuItem menuItem || menuItem.Tag is not string targetScopeText || !Enum.TryParse(targetScopeText, out TrustScope targetScope))
@@ -388,9 +286,12 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				return;
 			}
 
-			MoveTrustToScope(selectedTrust, targetScope, this.projectPath);
+			this.MoveTrustToScope(selectedTrust, targetScope, this.helper.ProjectPath);
 		}
 
+		/// <summary>
+		/// Triggers project scope relocation from context menu.
+		/// </summary>
 		private void MoveTrustToProjectScopeMenuItem_Click(object sender, RoutedEventArgs e)
 		{
 			if (sender is not MenuItem menuItem || menuItem.Tag is not string targetProjectPath || string.IsNullOrWhiteSpace(targetProjectPath))
@@ -403,9 +304,12 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				return;
 			}
 
-			MoveTrustToScope(selectedTrust, TrustScope.Project, targetProjectPath);
+			this.MoveTrustToScope(selectedTrust, TrustScope.Project, targetProjectPath);
 		}
 
+		/// <summary>
+		/// Configures context menu command state before it opens.
+		/// </summary>
 		private void TrustedAssembliesContextMenu_Opened(object sender, RoutedEventArgs e)
 		{
 			if (sender is not ContextMenu contextMenu)
@@ -419,98 +323,50 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			{
 				if (item.Header is string header && header.Contains("User", StringComparison.OrdinalIgnoreCase))
 				{
-					item.IsEnabled = hasSelection && GetSelectedScope() != TrustScope.User;
+					item.IsEnabled = hasSelection && this.GetSelectedScope() != TrustScope.User;
 				}
 				else if (item.Header is string solutionHeader && solutionHeader.Contains("Solution", StringComparison.OrdinalIgnoreCase))
 				{
-					item.IsEnabled = hasSelection && !string.IsNullOrWhiteSpace(this.solutionPath) && GetSelectedScope() != TrustScope.Solution;
+					item.IsEnabled = hasSelection && !string.IsNullOrWhiteSpace(this.helper.SolutionPath) && this.GetSelectedScope() != TrustScope.Solution;
 				}
 				else
 				{
-					item.IsEnabled = hasSelection && projectOptions.Count > 0;
+					item.IsEnabled = hasSelection && this.helper.ProjectOptions.Count > 0;
 				}
 			}
 		}
 
+		/// <summary>
+		/// Relocates a trust decision from the active scope to the target scope.
+		/// </summary>
 		private void MoveTrustToScope(AssemblyTrustItem selectedTrust, TrustScope targetScope, string targetProjectPath)
 		{
-			var sourceScope = GetSelectedScope();
+			var sourceScope = this.GetSelectedScope();
 
 			if (sourceScope == targetScope)
 			{
 				return;
 			}
 
-			if (targetScope == TrustScope.Solution && string.IsNullOrWhiteSpace(this.solutionPath))
+			if (targetScope == TrustScope.Solution && string.IsNullOrWhiteSpace(this.helper.SolutionPath))
 			{
 				MessageBox.Show("Solution scope is not available in this context.", "Move Trust", MessageBoxButton.OK, MessageBoxImage.Information);
+
 				return;
 			}
 
 			if (targetScope == TrustScope.Project && string.IsNullOrWhiteSpace(targetProjectPath))
 			{
 				MessageBox.Show("Project scope is not available in this context.", "Move Trust", MessageBoxButton.OK, MessageBoxImage.Information);
+
 				return;
 			}
 
 			try
 			{
-				var trustStoreService = new TrustStoreService();
-				var sourceProjectPath = sourceScope == TrustScope.Project ? GetSelectedProjectPathForScope() : this.projectPath;
-				var selectedTargetProjectPath = targetScope == TrustScope.Project ? targetProjectPath : this.projectPath;
-				var sourcePath = ResolveTrustStorePath(trustStoreService, sourceScope, this.solutionPath, sourceProjectPath);
-				var targetPath = ResolveTrustStorePath(trustStoreService, targetScope, this.solutionPath, selectedTargetProjectPath);
 				var userSid = WindowsIdentity.GetCurrent()?.User?.Value ?? "Unknown";
 
-				if (string.Equals(sourcePath, targetPath, StringComparison.OrdinalIgnoreCase))
-				{
-					return;
-				}
-
-				var sourceStore = trustStoreService.Load(sourcePath);
-				var sourceEntries = sourceStore.Decisions
-					.Where(d => (d.ScopeKind == TrustDecisionScopeKind.Assembly || string.Equals(d.Scope, "Assembly", StringComparison.OrdinalIgnoreCase)) && string.Equals(d.SubjectHash, selectedTrust.Subject, StringComparison.OrdinalIgnoreCase))
-					.ToList();
-
-				if (sourceEntries.Count == 0)
-				{
-					return;
-				}
-
-				var moveReason = $"Moved assembly trust from {sourceScope} to {targetScope}";
-
-				foreach (var sourceEntry in sourceEntries)
-				{
-					var movedEntryReason = string.IsNullOrWhiteSpace(sourceEntry.Reason)
-						? moveReason
-						: $"{sourceEntry.Reason} ({moveReason})";
-
-					trustStoreService.AddDecision(targetPath, new TrustDecisionEntry
-					{
-						DecisionId           = Guid.NewGuid().ToString("N"),
-						Scope                = sourceEntry.Scope,
-						SubjectHash          = sourceEntry.SubjectHash,
-						AssemblySigner       = sourceEntry.AssemblySigner,
-						AssemblyIssuer       = sourceEntry.AssemblyIssuer,
-						AssemblySubject      = sourceEntry.AssemblySubject,
-						AssemblyThumbprint   = sourceEntry.AssemblyThumbprint,
-						AssemblySerialNumber = sourceEntry.AssemblySerialNumber,
-						Decision             = sourceEntry.Decision,
-						Reason               = movedEntryReason,
-						UserSid              = userSid,
-						CreatedAtUtc         = DateTimeOffset.UtcNow,
-						ExpiresAtUtc         = sourceEntry.ExpiresAtUtc,
-						RepositoryRemote     = sourceEntry.RepositoryRemote,
-						Branch               = sourceEntry.Branch,
-						CommitSha            = sourceEntry.CommitSha,
-						PolicyProfile        = sourceEntry.PolicyProfile
-					});
-				}
-
-				trustStoreService.RemoveDecisionsBySubject(sourcePath, selectedTrust.Subject, moveReason, userSid);
-
-				trustedAssemblies.Remove(selectedTrust);
-				hasMovedTrust = true;
+				this.helper.MoveTrustToScope(selectedTrust, sourceScope, targetScope, this.GetSelectedProjectPathForScope(), targetProjectPath, userSid);
 				MessageBox.Show($"Moved trust '{selectedTrust.Name}@{selectedTrust.Version}' to {targetScope} scope.", "Trust Moved", MessageBoxButton.OK, MessageBoxImage.Information);
 			}
 			catch (Exception ex)
@@ -520,69 +376,25 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		}
 
 		/// <summary>
-		/// Handles the Save button click to persist changes to the trust store.
+		/// Saves changes to the trust store.
 		/// </summary>
 		private void SaveButton_Click(object sender, RoutedEventArgs e)
 		{
-			if (!hasChanges)
+			if (!this.helper.HasChanges)
 			{
-				DialogResult = false;
-				Close();
+				this.DialogResult = false;
+				this.Close();
+
 				return;
 			}
 
 			try
 			{
-				var trustStoreService = new TrustStoreService();
+				var userSid = WindowsIdentity.GetCurrent()?.User?.Value ?? "Unknown";
 
-				// Ensure we have the correct trust store path
-				if (string.IsNullOrWhiteSpace(trustStorePath))
-				{
-					trustStorePath = trustStoreService.GetDefaultUserTrustPath();
-				}
-
-				var document = trustStoreService.Load(trustStorePath);
-				var userSid  = WindowsIdentity.GetCurrent()?.User?.Value ?? "Unknown";
-
-				if (document?.Decisions == null)
-				{
-					document = new TrustStoreDocument { Decisions = new List<TrustDecisionEntry>() };
-				}
-
-				// Remove all existing assembly trusts
-				var existingAssemblyTrusts = document.Decisions
-					.Where(d => d.ScopeKind == TrustDecisionScopeKind.Assembly || 
-								string.Equals(d.Scope, "Assembly", StringComparison.OrdinalIgnoreCase))
-					.ToList();
-
-				foreach (var existingTrust in existingAssemblyTrusts)
-				{
-					document.Decisions.Remove(existingTrust);
-				}
-
-				// Add the new set of assembly trusts
-				foreach (var trust in trustedAssemblies)
-				{
-					var entry = new TrustDecisionEntry
-					{
-						DecisionId      = Guid.NewGuid().ToString(),
-						Scope           = "Assembly",
-						SubjectHash     = trust.Subject,
-						AssemblySigner  = trust.Signer,
-						AssemblyIssuer  = trust.Issuer,
-						AssemblySubject = trust.SubjectName,
-						Decision        = "Trust",
-						Reason          = trust.Reason,
-						UserSid         = userSid,
-						CreatedAtUtc    = DateTimeOffset.UtcNow
-					};
-
-					document.Decisions.Add(entry);
-				}
-
-				trustStoreService.Save(trustStorePath, document);
-				DialogResult = true;
-				Close();
+				this.helper.Save(userSid);
+				this.DialogResult = true;
+				this.Close();
 			}
 			catch (Exception ex)
 			{
@@ -591,12 +403,12 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		}
 
 		/// <summary>
-		/// Handles the Cancel button click.
+		/// Closes the dialog.
 		/// </summary>
 		private void CancelButton_Click(object sender, RoutedEventArgs e)
 		{
-			DialogResult = false;
-			Close();
+			this.DialogResult = false;
+			this.Close();
 		}
 
 		/// <inheritdoc/>
@@ -604,7 +416,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		{
 			base.OnClosed(e);
 
-			if (!hasMovedTrust)
+			if (!this.helper.HasMovedTrust)
 			{
 				return;
 			}
@@ -621,85 +433,19 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		}
 
 		/// <summary>
-		/// Gets the currently selected trust scope from the UI.
+		/// Gets the currently selected trust scope.
 		/// </summary>
-		/// <returns></returns>
 		private TrustScope GetSelectedScope()
 		{
 			return ScopeComboBox?.SelectedItem is TrustScope scope ? scope : TrustScope.User;
 		}
 
 		/// <summary>
-		/// Gets the currently selected project path for the project scope, if applicable.
+		/// Gets the currently selected project path for project-scoped trust.
 		/// </summary>
-		/// <returns></returns>
 		private string GetSelectedProjectPathForScope()
 		{
-			return ProjectScopeComboBox?.SelectedValue as string ?? this.projectPath;
+			return ProjectScopeComboBox?.SelectedValue as string ?? this.helper.ProjectPath;
 		}
-
-		/// <summary>
-		/// Resolves the appropriate trust store path based on the selected scope and context.
-		/// </summary>
-		/// <param name="trustStoreService">The trust store service used to resolve paths.</param>
-		/// <param name="scope">The selected trust scope.</param>
-		/// <param name="solutionPath">The path to the solution.</param>
-		/// <param name="projectPath">The path to the project.</param>
-		/// <returns>The resolved trust store path.</returns>
-		private static string ResolveTrustStorePath(TrustStoreService trustStoreService, TrustScope scope, string solutionPath, string projectPath)
-		{
-			if (scope == TrustScope.Project && !string.IsNullOrWhiteSpace(projectPath))
-			{
-				return trustStoreService.GetProjectTrustPath(projectPath);
-			}
-
-			if (scope == TrustScope.Solution && !string.IsNullOrWhiteSpace(solutionPath))
-			{
-				return trustStoreService.GetSolutionTrustPath(solutionPath);
-			}
-
-			return trustStoreService.GetDefaultUserTrustPath();
-		}
-	}
-
-	/// <summary>
-	/// Represents a single trusted assembly item in the list.
-	/// </summary>
-	internal sealed class AssemblyTrustItem
-	{
-		/// <summary>
-		/// Gets or sets the assembly name.
-		/// </summary>
-		public string Name { get; set; } = string.Empty;
-
-		/// <summary>
-		/// Gets or sets the assembly version.
-		/// </summary>
-		public string Version { get; set; } = string.Empty;
-
-		/// <summary>
-		/// Gets or sets the assembly signer.
-		/// </summary>
-		public string Signer { get; set; } = string.Empty;
-
-		/// <summary>
-		/// Gets or sets the certificate issuer.
-		/// </summary>
-		public string Issuer { get; set; } = string.Empty;
-
-		/// <summary>
-		/// Gets or sets the certificate subject.
-		/// </summary>
-		public string SubjectName { get; set; } = string.Empty;
-
-		/// <summary>
-		/// Gets or sets the trust reason.
-		/// </summary>
-		public string Reason { get; set; } = string.Empty;
-
-		/// <summary>
-		/// Gets or sets the subject identifier (name@version).
-		/// </summary>
-		public string Subject { get; set; } = string.Empty;
 	}
 }

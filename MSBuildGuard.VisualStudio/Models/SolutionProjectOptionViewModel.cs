@@ -14,5 +14,10 @@ namespace MSBuildGuard.VisualStudio.Models
 		/// Gets or sets the backing path for filtering.
 		/// </summary>
 		public string Path { get; set; } = string.Empty;
+
+		/// <summary>
+		/// Gets or sets the risk level string ('High', 'Medium', or 'Low').
+		/// </summary>
+		public string RiskLevel { get; set; } = "Low";
 	}
 }

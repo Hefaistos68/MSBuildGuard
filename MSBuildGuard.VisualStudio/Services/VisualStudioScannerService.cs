@@ -45,8 +45,8 @@ namespace MSBuildGuard.VisualStudio.Services
 		/// <summary>
 		/// Splits a semicolon-delimited list from the options page into an array of strings, trimming whitespace and ignoring empty entries.
 		/// </summary>
-		/// <param name="value"></param>
-		/// <returns></returns>
+		/// <param name="value">Semicolon-delimited options string.</param>
+		/// <returns>An array of non-empty, trimmed strings.</returns>
 		private static IEnumerable<string> SplitList(string value)
 		{
 			if (string.IsNullOrWhiteSpace(value))
@@ -62,7 +62,7 @@ namespace MSBuildGuard.VisualStudio.Services
 		/// <summary>
 		/// Logs activity messages to the Visual Studio output window using the package's UI feedback service.
 		/// </summary>
-		/// <param name="message"></param>
+		/// <param name="message">The message to write to the output pane.</param>
 		private void LogActivity(string message)
 		{
 			this.package.JoinableTaskFactory.RunAsync(async delegate
@@ -82,6 +82,25 @@ namespace MSBuildGuard.VisualStudio.Services
 			if (string.IsNullOrWhiteSpace(solutionPath))
 			{
 				throw new ArgumentException("A solution path is required.", nameof(solutionPath));
+			}
+
+			var solutionDir = Path.GetDirectoryName(solutionPath);
+
+			if (!string.IsNullOrWhiteSpace(solutionDir))
+			{
+				var noscanPath = Path.Combine(solutionDir!, ".msbuildguard", "noscan");
+
+				if (File.Exists(noscanPath))
+				{
+					await this.package.UiFeedbackService.WriteLineAsync($"Scanning disabled for solution via marker: {noscanPath}", CancellationToken.None);
+
+					var emptyReport = new ScanReport();
+
+					emptyReport.Target.TargetPath = solutionPath;
+					emptyReport.Target.TargetKind = TargetKind.Solution;
+
+					return emptyReport;
+				}
 			}
 
 			var targetName = Path.GetFileName(solutionPath);

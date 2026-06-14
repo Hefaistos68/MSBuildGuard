@@ -7,6 +7,7 @@
   </Configurations>
   <Folder Name="/Documentation/">
     <File Path="documentation/VisualStudioExtension.md" />
+    <File Path="MSBuildGuard.VSCode/VScodeExtension.md" />
   </Folder>
   <Folder Name="/MSBuildGuard.VScode/">
     <File Path="MSBuildGuard.VSCode/.vscodeignore" />
@@ -41,6 +42,7 @@
   <Project Path="MSBuildGuard.VisualStudio/MSBuildGuard.VisualStudio.csproj">
     <Deploy Solution="Debug|Any CPU" />
   </Project>
+  <Project Path="MSBuildGuard.VisualStudio.Tests/MSBuildGuard.VisualStudio.Tests.csproj" />
   <Project Path="MSBuildGuard.Worker.Tests/MSBuildGuard.Worker.Tests.csproj" />
   <Project Path="MSBuildGuard.Worker/MSBuildGuard.Worker.csproj" />
 </Solution>

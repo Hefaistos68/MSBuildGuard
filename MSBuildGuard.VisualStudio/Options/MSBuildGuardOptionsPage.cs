@@ -38,6 +38,15 @@ namespace MSBuildGuard.VisualStudio.Options
 		public bool AutoOpenSecurityReviewOnOpen { get; set; } = true;
 
 		/// <summary>
+		/// Gets or sets a value indicating whether baseline onboarding setup is enabled.
+		/// </summary>
+		[Category("Behavior")]
+		[DisplayName("Enable Baseline Onboarding")]
+		[Description("Prompt to set up a trusted baseline when loading a new solution or project.")]
+		[DefaultValue(true)]
+		public bool EnableBaselineOnboarding { get; set; } = true;
+
+		/// <summary>
 		/// Gets or sets a value indicating whether NuGet package assets should be scanned.
 		/// </summary>
 		[Category("Scanning")]

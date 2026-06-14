@@ -151,6 +151,74 @@ namespace MSBuildGuard.VisualStudio.Services
 				dialog.ExpiresAtUtc);
 		}
 
+		/// <summary>
+		/// Opens the trust package dialog and adds the package to the trust store if confirmed.
+		/// </summary>
+		/// <param name="finding">The finding whose owning package should be trusted.</param>
+		/// <param name="reason">Reason provided by the user.</param>
+		/// <returns>A task that completes when the dialog is closed.</returns>
+		public async Task TrustPackageAsync(FindingViewModel finding, string reason)
+		{
+			if (finding == null)
+			{
+				throw new ArgumentNullException(nameof(finding));
+			}
+
+			if (string.IsNullOrWhiteSpace(finding.PackageId) || string.IsNullOrWhiteSpace(finding.PackageVersion))
+			{
+				throw new InvalidOperationException("Finding does not have a package ID or version.");
+			}
+
+			await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+
+			var solutionPath = await SolutionDiscoveryService.GetOpenSolutionPathAsync(MSBuildGuardPackage.Instance!);
+
+			var projectPath = SolutionExplorerProjectDiscoveryService.GetSelectedProjectPath() ?? string.Empty;
+
+			var userHome = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
+			var packageDir = System.IO.Path.Combine(userHome, ".nuget", "packages", finding.PackageId.ToLowerInvariant(), finding.PackageVersion.ToLowerInvariant());
+
+			var dialog = new TrustPackageDialog
+			{
+				PackageId             = finding.PackageId,
+				PackageVersion        = finding.PackageVersion,
+				PackagePath           = packageDir,
+				SolutionPath           = solutionPath ?? string.Empty,
+				ProjectPath            = projectPath,
+				Owner                  = System.Windows.Application.Current.MainWindow,
+				WindowStartupLocation  = System.Windows.WindowStartupLocation.CenterOwner
+			};
+
+			if (dialog.ShowDialog() != true)
+			{
+
+				return;
+			}
+
+			var trustPath = ResolveTrustStorePath(dialog.SelectedScope, solutionPath ?? string.Empty, dialog.SelectedProjectPath);
+
+			var userSid = WindowsIdentity.GetCurrent()?.User?.Value ?? "Unknown";
+
+			var trustReason = !string.IsNullOrWhiteSpace(dialog.TrustReason) ? dialog.TrustReason : reason;
+
+			this.trustStoreService.AddPackageTrust(
+				trustPath,
+				finding.PackageId,
+				finding.PackageVersion,
+				dialog.PackageHash,
+				trustReason,
+				userSid,
+				dialog.ExpiresAtUtc);
+		}
+
+		/// <summary>
+		/// Resolves the trust-store file path based on the user-selected scope, solution path, and project path.
+		/// </summary>
+		/// <param name="selectedScope">The scope selected by the user in the trust dialog.</param>
+		/// <param name="solutionPath">The currently open solution file path.</param>
+		/// <param name="projectPath">The selected project file path.</param>
+		/// <returns>The resolved trust-store file path for the given scope.</returns>
 		private string ResolveTrustStorePath(TrustScope selectedScope, string solutionPath, string projectPath)
 		{
 			if (selectedScope == TrustScope.Project && !string.IsNullOrWhiteSpace(projectPath))

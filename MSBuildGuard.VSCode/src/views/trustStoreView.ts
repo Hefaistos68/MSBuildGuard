@@ -391,6 +391,7 @@ export class TrustStorePanel {
         .trust-card.finding::before { background: var(--accent-primary); }
         .trust-card.assembly::before { background: var(--accent-success); }
         .trust-card.signer::before { background: #a855f7; }
+        .trust-card.package::before { background: #06b6d4; }
 
         .card-header {
             display: flex;
@@ -482,6 +483,7 @@ export class TrustStorePanel {
         .badge.finding { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
         .badge.assembly { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
         .badge.signer { background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3); }
+        .badge.package { background: rgba(6, 182, 212, 0.15); color: #22d3ee; border: 1px solid rgba(6, 182, 212, 0.3); }
 
         .btn-revoke {
             background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
@@ -761,6 +763,8 @@ export class TrustStorePanel {
                     subject.innerText = '📦 NuGet: ' + (d.assemblyName || 'Unnamed Package');
                 } else if (d.scope === 'Signer') {
                     subject.innerText = '🔑 Certificate Signer: ' + (d.assemblySubject || 'Unnamed Signer');
+                } else if (d.scope === 'Package') {
+                    subject.innerText = '📦 NuGet Package: ' + (d.assemblySigner || 'Unnamed Package');
                 } else {
                     subject.innerText = '🛡️ Finding Fingerprint: ' + (d.subjectHash || 'No Fingerprint');
                 }
@@ -780,6 +784,10 @@ export class TrustStorePanel {
                         '<div class="card-detail-item"><span class="card-detail-label">Issuer:</span><span class="card-detail-value">' + escapeHtml(d.assemblyIssuer || 'None') + '</span></div>' +
                         '<div class="card-detail-item"><span class="card-detail-label">Serial Number:</span><span class="card-detail-value">' + escapeHtml(d.assemblySerialNumber || 'None') + '</span></div>' +
                         '<div class="card-detail-item"><span class="card-detail-label">Thumbprint:</span><span class="card-detail-value">' + escapeHtml(d.subjectHash || 'None') + '</span></div>';
+                } else if (d.scope === 'Package') {
+                    detailsSec.innerHTML = 
+                        '<div class="card-detail-item"><span class="card-detail-label">Package Identity:</span><span class="card-detail-value">' + escapeHtml(d.assemblySigner || 'None') + '</span></div>' +
+                        '<div class="card-detail-item"><span class="card-detail-label">Directory Hash:</span><span class="card-detail-value">' + escapeHtml(d.subjectHash || 'None') + '</span></div>';
                 } else {
                     detailsSec.innerHTML = 
                         '<div class="card-detail-item"><span class="card-detail-label">Fingerprint:</span><span class="card-detail-value">' + escapeHtml(d.subjectHash || 'None') + '</span></div>' +

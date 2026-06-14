@@ -297,6 +297,13 @@ For team repositories, decide whether solution/project trust files should be com
 }
 ```
 
+### Trusted Baseline Onboarding
+
+Both the Visual Studio and VS Code extensions feature an interactive **Trusted Baseline Onboarding** workflow designed to guide users through establishing a secure starting point for new or unseen solutions:
+- **Reputation-Based Trust Suggestions**: Analyzes package metadata (fetching download metrics and publisher verified status from NuGet.org) and certificate signatures to identify high-trust dependencies (e.g. signed by Microsoft Corporation).
+- **Opt-in Review for Unsigned/Unverified Code**: Dependency assets that lack valid signatures or verified publisher identity (e.g. `Shouldly`) are suggested as **unselected** package trusts, forcing an explicit review rather than silent automation bypasses.
+- **Enforcement & Bypass Controls**: Allows users to apply selected suggestions directly to `trust.json`, automatically generate baselines for remaining findings, or completely disable analysis for the solution via local `.msbuildguard/noscan` markers.
+
 ### Policy Precedence
 
 Effective policy merge order (highest priority first):
@@ -325,6 +332,7 @@ Lower-priority layers cannot weaken stricter machine policy requirements.
 Module-specific documentation is split into dedicated files:
 
 - [Visual Studio extension documentation](documentation/VisualStudioExtension.md)
+- [VS Code extension documentation](MSBuildGuard.VSCode/README.md)
 
 
 ## Visual Studio Unified Settings Migration Guide

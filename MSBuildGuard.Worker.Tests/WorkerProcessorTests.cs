@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using NUnit.Framework;
 using Shouldly;
+using MSBuildGuard.Core;
 using MSBuildGuard.Worker;
 
 namespace MSBuildGuard.Worker.Tests
@@ -155,6 +156,91 @@ namespace MSBuildGuard.Worker.Tests
 			response.Success.ShouldBeFalse();
 			response.Error.ShouldNotBeNull();
 			response.Error.Code.ShouldBe(WorkerErrorCodes.InvalidArgument);
+		}
+
+		/// <summary>
+		/// Verifies that <see cref="WorkerProcessor.ProcessAsync"/> returns an invalid argument error when targetPath is not found on disk for onboarding suggestions.
+		/// </summary>
+		/// <returns>A task tracking execution.</returns>
+		[Test]
+		public async Task ProcessAsync_GetOnboardingSuggestionsNonExistentTargetPath_ReturnsInvalidArgumentError()
+		{
+			var processor = new WorkerProcessor();
+
+			var request = new WorkerRequest
+			{
+				Id      = "req-1",
+				Method  = WorkerProtocol.MethodGetOnboardingSuggestions,
+				Payload = new RequestPayload { TargetPath = Path.Combine(Directory.GetCurrentDirectory(), Guid.NewGuid().ToString() + ".sln") }
+			};
+
+			var line = JsonSerializer.Serialize(request);
+
+			var response = await processor.ProcessAsync(line, CancellationToken.None);
+
+			response.ShouldNotBeNull();
+			response.Success.ShouldBeFalse();
+			response.Error.ShouldNotBeNull();
+			response.Error.Code.ShouldBe(WorkerErrorCodes.InvalidArgument);
+		}
+
+		/// <summary>
+		/// Verifies that <see cref="WorkerProcessor.ProcessAsync"/> returns an empty success report when the noscan marker is present.
+		/// </summary>
+		/// <returns>A task tracking execution.</returns>
+		[Test]
+		public async Task ProcessAsync_NoscanMarkerPresent_ReturnsEmptyScanReport()
+		{
+			var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+
+			Directory.CreateDirectory(tempDir);
+
+			try
+			{
+				var slnPath = Path.Combine(tempDir, "TestSolution.sln");
+
+				File.WriteAllText(slnPath, "Microsoft Visual Studio Solution File, Format Version 12.00");
+
+				var configDir = Path.Combine(tempDir, ".msbuildguard");
+
+				Directory.CreateDirectory(configDir);
+
+				File.WriteAllText(Path.Combine(configDir, "noscan"), "Scanning disabled.");
+
+				var processor = new WorkerProcessor();
+
+				var request = new WorkerRequest
+				{
+					Id      = "req-1",
+					Method  = WorkerProtocol.MethodScan,
+					Payload = new RequestPayload { TargetPath = slnPath }
+				};
+
+				var line = JsonSerializer.Serialize(request);
+
+				var response = await processor.ProcessAsync(line, CancellationToken.None);
+
+				response.ShouldNotBeNull();
+				response.Success.ShouldBeTrue();
+				response.Result.ShouldNotBeNull();
+
+				var report = (ScanReport)response.Result;
+
+				report.ShouldNotBeNull();
+				report.Findings.ShouldBeEmpty();
+				report.Target.TargetPath.ShouldBe(slnPath);
+			}
+			finally
+			{
+				try
+				{
+					Directory.Delete(tempDir, true);
+				}
+				catch
+				{
+					// Ignore cleanup errors
+				}
+			}
 		}
 	}
 }

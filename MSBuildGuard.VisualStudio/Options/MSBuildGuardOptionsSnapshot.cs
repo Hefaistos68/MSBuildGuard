@@ -16,6 +16,11 @@ namespace MSBuildGuard.VisualStudio.Options
 		internal bool ScanNuGetPackages { get; set; } = true;
 
 		/// <summary>
+		/// Gets or sets a value indicating whether baseline onboarding setup is enabled.
+		/// </summary>
+		internal bool EnableBaselineOnboarding { get; set; } = true;
+
+		/// <summary>
 		/// Gets or sets a value indicating whether trust sharing in repositories is enabled.
 		/// </summary>
 		internal bool AllowSharingTrustsInRepositories { get; set; }

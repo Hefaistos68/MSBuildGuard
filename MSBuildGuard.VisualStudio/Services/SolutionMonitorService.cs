@@ -77,19 +77,34 @@ namespace MSBuildGuard.VisualStudio.Services
 			this.scanGate.Dispose();
 		}
 
+		/// <summary>
+		/// Handles the after-open-solution event by queueing a new scan.
+		/// </summary>
+		/// <param name="sender">Event sender.</param>
+		/// <param name="e">Solution open event arguments.</param>
 		private void OnAfterOpenSolution(object? sender, OpenSolutionEventArgs e)
 		{
 			_ = this.package.UiFeedbackService.WriteLineAsync("Solution opened.", CancellationToken.None);
 			_ = this.QueueScanAsync(null, this.package.DisposalToken);
 		}
 
+		/// <summary>
+		/// Handles the before-open-project event by queuing a project-open scan.
+		/// </summary>
+		/// <param name="sender">Event sender.</param>
+		/// <param name="e">Project-open event arguments.</param>
 		private void OnBeforeOpenProject(object? sender, BeforeOpenProjectEventArgs e)
 		{
 			_ = this.package.UiFeedbackService.WriteLineAsync($"Project opening: {e.Filename}", CancellationToken.None);
-			_ = this.package.UiFeedbackService.WriteLineAsync("[Flow] OnBeforeOpenProject -> QueueScanAsync target='<open-solution>', forceRescan=true", CancellationToken.None);
-			_ = this.QueueScanAsync(null, this.package.DisposalToken, true);
+			_ = this.package.UiFeedbackService.WriteLineAsync("[Flow] OnBeforeOpenProject -> QueueScanAsync target='<open-solution>', forceRescan=false", CancellationToken.None);
+			_ = this.QueueScanAsync(null, this.package.DisposalToken, false);
 		}
 
+		/// <summary>
+		/// Handles the after-close-solution event by clearing the cached scan path and notifying the package.
+		/// </summary>
+		/// <param name="sender">Event sender.</param>
+		/// <param name="e">Event arguments.</param>
 		private void OnAfterCloseSolution(object? sender, EventArgs e)
 		{
 			lock (this.syncRoot)
@@ -100,10 +115,18 @@ namespace MSBuildGuard.VisualStudio.Services
 			_ = this.package.OnSolutionUnloadedAsync();
 		}
 
+		/// <summary>
+		/// Acquires the scan gate, resolves the target path, runs the scanner, and raises <see cref="ScanCompleted"/>.
+		/// </summary>
+		/// <param name="targetPath">Optional explicit target path; the open solution path is used when <c>null</c>.</param>
+		/// <param name="cancellationToken">Cancellation token for the scan operation.</param>
+		/// <param name="forceRescan">When <c>true</c>, bypasses the duplicate-path guard.</param>
+		/// <returns>A task that completes when the scan and notification are done.</returns>
 		private async Task QueueScanAsync(string? targetPath, CancellationToken cancellationToken, bool forceRescan = false)
 		{
 			await this.package.UiFeedbackService.WriteLineAsync($"[Flow] QueueScanAsync entered with target='{targetPath ?? string.Empty}', forceRescan={forceRescan}", CancellationToken.None);
-			await this.scanGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+			bool acquired = false;
 
 			try
 			{
@@ -116,6 +139,7 @@ namespace MSBuildGuard.VisualStudio.Services
 				if (string.IsNullOrWhiteSpace(targetPath) || !File.Exists(targetPath))
 				{
 					await this.package.UiFeedbackService.WriteLineAsync("No solution or project path was available to scan.", CancellationToken.None);
+
 					return;
 				}
 
@@ -126,14 +150,20 @@ namespace MSBuildGuard.VisualStudio.Services
 					if (!forceRescan && string.Equals(scanPath, this.lastScannedSolutionPath, StringComparison.OrdinalIgnoreCase))
 					{
 						_ = this.package.UiFeedbackService.WriteLineAsync($"[Flow] QueueScanAsync skipped duplicate target='{scanPath}'", CancellationToken.None);
+
 						return;
 					}
 
 					this.lastScannedSolutionPath = scanPath;
 				}
 
+				await this.scanGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+				acquired = true;
+
 				await this.package.UiFeedbackService.WriteLineAsync($"Queued scan: {scanPath}", CancellationToken.None);
+
 				var report = await this.scannerService.ScanSolutionAsync(scanPath, cancellationToken).ConfigureAwait(false);
+
 				await this.package.UiFeedbackService.WriteLineAsync($"[Flow] QueueScanAsync completed scan target='{scanPath}', findings={report.Findings.Count}, kind={report.Target.TargetKind}", CancellationToken.None);
 
 				this.ScanCompleted?.Invoke(this, report);
@@ -149,7 +179,10 @@ namespace MSBuildGuard.VisualStudio.Services
 			}
 			finally
 			{
-				this.scanGate.Release();
+				if (acquired)
+				{
+					this.scanGate.Release();
+				}
 			}
 		}
 	}

@@ -186,6 +186,19 @@ namespace MSBuildGuard.VisualStudio.Models
 		}
 
 		/// <summary>
+		/// Gets a value indicating whether this finding's NuGet package can be trusted.
+		/// </summary>
+		public bool CanTrustPackage
+		{
+			get
+			{
+				return !string.Equals(this.RuleId, "MBG000", System.StringComparison.OrdinalIgnoreCase) &&
+					!string.IsNullOrWhiteSpace(this.PackageId) &&
+					!string.IsNullOrWhiteSpace(this.PackageVersion);
+			}
+		}
+
+		/// <summary>
 		/// Gets a value indicating whether this finding's owning assembly can be untrusted.
 		/// </summary>
 		public bool CanUntrustAssembly

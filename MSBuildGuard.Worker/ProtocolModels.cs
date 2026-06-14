@@ -369,6 +369,11 @@ namespace MSBuildGuard.Worker
 		public const string MethodScan = "scan";
 
 		/// <summary>
+		/// The method name to retrieve onboarding suggestions.
+		/// </summary>
+		public const string MethodGetOnboardingSuggestions = "getOnboardingSuggestions";
+
+		/// <summary>
 		/// The method name to create a trusted baseline snapshot.
 		/// </summary>
 		public const string MethodCreateBaseline = "createBaseline";

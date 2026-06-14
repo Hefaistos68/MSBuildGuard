@@ -12,6 +12,8 @@
         ResizeMode="CanResizeWithGrip"
         Background="{DynamicResource {x:Static vsshell:VsBrushes.WindowKey}}"
         Foreground="{DynamicResource {x:Static vsshell:VsBrushes.WindowTextKey}}"
+        BorderBrush="Red"
+        BorderThickness="3"
         platformUi:ThemedDialogStyleLoader.UseDefaultThemedDialogStyles="True">
     <platformUi:DialogWindow.Resources>
         <ResourceDictionary>
@@ -65,111 +67,113 @@
             </Style>
         </ResourceDictionary>
     </platformUi:DialogWindow.Resources>
-    <Grid Margin="16">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
-
-        <!-- Header -->
-        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-            <TextBlock Text="⛔"
-                       FontSize="34"
-                       Foreground="{DynamicResource {x:Static platformUi:EnvironmentColors.VizSurfaceRedMediumBrushKey}}"
-                       Margin="0,0,12,0"
-                       VerticalAlignment="Top" />
-
-            <StackPanel Orientation="Vertical">
-                <TextBlock Text="Build Blocked by Security Policy"
-                           FontSize="18"
-                           FontWeight="SemiBold"
-                           Foreground="{DynamicResource {x:Static vsshell:VsBrushes.WindowTextKey}}" />
-                <TextBlock Text="The current security scan requires action before the build can proceed."
-                           Margin="0,4,0,0"
-                           Foreground="{DynamicResource {x:Static vsshell:VsBrushes.GrayTextKey}}" />
-            </StackPanel>
-        </StackPanel>
-
-        <!-- Summary -->
-        <Grid Grid.Row="1" Margin="0,0,0,10">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
+    <Border BorderBrush="Red" BorderThickness="3">
+        <Grid Margin="16">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <TextBlock Text="Target:" FontWeight="Bold" Width="110" Foreground="{DynamicResource {x:Static vsshell:VsBrushes.WindowTextKey}}" />
-            <TextBlock Grid.Column="1"
-                       Text="{Binding TargetPathDisplay}"
-                       ToolTip="{Binding TargetPathDisplay}"
-                       TextTrimming="CharacterEllipsis"
-                       Foreground="{DynamicResource {x:Static vsshell:VsBrushes.WindowTextKey}}"
-                       Grid.ColumnSpan="3" />
+            <!-- Header -->
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                <TextBlock Text="⛔"
+                           FontSize="34"
+                           Foreground="{DynamicResource {x:Static platformUi:EnvironmentColors.VizSurfaceRedMediumBrushKey}}"
+                           Margin="0,0,12,0"
+                           VerticalAlignment="Top" />
 
-            <TextBlock Grid.Row="1" Text="Risk Score:" FontWeight="Bold" Width="110" Margin="0,4,0,0" Foreground="{DynamicResource {x:Static vsshell:VsBrushes.WindowTextKey}}" />
-            <TextBlock Grid.Row="1" Grid.Column="1"
-                       Text="{Binding RiskScore}"
-                       Foreground="{DynamicResource {x:Static vsshell:VsBrushes.WindowTextKey}}"
-                       Margin="0,4,0,0" />
-            <TextBlock Grid.Row="1" Grid.Column="2"
-                       Text="Action Required:"
-                       FontWeight="Bold"
-                       Foreground="{DynamicResource {x:Static vsshell:VsBrushes.WindowTextKey}}"
-                       Margin="24,4,8,0" />
-            <TextBlock Grid.Row="1" Grid.Column="3"
-                       Text="{Binding RecommendedAction}"
-                       Style="{StaticResource RiskIndicatorTextStyle}"
-                       FontWeight="SemiBold"
-                       Margin="0,4,0,0" />
+                <StackPanel Orientation="Vertical">
+                    <TextBlock Text="Build Blocked by Security Policy"
+                               FontSize="18"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource {x:Static vsshell:VsBrushes.WindowTextKey}}" />
+                    <TextBlock Text="The current security scan requires action before the build can proceed."
+                               Margin="0,4,0,0"
+                               Foreground="{DynamicResource {x:Static vsshell:VsBrushes.GrayTextKey}}" />
+                </StackPanel>
+            </StackPanel>
+
+            <!-- Summary -->
+            <Grid Grid.Row="1" Margin="0,0,0,10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <TextBlock Text="Target:" FontWeight="Bold" Width="110" Foreground="{DynamicResource {x:Static vsshell:VsBrushes.WindowTextKey}}" />
+                <TextBlock Grid.Column="1"
+                           Text="{Binding TargetPathDisplay}"
+                           ToolTip="{Binding TargetPathDisplay}"
+                           TextTrimming="CharacterEllipsis"
+                           Foreground="{DynamicResource {x:Static vsshell:VsBrushes.WindowTextKey}}"
+                           Grid.ColumnSpan="3" />
+
+                <TextBlock Grid.Row="1" Text="Risk Score:" FontWeight="Bold" Width="110" Margin="0,4,0,0" Foreground="{DynamicResource {x:Static vsshell:VsBrushes.WindowTextKey}}" />
+                <TextBlock Grid.Row="1" Grid.Column="1"
+                           Text="{Binding RiskScore}"
+                           Foreground="{DynamicResource {x:Static vsshell:VsBrushes.WindowTextKey}}"
+                           Margin="0,4,0,0" />
+                <TextBlock Grid.Row="1" Grid.Column="2"
+                           Text="Action Required:"
+                           FontWeight="Bold"
+                           Foreground="{DynamicResource {x:Static vsshell:VsBrushes.WindowTextKey}}"
+                           Margin="24,4,8,0" />
+                <TextBlock Grid.Row="1" Grid.Column="3"
+                           Text="{Binding RecommendedAction}"
+                           Style="{StaticResource RiskIndicatorTextStyle}"
+                           FontWeight="SemiBold"
+                           Margin="0,4,0,0" />
+            </Grid>
+
+            <!-- Findings grid -->
+            <DataGrid Grid.Row="2"
+                      ItemsSource="{Binding Findings}"
+                      AutoGenerateColumns="False"
+                      IsReadOnly="True"
+                      GridLinesVisibility="Horizontal"
+                      HeadersVisibility="Column"
+                      SelectionMode="Single"
+                      CanUserAddRows="False"
+                      CanUserDeleteRows="False"
+                      CanUserReorderColumns="False"
+                      BorderThickness="1"
+                      BorderBrush="{DynamicResource {x:Static vsshell:VsBrushes.PanelBorderKey}}"
+                      Background="{DynamicResource {x:Static vsshell:VsBrushes.WindowKey}}"
+                      Foreground="{DynamicResource {x:Static vsshell:VsBrushes.WindowTextKey}}">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Rule"     Binding="{Binding RuleId}"   Width="90" />
+                    <DataGridTextColumn Header="Title"    Binding="{Binding Title}"    Width="*" />
+                    <DataGridTextColumn Header="Severity" Binding="{Binding Severity}" Width="80" />
+                    <DataGridTextColumn Header="Action"   Binding="{Binding Action}"   Width="110" />
+                    <DataGridTextColumn Header="File"     Binding="{Binding FilePath}" Width="160" />
+                </DataGrid.Columns>
+            </DataGrid>
+
+            <!-- Buttons -->
+            <StackPanel Grid.Row="3"
+                        Orientation="Horizontal"
+                        HorizontalAlignment="Right"
+                        Margin="0,12,0,0">
+                <Button Content="Proceed Anyway"
+                        MinWidth="130"
+                        Padding="12,6"
+                        Margin="0,0,10,0"
+                        Click="OnProceedClick" />
+                <Button Content="Cancel Build"
+                        MinWidth="110"
+                        Padding="12,6"
+                        IsDefault="True"
+                        IsCancel="True"
+                        Click="OnCancelClick" />
+            </StackPanel>
         </Grid>
-
-        <!-- Findings grid -->
-        <DataGrid Grid.Row="2"
-                  ItemsSource="{Binding Findings}"
-                  AutoGenerateColumns="False"
-                  IsReadOnly="True"
-                  GridLinesVisibility="Horizontal"
-                  HeadersVisibility="Column"
-                  SelectionMode="Single"
-                  CanUserAddRows="False"
-                  CanUserDeleteRows="False"
-                  CanUserReorderColumns="False"
-                  BorderThickness="1"
-                  BorderBrush="{DynamicResource {x:Static vsshell:VsBrushes.PanelBorderKey}}"
-                  Background="{DynamicResource {x:Static vsshell:VsBrushes.WindowKey}}"
-                  Foreground="{DynamicResource {x:Static vsshell:VsBrushes.WindowTextKey}}">
-            <DataGrid.Columns>
-                <DataGridTextColumn Header="Rule"     Binding="{Binding RuleId}"   Width="90" />
-                <DataGridTextColumn Header="Title"    Binding="{Binding Title}"    Width="*" />
-                <DataGridTextColumn Header="Severity" Binding="{Binding Severity}" Width="80" />
-                <DataGridTextColumn Header="Action"   Binding="{Binding Action}"   Width="110" />
-                <DataGridTextColumn Header="File"     Binding="{Binding FilePath}" Width="160" />
-            </DataGrid.Columns>
-        </DataGrid>
-
-        <!-- Buttons -->
-        <StackPanel Grid.Row="3"
-                    Orientation="Horizontal"
-                    HorizontalAlignment="Right"
-                    Margin="0,12,0,0">
-            <Button Content="Proceed Anyway"
-                    MinWidth="130"
-                    Padding="12,6"
-                    Margin="0,0,10,0"
-                    Click="OnProceedClick" />
-            <Button Content="Cancel Build"
-                    MinWidth="110"
-                    Padding="12,6"
-                    IsDefault="True"
-                    IsCancel="True"
-                    Click="OnCancelClick" />
-        </StackPanel>
-    </Grid>
+    </Border>
 </platformUi:DialogWindow>

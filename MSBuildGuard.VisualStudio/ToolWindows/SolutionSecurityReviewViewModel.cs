@@ -316,6 +316,29 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 					}
 				}
 
+				var packageTrustScopes = new List<string>();
+				var isApprovedByPackage  = false;
+
+				if (!string.IsNullOrWhiteSpace(packageId) && !string.IsNullOrWhiteSpace(packageVersion))
+				{
+					if (trustStoreService.IsFindingApprovedByPackage(userTrustStore, packageId, packageVersion))
+					{
+						packageTrustScopes.Add("User");
+					}
+
+					if (trustStoreService.IsFindingApprovedByPackage(solutionTrustStore, packageId, packageVersion))
+					{
+						packageTrustScopes.Add("Solution");
+					}
+
+					if (projectTrustStore != null && trustStoreService.IsFindingApprovedByPackage(projectTrustStore, packageId, packageVersion))
+					{
+						packageTrustScopes.Add("Project");
+					}
+
+					isApprovedByPackage = packageTrustScopes.Count > 0;
+				}
+
 				var assemblyPath = string.Empty;
 
 				if (!string.IsNullOrWhiteSpace(packageId) && !string.IsNullOrWhiteSpace(packageVersion))
@@ -341,8 +364,8 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				}
 
 				var owningAssembly       = !string.IsNullOrWhiteSpace(assemblyPath) && !string.IsNullOrWhiteSpace(packageId) && !string.IsNullOrWhiteSpace(packageVersion) ? $"{packageId}@{packageVersion}" : string.Empty;
-				var trustStatusDetails   = BuildTrustStatusDetails(issueTrustScopes, assemblyTrustScopes, signerTrustScopes);
-				var isEffectivelyTrusted = isTrusted || isApprovedByAssembly || isApprovedBySigner;
+				var trustStatusDetails   = BuildTrustStatusDetails(issueTrustScopes, assemblyTrustScopes, signerTrustScopes, packageTrustScopes);
+				var isEffectivelyTrusted = isTrusted || isApprovedByAssembly || isApprovedBySigner || isApprovedByPackage;
 
 				this.allFindings.Add(new FindingViewModel
 				{
@@ -421,8 +444,9 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			this.ProjectOptions.Clear();
 			this.ProjectOptions.Add(new SolutionProjectOptionViewModel
 			{
-				Name = "All",
-				Path = AllProjectsPath
+				Name      = "All",
+				Path      = AllProjectsPath,
+				RiskLevel = this.GetProjectRiskLevel(AllProjectsPath)
 			});
 
 			var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -443,8 +467,9 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 
 					this.ProjectOptions.Add(new SolutionProjectOptionViewModel
 					{
-						Name = Path.GetFileNameWithoutExtension(projectPath),
-						Path = projectPath
+						Name      = Path.GetFileNameWithoutExtension(projectPath),
+						Path      = projectPath,
+						RiskLevel = this.GetProjectRiskLevel(projectPath)
 					});
 				}
 			}
@@ -465,8 +490,9 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 
 					this.ProjectOptions.Add(new SolutionProjectOptionViewModel
 					{
-						Name = Path.GetFileNameWithoutExtension(file.Path),
-						Path = file.Path
+						Name      = Path.GetFileNameWithoutExtension(file.Path),
+						Path      = file.Path,
+						RiskLevel = this.GetProjectRiskLevel(file.Path)
 					});
 				}
 			}
@@ -475,8 +501,9 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			{
 				this.ProjectOptions.Add(new SolutionProjectOptionViewModel
 				{
-					Name = Path.GetFileNameWithoutExtension(solutionPath),
-					Path = solutionPath
+					Name      = Path.GetFileNameWithoutExtension(solutionPath),
+					Path      = solutionPath,
+					RiskLevel = this.GetProjectRiskLevel(solutionPath)
 				});
 			}
 
@@ -496,6 +523,47 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 
 			this.OnPropertyChanged(nameof(this.SelectedProject));
 			this.OnPropertyChanged(nameof(this.OnlyUntrustedIssues));
+		}
+
+		/// <summary>
+		/// Gets the risk level representing a project's active risk level.
+		/// </summary>
+		/// <param name="projectPath">Project file path or AllProjectsPath.</param>
+		/// <returns>Risk level name ('High', 'Medium', or 'Low').</returns>
+		private string GetProjectRiskLevel(string projectPath)
+		{
+			if (string.Equals(projectPath, AllProjectsPath, StringComparison.OrdinalIgnoreCase))
+			{
+				ComputeRiskScores(this.allFindings, out var activeRiskScore, out _);
+
+				return GetRiskLevelForScore(activeRiskScore);
+			}
+
+			var projectFindings = this.allFindings.Where(finding => BelongsToProject(finding, projectPath)).ToList();
+
+			ComputeRiskScores(projectFindings, out var projectRiskScore, out _);
+
+			return GetRiskLevelForScore(projectRiskScore);
+		}
+
+		/// <summary>
+		/// Maps a risk score to a risk level name.
+		/// </summary>
+		/// <param name="score">The calculated risk score.</param>
+		/// <returns>Risk level name ('High', 'Medium', or 'Low').</returns>
+		private static string GetRiskLevelForScore(int score)
+		{
+			if (score >= 100)
+			{
+				return "High";
+			}
+
+			if (score >= 20)
+			{
+				return "Medium";
+			}
+
+			return "Low";
 		}
 
 		/// <summary>
@@ -571,7 +639,11 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		/// <param name="assemblyTrustScopes">Matching scope names for assembly trust.</param>
 		/// <param name="signerTrustScopes">Matching scope names for signer trust.</param>
 		/// <returns>Concise trust detail string.</returns>
-		private static string BuildTrustStatusDetails(IReadOnlyCollection<string> issueTrustScopes, IReadOnlyCollection<string> assemblyTrustScopes, IReadOnlyCollection<string> signerTrustScopes)
+		private static string BuildTrustStatusDetails(
+			IReadOnlyCollection<string> issueTrustScopes,
+			IReadOnlyCollection<string> assemblyTrustScopes,
+			IReadOnlyCollection<string> signerTrustScopes,
+			IReadOnlyCollection<string> packageTrustScopes)
 		{
 			var parts = new List<string>();
 
@@ -588,6 +660,11 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			if (signerTrustScopes.Count > 0)
 			{
 				parts.Add($"signer trust ({string.Join("/", signerTrustScopes)})");
+			}
+
+			if (packageTrustScopes.Count > 0)
+			{
+				parts.Add($"package trust ({string.Join("/", packageTrustScopes)})");
 			}
 
 			return string.Join("; ", parts);
