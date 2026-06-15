@@ -65,6 +65,11 @@ namespace MSBuildGuard.Core.Baseline
 		public string ReputationSourceDescription { get; set; } = string.Empty;
 
 		/// <summary>
+		/// Gets or sets a value indicating whether this suggestion is already trusted in any trust store.
+		/// </summary>
+		public bool IsAlreadyTrusted { get; set; }
+
+		/// <summary>
 		/// Gets additional metadata for creating the trust decision.
 		/// </summary>
 		public Dictionary<string, string> Metadata { get; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -97,6 +102,15 @@ namespace MSBuildGuard.Core.Baseline
 			{
 				throw new ArgumentNullException(nameof(report));
 			}
+
+			var trustStoreService = new TrustStoreService();
+			var userTrustPath = trustStoreService.GetDefaultUserTrustPath();
+			var solutionPath = report.Target.TargetKind == TargetKind.Solution ? report.Target.TargetPath : null;
+			var projectPath = report.Target.TargetKind == TargetKind.File && (report.Target.TargetPath.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase) ||
+																			   report.Target.TargetPath.EndsWith(".vbproj", StringComparison.OrdinalIgnoreCase) ||
+																			   report.Target.TargetPath.EndsWith(".fsproj", StringComparison.OrdinalIgnoreCase) ||
+																			   report.Target.TargetPath.EndsWith(".proj", StringComparison.OrdinalIgnoreCase)) ? report.Target.TargetPath : null;
+			var trustStore = trustStoreService.LoadMergedTrustStore(userTrustPath, solutionPath, projectPath);
 
 			var suggestions = new List<TrustSuggestion>();
 			var processedPackages = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -241,7 +255,52 @@ namespace MSBuildGuard.Core.Baseline
 				}
 			}
 
+			foreach (var suggestion in suggestions)
+			{
+				suggestion.IsAlreadyTrusted = IsSuggestionAlreadyTrusted(suggestion, trustStore, trustStoreService);
+
+				if (suggestion.IsAlreadyTrusted)
+				{
+					suggestion.IsSelected = true;
+					suggestion.RecommendationReason = "Already trusted in your configuration.";
+				}
+			}
+
 			return suggestions;
+		}
+
+		private static bool IsSuggestionAlreadyTrusted(
+			TrustSuggestion suggestion,
+			TrustStoreDocument trustStore,
+			TrustStoreService trustStoreService)
+		{
+			if (suggestion.Scope == TrustSuggestionScope.Signer)
+			{
+				var thumb = suggestion.Metadata.TryGetValue("SignerThumbprint", out var t) ? t : string.Empty;
+				var sub = suggestion.Metadata.TryGetValue("SignerSubject", out var s) ? s : string.Empty;
+				var iss = suggestion.Metadata.TryGetValue("SignerIssuer", out var i) ? i : string.Empty;
+				var ser = suggestion.Metadata.TryGetValue("SignerSerialNumber", out var sn) ? sn : string.Empty;
+
+				return trustStoreService.IsSignerTrusted(trustStore, thumb, sub, iss, ser);
+			}
+
+			if (suggestion.Scope == TrustSuggestionScope.Package)
+			{
+				var id = suggestion.Metadata.TryGetValue("PackageId", out var pid) ? pid : string.Empty;
+				var ver = suggestion.Metadata.TryGetValue("PackageVersion", out var pv) ? pv : string.Empty;
+
+				return trustStoreService.IsFindingApprovedByPackage(trustStore, id, ver);
+			}
+
+			if (suggestion.Scope == TrustSuggestionScope.Assembly)
+			{
+				var name = suggestion.Metadata.TryGetValue("AssemblyName", out var an) ? an : string.Empty;
+				var ver = suggestion.Metadata.TryGetValue("AssemblyVersion", out var av) ? av : string.Empty;
+
+				return trustStoreService.IsFindingApprovedByAssembly(trustStore, name, ver);
+			}
+
+			return false;
 		}
 	}
 }

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Windows;
 using MSBuildGuard.Core.Baseline;
 
 namespace MSBuildGuard.VisualStudio.ToolWindows
@@ -72,6 +73,22 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		/// Gets the source of reputation rating.
 		/// </summary>
 		public string ReputationSourceDescription => this.Suggestion.ReputationSourceDescription;
+
+		/// <summary>
+		/// Gets a value indicating whether this suggestion is already trusted in any trust store.
+		/// </summary>
+		public bool IsAlreadyTrusted => this.Suggestion.IsAlreadyTrusted;
+
+		/// <summary>
+		/// Gets a value indicating whether this suggestion can be selected by the user.
+		/// </summary>
+		public bool IsSelectable => !this.IsAlreadyTrusted;
+
+		/// <summary>
+		/// Gets the visibility of the "Already Trusted" indicator in the UI.
+		/// </summary>
+		public Visibility AlreadyTrustedVisibility =>
+			this.IsAlreadyTrusted ? Visibility.Visible : Visibility.Collapsed;
 
 		private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
 		{

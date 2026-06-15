@@ -49,13 +49,14 @@
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <CheckBox IsChecked="{Binding IsSelected}" VerticalAlignment="Top" Margin="4,4,8,0"/>
+                            <CheckBox IsChecked="{Binding IsSelected}" IsEnabled="{Binding IsSelectable}" VerticalAlignment="Top" Margin="4,4,8,0"/>
                             <StackPanel Grid.Column="1" Orientation="Vertical">
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,3">
                                     <Border Background="{DynamicResource {x:Static vsshell:VsBrushes.GridHeadingBackgroundKey}}" Padding="6,2" CornerRadius="3" Margin="0,0,8,0">
                                         <TextBlock Text="{Binding ScopeName}" FontSize="10" FontWeight="Bold" VerticalAlignment="Center"/>
                                     </Border>
                                     <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" VerticalAlignment="Center" FontSize="12"/>
+                                    <TextBlock Text="✓ Already Trusted" Foreground="#10B981" FontWeight="Bold" Margin="8,0,0,0" VerticalAlignment="Center" FontSize="11" Visibility="{Binding AlreadyTrustedVisibility}"/>
                                 </StackPanel>
                                 <TextBlock Text="{Binding RecommendationReason}" TextWrapping="Wrap" FontSize="11" Opacity="0.8"/>
                                 <TextBlock Text="{Binding ReputationSourceDescription}" FontSize="10" Opacity="0.5" FontStyle="Italic" Margin="0,2,0,0"/>

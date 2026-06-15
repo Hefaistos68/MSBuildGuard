@@ -112,7 +112,7 @@ export class OnboardingPanel {
     private async _handleApplySetup(selectedIndices: number[], trustScope: string, createBaseline: boolean, doNotScan: boolean) {
         try {
             const suggestions = await this._workerClient.getOnboardingSuggestionsAsync(this._solutionPath, this._scanOptions);
-            const selectedSuggestions = suggestions.filter((_, idx) => selectedIndices.includes(idx));
+            const selectedSuggestions = suggestions.filter((item, idx) => selectedIndices.includes(idx) && !item.isAlreadyTrusted);
 
             // Apply selected trusts
             if (selectedSuggestions.length > 0) {
@@ -654,14 +654,23 @@ export class OnboardingPanel {
                 const container = document.createElement('div');
                 container.className = 'suggestion-item';
 
+                const isAlreadyTrusted = item.isAlreadyTrusted || false;
+                const checkboxHtml = isAlreadyTrusted
+                    ? '<input type="checkbox" id="sug-' + index + '" checked disabled>'
+                    : '<input type="checkbox" id="sug-' + index + '" ' + (item.isSelected ? 'checked' : '') + '>';
+
+                const detailsStyle = isAlreadyTrusted ? 'opacity: 0.65;' : '';
+                const trustedIndicator = isAlreadyTrusted ? ' <span style="color: var(--accent-success); font-size: 0.8rem; font-weight: 600; margin-left: 8px;">✓ Already Trusted</span>' : '';
+
                 container.innerHTML = 
                     '<div class="checkbox-container">' +
-                        '<input type="checkbox" id="sug-' + index + '" ' + (item.isSelected ? 'checked' : '') + '>' +
+                        checkboxHtml +
                     '</div>' +
-                    '<div class="suggestion-details">' +
+                    '<div class="suggestion-details" style="' + detailsStyle + '">' +
                         '<div class="suggestion-header">' +
                             '<span class="badge ' + badgeClass + '">' + item.scope + '</span>' +
                             '<span class="display-name">' + item.displayName + '</span>' +
+                            trustedIndicator +
                         '</div>' +
                         '<div class="reason">' + item.recommendationReason + '</div>' +
                         '<div class="reputation">' + item.reputationSourceDescription + '</div>' +

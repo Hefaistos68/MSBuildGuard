@@ -54,5 +54,27 @@ namespace MSBuildGuard.VisualStudio.ToolWindows.Tests
 			viewModel.SelectedTrustScope.ShouldBe("User");
 			raised.ShouldBeTrue();
 		}
+
+		/// <summary>
+		/// Verifies that TrustSuggestionItemViewModel correctly exposes isAlreadyTrusted properties.
+		/// </summary>
+		[Test]
+		public void TrustSuggestionItemViewModel_ShouldExposeAlreadyTrustedProperties()
+		{
+			var suggestion = new TrustSuggestion
+			{
+				IsSelected = true,
+				Scope = TrustSuggestionScope.Package,
+				DisplayName = "Newtonsoft.Json v13.0.3",
+				IsAlreadyTrusted = true
+			};
+
+			var itemViewModel = new TrustSuggestionItemViewModel(suggestion);
+
+			itemViewModel.IsAlreadyTrusted.ShouldBeTrue();
+			itemViewModel.IsSelectable.ShouldBeFalse();
+			itemViewModel.AlreadyTrustedVisibility.ShouldBe(System.Windows.Visibility.Visible);
+			itemViewModel.IsSelected.ShouldBeTrue();
+		}
 	}
 }

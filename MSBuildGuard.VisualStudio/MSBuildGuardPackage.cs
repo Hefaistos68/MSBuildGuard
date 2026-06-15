@@ -865,7 +865,7 @@ namespace MSBuildGuard.VisualStudio
 
 			if (dialogResult == true)
 			{
-				var selectedSuggestions = vm.Suggestions.Where(s => s.IsSelected).ToList();
+				var selectedSuggestions = vm.Suggestions.Where(s => s.IsSelected && !s.IsAlreadyTrusted).ToList();
 				var userSid = System.Security.Principal.WindowsIdentity.GetCurrent()?.User?.Value ?? "Unknown";
 
 				await this.UiFeedbackService.WriteLineAsync($"Applying {selectedSuggestions.Count} selected trusts...", CancellationToken.None);
