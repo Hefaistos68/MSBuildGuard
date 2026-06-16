@@ -341,7 +341,7 @@
 						Margin="10,4,8,4"
 						Padding="8,4"
 						Style="{StaticResource SecondaryActionButtonStyle}"
-						Command="{Binding RemoveAllProjectTrustsCommand}"
+						Click="OnRemoveAllProjectTrustsClick"
 						IsEnabled="{Binding CanRemoveProjectTrusts}" />
 				<CheckBox Content="only untrusted issues"
 						  Margin="10,4,8,0"

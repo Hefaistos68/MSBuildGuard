@@ -2,6 +2,20 @@
 
 MSBuild Guard for VS Code provides cross-platform inline project risk visibility, trust workflows, and build protection inside Visual Studio Code.
 
+---
+
+## What's New in This Version
+
+- **VS Code Webview Layout Styling Fix**: Added explicit styling to onboarding webviews to prevent layout items from rendering as horizontal rows, ensuring clean vertical stack rendering.
+- **Root CA Chain Pinning**: Enforces strict X509 Root CA thumbprint pinning via environment variable configuration to secure signed policies against unauthorized/untrusted authorities.
+- **Load-time Audit Trail Validation**: Added cryptographic append-only audit trail verification to protect the trust store databases from offline tampering.
+- **Auto-signature Companion Cleanup**: Automatically deletes corresponding `.signature` companion files alongside trust JSON files when removing or purging user, solution, or project trusts.
+- **Multi-Root & Subfolder Workspace Alignment**: Strengthened path resolution for trust purging, baseline creation, policy configuration, and trust management to fully support multi-root environments and subfolder solution layouts.
+- **macOS Folder Structure Synchronization**: Aligned the user trust directory path on macOS to use `~/Library/Application Support` instead of `~/Library/Caches` to remain consistent with core .NET LocalApplicationData resolutions.
+- **Options and State Synchronization**: Replaced hardcoded Global target config updates with dynamic scope-based `conf.inspect` targets and synchronized state changes correctly to prevent cached flag desynchronization when reverting a settings change.
+
+---
+
 ## Target
 
 - VS Code version `^1.75.0` or higher

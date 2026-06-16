@@ -12,6 +12,20 @@ It integrates into your workflow through three complementary surfaces:
 
 ---
 
+## What's New in This Version
+
+- **Themed Visual Studio Onboarding**: Replaced generic dialogs with a beautiful, fully-themed Visual Studio key management choice window (supporting Light, Dark, and Blue color schemes).
+- **Onboarding Start Page Suppression**: Prevents onboarding prompts from displaying while Visual Studio is sitting on the Start Page, automatically deferring them until the main window has been fully restored.
+- **Root CA Chain Pinning**: Enforces strict X509 Root CA thumbprint pinning via environment variable configuration to secure signed policies against unauthorized/untrusted authorities.
+- **Load-time Audit Trail Validation**: Added cryptographic append-only audit trail verification to protect the trust store databases from offline tampering.
+- **Auto-signature Companion Cleanup**: Automatically deletes corresponding `.signature` companion files alongside trust JSON files when removing or purging user, solution, or project trusts.
+- **Visual Studio Menu Structure Enhancements**: Organized the Project Security menu items into section groups separated by separators, matching modern Visual Studio UX.
+- **Multi-Root & Subfolder Workspace Alignment**: Strengthened path resolution for trust purging, baseline creation, policy configuration, and trust management to fully support multi-root environments and subfolder solution layouts.
+- **macOS Folder Structure Synchronization**: Aligned the user trust directory path on macOS to use `~/Library/Application Support` to remain consistent with core .NET LocalApplicationData resolutions.
+- **Options and State Synchronization**: Ensured options changes automatically propagate to core services at startup and run time, and synchronized setting reversion cache flags correctly.
+
+---
+
 ## Why MSBuild Guard?
 
 MSBuild project files (`.csproj`, `.targets`, `.props`, `.sln`, etc.) are XML documents that can execute arbitrary shell commands, download files, and run code during a simple `dotnet restore` or solution load. Supply-chain attacks increasingly abuse this attack surface.

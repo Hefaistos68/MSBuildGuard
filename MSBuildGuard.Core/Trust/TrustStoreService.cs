@@ -1741,6 +1741,16 @@ namespace MSBuildGuard.Core.Trust
 					return;
 				}
 
+				if (string.Equals(Path.GetFileName(solutionDir), ".msbuildguard", StringComparison.OrdinalIgnoreCase))
+				{
+					solutionDir = Path.GetDirectoryName(solutionDir);
+				}
+
+				if (string.IsNullOrWhiteSpace(solutionDir))
+				{
+					return;
+				}
+
 				var pinned = LoadPinnedRepositories();
 
 				if (!pinned.Contains(solutionDir, StringComparer.OrdinalIgnoreCase))
@@ -1764,6 +1774,16 @@ namespace MSBuildGuard.Core.Trust
 			try
 			{
 				var solutionDir = Path.GetDirectoryName(path);
+
+				if (string.IsNullOrWhiteSpace(solutionDir))
+				{
+					return false;
+				}
+
+				if (string.Equals(Path.GetFileName(solutionDir), ".msbuildguard", StringComparison.OrdinalIgnoreCase))
+				{
+					solutionDir = Path.GetDirectoryName(solutionDir);
+				}
 
 				if (string.IsNullOrWhiteSpace(solutionDir))
 				{

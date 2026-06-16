@@ -140,14 +140,25 @@ export function activate(context: vscode.ExtensionContext) {
                         await purgeAllTrusts(context);
                         restartWorkerClient();
                         void runScan();
+                        await context.globalState.update('lastEnforceAsymmetricSignatures', newValue);
                     } else {
-                        await conf.update('enforceAsymmetricSignatures', true, vscode.ConfigurationTarget.Global);
+                        const inspect = conf.inspect<boolean>('enforceAsymmetricSignatures');
+                        let target = vscode.ConfigurationTarget.Global;
+                        if (inspect) {
+                            if (inspect.workspaceFolderValue === false) {
+                                target = vscode.ConfigurationTarget.WorkspaceFolder;
+                            } else if (inspect.workspaceValue === false) {
+                                target = vscode.ConfigurationTarget.Workspace;
+                            }
+                        }
+                        await conf.update('enforceAsymmetricSignatures', true, target);
+                        await context.globalState.update('lastEnforceAsymmetricSignatures', true);
                     }
                 } else {
                     restartWorkerClient();
                     void runScan();
+                    await context.globalState.update('lastEnforceAsymmetricSignatures', newValue);
                 }
-                await context.globalState.update('lastEnforceAsymmetricSignatures', newValue);
             } else if (e.affectsConfiguration('msbuildguard.trustManagement.allowSharingTrustsInRepositories')) {
                 const conf = vscode.workspace.getConfiguration('msbuildguard');
                 const allowSharing = conf.get<boolean>('trustManagement.allowSharingTrustsInRepositories', false);
@@ -307,7 +318,7 @@ async function createBaseline(): Promise<void> {
         return;
     }
 
-    const defaultBaselineDir = path.join(workspaceFolders[0].uri.fsPath, '.msbuildguard');
+    const defaultBaselineDir = path.join(path.dirname(latestReport.target.targetPath), '.msbuildguard');
     const defaultPath = path.join(defaultBaselineDir, 'baseline.json');
 
     const confirmed = await vscode.window.showInputBox({
@@ -509,8 +520,11 @@ async function editPolicy(): Promise<void> {
     const projectFiles = await vscode.workspace.findFiles('**/*.{csproj,fsproj,vbproj}', '**/node_modules/**');
     const projectPaths = projectFiles.map(f => f.fsPath);
 
+    const solutionUri = vscode.Uri.file(solutionPath);
+    const folder = vscode.workspace.getWorkspaceFolder(solutionUri) || workspaceFolders[0];
+
     PolicyEditorPanel.createOrShow(
-        contextUriResolver(workspaceFolders[0]),
+        contextUriResolver(folder),
         workerClient,
         solutionPath,
         projectPaths
@@ -547,8 +561,11 @@ async function manageTrusts(initialScope: 'User' | 'Solution' | 'Project' = 'Use
     const projectFiles = await vscode.workspace.findFiles('**/*.{csproj,fsproj,vbproj}', '**/node_modules/**');
     const projectPaths = projectFiles.map(f => f.fsPath);
 
+    const solutionUri = vscode.Uri.file(solutionPath);
+    const folder = vscode.workspace.getWorkspaceFolder(solutionUri) || workspaceFolders[0];
+
     TrustStorePanel.createOrShow(
-        contextUriResolver(workspaceFolders[0]),
+        contextUriResolver(folder),
         workerClient,
         solutionPath,
         projectPaths,
@@ -560,7 +577,7 @@ async function manageTrusts(initialScope: 'User' | 'Solution' | 'Project' = 'Use
 
 function getUserTrustPath(): string {
     const localAppData = process.env.LOCALAPPDATA || 
-        (process.platform === 'darwin' ? path.join(process.env.HOME || '', 'Library', 'Caches') : path.join(process.env.HOME || '', '.local', 'share'));
+        (process.platform === 'darwin' ? path.join(process.env.HOME || '', 'Library', 'Application Support') : path.join(process.env.HOME || '', '.local', 'share'));
     return path.join(localAppData, 'MSBuildGuard', 'trust.json');
 }
 
@@ -723,6 +740,12 @@ async function removeAllSolutionTrusts(): Promise<void> {
         return;
     }
 
+    const solutionPath = await resolveActiveScanTarget();
+    if (!solutionPath) {
+        void vscode.window.showWarningMessage('No active solution or project found to remove trusts.');
+        return;
+    }
+
     const confirm = await vscode.window.showWarningMessage(
         "Are you sure you want to permanently remove all solution-level trusts for this workspace?",
         { modal: true },
@@ -734,7 +757,8 @@ async function removeAllSolutionTrusts(): Promise<void> {
         return;
     }
 
-    const solutionTrustPath = path.join(workspaceFolders[0].uri.fsPath, '.msbuildguard', 'trust.json');
+    const solutionDir = path.dirname(solutionPath);
+    const solutionTrustPath = path.join(solutionDir, '.msbuildguard', 'trust.json');
     if (fs.existsSync(solutionTrustPath)) {
         try {
             fs.unlinkSync(solutionTrustPath);
@@ -795,6 +819,12 @@ async function removeAllProjectTrusts(): Promise<void> {
         return;
     }
 
+    const solutionPath = await resolveActiveScanTarget();
+    if (!solutionPath) {
+        void vscode.window.showWarningMessage('No active solution or project found to remove trusts.');
+        return;
+    }
+
     const confirm = await vscode.window.showWarningMessage(
         "Are you sure you want to permanently remove all project-level trusts for this workspace?",
         { modal: true },
@@ -806,10 +836,10 @@ async function removeAllProjectTrusts(): Promise<void> {
         return;
     }
 
-    const rootDir = workspaceFolders[0].uri.fsPath;
+    const solutionDir = path.dirname(solutionPath);
     let deletedCount = 0;
 
-    function purgeProjectTrusts(dir: string, depth: number = 0): void {
+    function purgeProjectTrusts(dir: string, solutionDir: string, depth: number = 0): void {
         if (depth > 5) {
             return;
         }
@@ -818,7 +848,7 @@ async function removeAllProjectTrusts(): Promise<void> {
             for (const file of files) {
                 const fullPath = path.join(dir, file);
                 if (file === '.msbuildguard') {
-                    if (path.resolve(dir) === path.resolve(rootDir)) {
+                    if (path.resolve(dir) === path.resolve(solutionDir)) {
                         continue;
                     }
                     const trustFile = path.join(fullPath, 'trust.json');
@@ -841,7 +871,7 @@ async function removeAllProjectTrusts(): Promise<void> {
                         const stat = fs.statSync(fullPath);
                         if (stat.isDirectory()) {
                             if (file !== 'node_modules' && file !== '.git' && file !== 'bin' && file !== 'obj') {
-                                purgeProjectTrusts(fullPath, depth + 1);
+                                purgeProjectTrusts(fullPath, solutionDir, depth + 1);
                             }
                         }
                     } catch (e) {}
@@ -850,7 +880,8 @@ async function removeAllProjectTrusts(): Promise<void> {
         } catch (e) {}
     }
 
-    purgeProjectTrusts(rootDir);
+    purgeProjectTrusts(solutionDir, solutionDir);
+
     if (deletedCount > 0) {
         void vscode.window.showInformationMessage(`Successfully removed project-level trusts from ${deletedCount} project(s).`);
         restartWorkerClient();

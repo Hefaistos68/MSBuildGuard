@@ -167,6 +167,9 @@ namespace MSBuildGuard.VisualStudio
 			}
 
 			this.lastEnforceAsymmetric = page.EnforceAsymmetricSignatures;
+
+			MSBuildGuard.Core.CoreSettings.EnforceAsymmetricSignatures = page.EnforceAsymmetricSignatures;
+			MSBuildGuard.Core.CoreSettings.AllowSharingTrustsInRepositories = page.AllowSharingTrustsInRepositories;
 		}
 
 		/// <summary>
@@ -254,7 +257,15 @@ namespace MSBuildGuard.VisualStudio
 				this.RegisterHardeningCommands(commandService);
 			}
 
+			var options = await this.GetOptionsSnapshotAsync(cancellationToken).ConfigureAwait(false);
+
+			MSBuildGuard.Core.CoreSettings.EnforceAsymmetricSignatures = options.EnforceAsymmetricSignatures;
+			MSBuildGuard.Core.CoreSettings.AllowSharingTrustsInRepositories = options.AllowSharingTrustsInRepositories;
+
 			var page = (MSBuildGuardOptionsPage)this.GetDialogPage(typeof(MSBuildGuardOptionsPage));
+
+			page.EnforceAsymmetricSignatures = options.EnforceAsymmetricSignatures;
+			page.AllowSharingTrustsInRepositories = options.AllowSharingTrustsInRepositories;
 
 			PerformOnboardingCheck(page);
 			this.lastEnforceAsymmetric = page.EnforceAsymmetricSignatures;

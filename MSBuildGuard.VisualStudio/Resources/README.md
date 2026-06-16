@@ -2,6 +2,21 @@
 
 MSBuild Guard for Visual Studio provides inline project risk visibility and trust workflows inside Visual Studio 2026.
 
+---
+
+## What's New in This Version
+
+- **Themed Key Management Onboarding**: Replaced standard OS message boxes with a beautiful, fully-themed Visual Studio key management choice window (supporting Light, Dark, and Blue color schemes).
+- **Onboarding Start Page Suppression**: Prevents onboarding prompts from displaying while Visual Studio is sitting on the Start Page, automatically deferring them until the main window has been fully restored.
+- **WPF Review Control Fixes**: Fixed binding for the "Remove All Project Trusts" button inside the Solution Security Review control to correctly trigger its confirmation dialog and purge trusts at runtime.
+- **Root CA Chain Pinning**: Enforces strict X509 Root CA thumbprint pinning via environment variable configuration to secure signed policies against unauthorized/untrusted authorities.
+- **Load-time Audit Trail Validation**: Added cryptographic append-only audit trail verification to protect the trust store databases from offline tampering.
+- **Auto-signature Companion Cleanup**: Automatically deletes corresponding `.signature` companion files alongside trust JSON files when removing or purging user, solution, or project trusts.
+- **Visual Studio Menu Structure Enhancements**: Organized the Project Security menu items into section groups separated by separators, matching modern Visual Studio UX.
+- **Options and State Synchronization**: Ensured options changes automatically propagate to core services at startup and run time, and synchronized setting reversion cache flags correctly.
+
+---
+
 ## Target
 
 - Visual Studio 2026 (Community, Professional, Enterprise), amd64
