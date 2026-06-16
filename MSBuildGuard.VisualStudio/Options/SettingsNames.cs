@@ -34,6 +34,20 @@ namespace MSBuildGuard.VisualStudio.Options
 			"MSBuild Guard\\General\\AllowSharingTrustsInRepositories");
 
 		/// <summary>
+		/// Gets the key management mode setting metadata.
+		/// </summary>
+		internal static SettingName KeyManagementMode { get; } = new(
+			"extensions.msbuildguard.trustManagement.keyManagementMode",
+			"MSBuild Guard\\General\\KeyManagementMode");
+
+		/// <summary>
+		/// Gets the enforce asymmetric signatures setting metadata.
+		/// </summary>
+		internal static SettingName EnforceAsymmetricSignatures { get; } = new(
+			"extensions.msbuildguard.trustManagement.enforceAsymmetricSignatures",
+			"MSBuild Guard\\General\\EnforceAsymmetricSignatures");
+
+		/// <summary>
 		/// Gets the file types to scan setting metadata.
 		/// </summary>
 		internal static SettingName FileTypesToScan { get; } = new(

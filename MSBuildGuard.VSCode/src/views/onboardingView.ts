@@ -565,6 +565,13 @@ export class OnboardingPanel {
             color: var(--text-secondary);
             font-size: 0.9rem;
         }
+
+        #content {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            width: 100%;
+        }
     </style>
 </head>
 <body>

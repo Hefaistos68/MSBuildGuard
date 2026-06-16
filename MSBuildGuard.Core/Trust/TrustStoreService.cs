@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -15,8 +16,14 @@ namespace MSBuildGuard.Core.Trust
 	/// </summary>
 	public sealed class TrustStoreService
 	{
+		/// <summary>
+		/// Fallback symmetric signing key used when repository trust sharing is enabled.
+		/// </summary>
 		private const string TrustStoreSigningKey = "MSBuildGuard.TrustStore.v1";
 
+		/// <summary>
+		/// Serializer options for trust store documents.
+		/// </summary>
 		private static readonly JsonSerializerOptions SerializerOptions = new JsonSerializerOptions
 		{
 			WriteIndented               = true,
@@ -24,11 +31,17 @@ namespace MSBuildGuard.Core.Trust
 			Converters                  = { new JsonStringEnumConverter() }
 		};
 
+		/// <summary>
+		/// Serializer options for line-delimited audit events.
+		/// </summary>
 		private static readonly JsonSerializerOptions AuditSerializerOptions = new JsonSerializerOptions
 		{
 			WriteIndented = false
 		};
 
+		/// <summary>
+		/// In-memory cache of calculated package directory hashes by absolute directory path.
+		/// </summary>
 		private readonly Dictionary<string, string> packageDirectoryHashCache = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
 		/// <summary>
@@ -50,44 +63,54 @@ namespace MSBuildGuard.Core.Trust
 
 			var payload = File.ReadAllText(path);
 			var signatureService = new JsonSignatureService();
-
 			var isEnvelopeFormat = false;
 
 			try
 			{
 				using var doc = JsonDocument.Parse(payload);
+
 				isEnvelopeFormat = doc.RootElement.ValueKind == JsonValueKind.Object && doc.RootElement.TryGetProperty("SignatureV1", out _);
 			}
 			catch (JsonException)
 			{
 			}
 
-			string? trustPayload;
-			var isEnvelopeSigned = signatureService.TryVerifyAndExtract<string>(payload, TrustStoreSigningKey, out trustPayload) && !string.IsNullOrWhiteSpace(trustPayload);
-
-			if (isEnvelopeFormat)
+			if (!isEnvelopeFormat)
 			{
-				if (!isEnvelopeSigned)
-				{
-					throw new InvalidDataException("Trust store signature validation failed. Do not modify the contents of this file manually.");
-				}
+				throw new InvalidDataException("Trust store must be signed. Unsigned trust stores are not allowed.");
+			}
+
+			var signingKey = GetSigningKeyForPath(path);
+			string? trustPayload;
+			var isEnvelopeSigned = signatureService.TryVerifyAndExtract<string>(payload, signingKey, out trustPayload) && !string.IsNullOrWhiteSpace(trustPayload);
+
+			if (!isEnvelopeSigned)
+			{
+				throw new InvalidDataException("Trust store signature validation failed. Do not modify the contents of this file manually.");
+			}
+
+			// Verify optional Asymmetric signature
+			var hasAsymmetricSignature = TryReadSignatureRecord(path, out _);
+
+			if (hasAsymmetricSignature)
+			{
+				ValidateSignedTrust(path);
+				PinRepositoryAsAsymmetricRequired(path);
 			}
 			else
 			{
-				try
-				{
-					var directTrust = JsonSerializer.Deserialize<TrustStoreDocument>(payload, SerializerOptions);
+				var solutionDir = Path.GetDirectoryName(path);
+				var isSolutionOrProjectScope = !string.IsNullOrWhiteSpace(solutionDir) && (solutionDir.Contains(".msbuildguard") || path.Contains(".msbuildguard"));
 
-					if (directTrust != null)
-					{
-						return directTrust;
-					}
-				}
-				catch
+				if (CoreSettings.EnforceAsymmetricSignatures && isSolutionOrProjectScope)
 				{
+					throw new InvalidDataException("Asymmetric signature is required but missing.");
 				}
 
-				throw new InvalidDataException("Trust store signature validation failed. Do not modify the contents of this file manually.");
+				if (IsRepositoryPinnedAsAsymmetricRequired(path) && isSolutionOrProjectScope)
+				{
+					throw new InvalidDataException("Asymmetric signature is required for this pinned repository but is missing.");
+				}
 			}
 
 			var trust = JsonSerializer.Deserialize<TrustStoreDocument>(trustPayload!, SerializerOptions);
@@ -95,6 +118,21 @@ namespace MSBuildGuard.Core.Trust
 			if (trust == null)
 			{
 				throw new InvalidDataException("Unable to deserialize decrypted trust store content.");
+			}
+
+			// Verify audit trail integrity if the audit file exists
+			var auditPath = GetAuditPathForStore(path);
+
+			if (File.Exists(auditPath))
+			{
+				try
+				{
+					ReadAudit(auditPath);
+				}
+				catch (Exception ex)
+				{
+					throw new InvalidDataException($"Audit trail integrity validation failed for '{path}': {ex.Message}", ex);
+				}
 			}
 
 			return trust;
@@ -124,10 +162,34 @@ namespace MSBuildGuard.Core.Trust
 				Directory.CreateDirectory(directory);
 			}
 
+			var hasAsymmetricSignature = TryReadSignatureRecord(path, out var signatureRecord);
+			string? signingThumbprint = null;
+
+			if (hasAsymmetricSignature)
+			{
+				signingThumbprint = signatureRecord.SigningCertificateThumbprint;
+			}
+			else
+			{
+				var solutionDir = Path.GetDirectoryName(path);
+				var isSolutionOrProjectScope = !string.IsNullOrWhiteSpace(solutionDir) && (solutionDir.Contains(".msbuildguard") || path.Contains(".msbuildguard"));
+
+				if (isSolutionOrProjectScope && (CoreSettings.EnforceAsymmetricSignatures || IsRepositoryPinnedAsAsymmetricRequired(path)))
+				{
+					signingThumbprint = ResolveSigningCertificateThumbprint(null);
+				}
+			}
+
 			var trustPayload = JsonSerializer.Serialize(document, SerializerOptions);
-			var payload = new JsonSignatureService().CreateSignedEnvelopeJson(trustPayload, TrustStoreSigningKey);
+			var signingKey = GetSigningKeyForPath(path);
+			var payload = new JsonSignatureService().CreateSignedEnvelopeJson(trustPayload, signingKey);
 
 			WriteAllTextAtomic(path, payload);
+
+			if (signingThumbprint != null)
+			{
+				Sign(path, signingThumbprint);
+			}
 		}
 
 		/// <summary>
@@ -773,6 +835,7 @@ namespace MSBuildGuard.Core.Trust
 		/// </summary>
 		/// <param name="store">Trust store document.</param>
 		/// <param name="repositoryRemote">Repository remote.</param>
+		/// <param name="branch">Repository branch.</param>
 		/// <param name="commitSha">Commit SHA.</param>
 		/// <param name="policyProfile">Optional policy profile.</param>
 		/// <returns><see langword="true"/> when a matching active repository or baseline trust decision exists; otherwise <see langword="false"/>.</returns>
@@ -1053,10 +1116,11 @@ namespace MSBuildGuard.Core.Trust
 		}
 
 		/// <summary>
-		/// Appends a trust audit event to the audit log associated with the specified trust store, ensuring that the integrity of the audit chain is maintained through hash linking of events.
+		/// Appends a trust audit event to the audit log associated with the specified trust store,
+		/// preserving hash-chain continuity with the previous event.
 		/// </summary>
-		/// <param name="trustStorePath"></param>
-		/// <param name="auditEvent"></param>
+		/// <param name="trustStorePath">Trust store path used to resolve the audit log location.</param>
+		/// <param name="auditEvent">Audit event to append.</param>
 		private void AppendAuditEvent(string trustStorePath, TrustAuditEvent auditEvent)
 		{
 			var auditPath = GetAuditPathForStore(trustStorePath);
@@ -1092,13 +1156,13 @@ namespace MSBuildGuard.Core.Trust
 		}
 
 		/// <summary>
-		/// Creates a trust audit event based on the provided decision entry and context information.
+		/// Creates a trust audit event from a trust decision and operation context.
 		/// </summary>
-		/// <param name="eventKind"></param>
-		/// <param name="entry"></param>
-		/// <param name="reason"></param>
-		/// <param name="userSid"></param>
-		/// <returns></returns>
+		/// <param name="eventKind">Audit operation kind.</param>
+		/// <param name="entry">Decision entry associated with the operation.</param>
+		/// <param name="reason">Human-readable operation reason.</param>
+		/// <param name="userSid">Security identifier of the acting user.</param>
+		/// <returns>A populated audit event instance.</returns>
 		private static TrustAuditEvent CreateAuditEvent(string eventKind, TrustDecisionEntry entry, string reason, string userSid)
 		{
 			return new TrustAuditEvent
@@ -1116,10 +1180,10 @@ namespace MSBuildGuard.Core.Trust
 		}
 
 		/// <summary>
-		/// Computes a SHA256 hash of the serialized audit event for integrity chaining.
+		/// Computes a SHA256 hash of a serialized audit event for integrity chaining.
 		/// </summary>
-		/// <param name="auditEvent"></param>
-		/// <returns></returns>
+		/// <param name="auditEvent">Audit event to hash.</param>
+		/// <returns>Uppercase hexadecimal SHA256 hash, or empty when the input is null.</returns>
 		private static string ComputeEventHash(TrustAuditEvent auditEvent)
 		{
 			if (auditEvent == null)
@@ -1139,10 +1203,11 @@ namespace MSBuildGuard.Core.Trust
 		}
 
 		/// <summary>
-		/// Validates the integrity of the audit event chain by ensuring that each event's PreviousEventHash matches the computed hash of the prior event.
+		/// Validates the integrity of the audit event chain by ensuring each event references
+		/// the computed hash of its predecessor.
 		/// </summary>
-		/// <param name="events"></param>
-		/// <exception cref="InvalidOperationException"></exception>
+		/// <param name="events">Audit events in persisted order.</param>
+		/// <exception cref="InvalidOperationException">Thrown when chain linkage is invalid.</exception>
 		private static void ValidateAuditChainIntegrity(IList<TrustAuditEvent> events)
 		{
 			if (events.Count == 0)
@@ -1263,6 +1328,592 @@ namespace MSBuildGuard.Core.Trust
 				return hash;
 			}
 		}
+
+		/// <summary>
+		/// Current supported version of persisted trust signature metadata.
+		/// </summary>
+		private const int TrustSignatureVersion = 1;
+
+		/// <summary>
+		/// Signature algorithm identifier used for trust-store signing.
+		/// </summary>
+		private const string TrustSignatureAlgorithm = "RSASSA-PKCS1-v1_5-SHA256";
+
+		/// <summary>
+		/// Logical stream name for trust signature metadata.
+		/// </summary>
+		private const string TrustSignatureStreamName = "msbuildguard.trust.signature";
+
+		/// <summary>
+		/// Serialized metadata describing a trust-store asymmetric signature.
+		/// </summary>
+		private sealed class TrustSignatureRecord
+		{
+			/// <summary>
+			/// Metadata schema version.
+			/// </summary>
+			public int Version { get; set; } = 1;
+
+			/// <summary>
+			/// Signature algorithm identifier.
+			/// </summary>
+			public string Algorithm { get; set; } = TrustSignatureAlgorithm;
+
+			/// <summary>
+			/// Thumbprint of the certificate that produced the signature.
+			/// </summary>
+			public string SigningCertificateThumbprint { get; set; } = string.Empty;
+
+			/// <summary>
+			/// Base64 signature payload.
+			/// </summary>
+			public string Signature { get; set; } = string.Empty;
+		}
+
+		/// <summary>
+		/// Signs a trust store file using a certificate thumbprint and stores signature metadata next to the trust file.
+		/// </summary>
+		/// <param name="trustPath">Path to the trust store file.</param>
+		/// <param name="signingCertificateThumbprint">Optional certificate thumbprint override.</param>
+		public void Sign(string trustPath, string? signingCertificateThumbprint)
+		{
+			if (trustPath == null)
+			{
+				throw new ArgumentNullException(nameof(trustPath));
+			}
+
+			if (!File.Exists(trustPath))
+			{
+				throw new FileNotFoundException("Trust file was not found.", trustPath);
+			}
+
+			var thumbprint = ResolveSigningCertificateThumbprint(signingCertificateThumbprint);
+			var certificate = LoadSigningCertificateOrThrow(thumbprint);
+			var trustBytes = File.ReadAllBytes(trustPath);
+			var signatureBytes = ComputeSignature(trustBytes, certificate);
+			var signatureRecord = new TrustSignatureRecord
+			{
+				Version = TrustSignatureVersion,
+				Algorithm = TrustSignatureAlgorithm,
+				SigningCertificateThumbprint = thumbprint,
+				Signature = Convert.ToBase64String(signatureBytes)
+			};
+			var signaturePath = GetSignatureStreamPath(trustPath);
+			var payload = JsonSerializer.Serialize(signatureRecord);
+
+			File.WriteAllText(signaturePath, payload);
+		}
+
+		/// <summary>
+		/// Validates the asymmetric signature for a trust store file.
+		/// </summary>
+		/// <param name="trustPath">Path to the trust store file.</param>
+		public void ValidateSignedTrust(string trustPath)
+		{
+			if (trustPath == null)
+			{
+				throw new ArgumentNullException(nameof(trustPath));
+			}
+
+			if (!File.Exists(trustPath))
+			{
+				throw new FileNotFoundException("Trust file was not found.", trustPath);
+			}
+
+			if (!TryReadSignatureRecord(trustPath, out var signatureRecord))
+			{
+				throw new InvalidDataException("Trust signature is missing.");
+			}
+
+			if (signatureRecord.Version != TrustSignatureVersion)
+			{
+				throw new InvalidDataException($"Trust signature stream uses unsupported version '{signatureRecord.Version}'.");
+			}
+
+			if (!string.Equals(signatureRecord.Algorithm, TrustSignatureAlgorithm, StringComparison.OrdinalIgnoreCase))
+			{
+				throw new InvalidDataException($"Trust signature stream uses unsupported algorithm '{signatureRecord.Algorithm}'.");
+			}
+
+			if (string.IsNullOrWhiteSpace(signatureRecord.Signature))
+			{
+				throw new InvalidDataException("Trust signature is missing.");
+			}
+
+			if (string.IsNullOrWhiteSpace(signatureRecord.SigningCertificateThumbprint))
+			{
+				throw new InvalidDataException("Trust signature does not declare a signing certificate thumbprint.");
+			}
+
+			byte[] storedSignatureBytes;
+
+			try
+			{
+				storedSignatureBytes = Convert.FromBase64String(signatureRecord.Signature);
+			}
+			catch (FormatException ex)
+			{
+				throw new InvalidDataException("Trust signature stream contains invalid base64 content.", ex);
+			}
+
+			var trustedCertificate = LoadTrustedVerificationCertificateOrThrow(signatureRecord.SigningCertificateThumbprint);
+			var trustBytes = File.ReadAllBytes(trustPath);
+			var isValid = VerifySignature(trustBytes, storedSignatureBytes, trustedCertificate);
+
+			if (!isValid)
+			{
+				throw new InvalidDataException("Trust store signature validation failed.");
+			}
+		}
+
+		/// <summary>
+		/// Gets the sidecar signature metadata path for a trust store file.
+		/// </summary>
+		/// <param name="trustPath">Path to the trust store file.</param>
+		/// <returns>Path of the signature sidecar file.</returns>
+		private string GetSignatureStreamPath(string trustPath)
+		{
+			return string.Concat(trustPath, ".signature");
+		}
+
+		/// <summary>
+		/// Attempts to read signature metadata for a trust store file.
+		/// </summary>
+		/// <param name="trustPath">Path to the trust store file.</param>
+		/// <param name="signatureRecord">Deserialized signature metadata when available.</param>
+		/// <returns><see langword="true"/> when metadata exists and is deserialized; otherwise <see langword="false"/>.</returns>
+		private bool TryReadSignatureRecord(string trustPath, out TrustSignatureRecord signatureRecord)
+		{
+			signatureRecord = null!;
+			var signaturePath = GetSignatureStreamPath(trustPath);
+
+			try
+			{
+				if (File.Exists(signaturePath))
+				{
+					var signaturePayload = File.ReadAllText(signaturePath);
+
+					signatureRecord = JsonSerializer.Deserialize<TrustSignatureRecord>(signaturePayload)
+						?? throw new InvalidDataException("Unable to deserialize trust signature stream content.");
+
+					return true;
+				}
+			}
+			catch
+			{
+			}
+
+			return false;
+		}
+
+		/// <summary>
+		/// Resolves the certificate thumbprint used for signing operations.
+		/// </summary>
+		/// <param name="providedThumbprint">Caller-supplied thumbprint override.</param>
+		/// <returns>Normalized certificate thumbprint.</returns>
+		private string ResolveSigningCertificateThumbprint(string? providedThumbprint)
+		{
+			var thumbprint = string.IsNullOrWhiteSpace(providedThumbprint)
+				? Environment.GetEnvironmentVariable("MSBUILDGUARD_POLICY_SIGNING_CERT_THUMBPRINT") ?? string.Empty
+				: providedThumbprint;
+
+			if (string.IsNullOrWhiteSpace(thumbprint))
+			{
+				throw new InvalidOperationException("Signing certificate thumbprint is required.");
+			}
+
+			return thumbprint.Replace(" ", string.Empty).ToUpperInvariant();
+		}
+
+		/// <summary>
+		/// Loads a signing certificate with private key by thumbprint.
+		/// </summary>
+		/// <param name="thumbprint">Certificate thumbprint.</param>
+		/// <returns>The matching certificate containing a private key.</returns>
+		private X509Certificate2 LoadSigningCertificateOrThrow(string thumbprint)
+		{
+			using var store = new X509Store(StoreName.My, StoreLocation.CurrentUser);
+
+			store.Open(OpenFlags.ReadOnly);
+
+			var matches = store.Certificates.Find(X509FindType.FindByThumbprint, thumbprint, false);
+
+			if (matches.Count > 0 && matches[0].HasPrivateKey)
+			{
+				return matches[0];
+			}
+
+			using var storeMachine = new X509Store(StoreName.My, StoreLocation.LocalMachine);
+
+			storeMachine.Open(OpenFlags.ReadOnly);
+
+			var matchesMachine = storeMachine.Certificates.Find(X509FindType.FindByThumbprint, thumbprint, false);
+
+			if (matchesMachine.Count > 0 && matchesMachine[0].HasPrivateKey)
+			{
+				return matchesMachine[0];
+			}
+
+			throw new InvalidOperationException($"Signing certificate '{thumbprint}' was not found with private key.");
+		}
+
+		/// <summary>
+		/// Loads a trusted verification certificate by thumbprint, including optional root CA pin validation.
+		/// </summary>
+		/// <param name="thumbprint">Certificate thumbprint.</param>
+		/// <returns>The matching verification certificate.</returns>
+		private X509Certificate2 LoadTrustedVerificationCertificateOrThrow(string thumbprint)
+		{
+			using var store = new X509Store(StoreName.TrustedPeople, StoreLocation.LocalMachine);
+
+			store.Open(OpenFlags.ReadOnly);
+
+			var matches = store.Certificates.Find(X509FindType.FindByThumbprint, thumbprint, false);
+
+			if (matches.Count > 0)
+			{
+				// Optional Root CA Pinning verification
+				var pinnedCa = Environment.GetEnvironmentVariable("MSBUILDGUARD_ROOT_CA_THUMBPRINT");
+
+				if (!string.IsNullOrWhiteSpace(pinnedCa))
+				{
+					var normalizedPinnedCa = pinnedCa!.Replace(" ", string.Empty).ToUpperInvariant();
+					var chain = new X509Chain();
+
+					chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
+					chain.Build(matches[0]);
+
+					var isChainValid = false;
+
+					foreach (var element in chain.ChainElements)
+					{
+						var elementThumb = element.Certificate.Thumbprint.Replace(" ", string.Empty).ToUpperInvariant();
+
+						if (string.Equals(elementThumb, normalizedPinnedCa, StringComparison.OrdinalIgnoreCase))
+						{
+							isChainValid = true;
+
+							break;
+						}
+					}
+
+					if (!isChainValid)
+					{
+						throw new InvalidDataException($"The verification certificate is not issued by the trusted Root CA '{normalizedPinnedCa}'.");
+					}
+				}
+
+				return matches[0];
+			}
+
+			var allowCurrentUser = Environment.GetEnvironmentVariable("MSBUILDGUARD_POLICY_ALLOW_CURRENTUSER_TRUSTED_STORE");
+
+			if (string.Equals(allowCurrentUser, "true", StringComparison.OrdinalIgnoreCase) || string.Equals(allowCurrentUser, "1"))
+			{
+				using var storeUser = new X509Store(StoreName.TrustedPeople, StoreLocation.CurrentUser);
+
+				storeUser.Open(OpenFlags.ReadOnly);
+
+				var matchesUser = storeUser.Certificates.Find(X509FindType.FindByThumbprint, thumbprint, false);
+
+				if (matchesUser.Count > 0)
+				{
+					return matchesUser[0];
+				}
+			}
+
+			throw new InvalidDataException($"Trusted verification certificate '{thumbprint}' was not found.");
+		}
+
+		/// <summary>
+		/// Computes an RSA PKCS#1 v1.5 SHA-256 signature over the supplied payload.
+		/// </summary>
+		/// <param name="payload">Payload bytes to sign.</param>
+		/// <param name="certificate">Certificate containing the signing private key.</param>
+		/// <returns>Signature bytes.</returns>
+		private static byte[] ComputeSignature(byte[] payload, X509Certificate2 certificate)
+		{
+			using var rsa = certificate.GetRSAPrivateKey();
+
+			if (rsa == null)
+			{
+				throw new InvalidOperationException("Certificate does not provide an RSA private key.");
+			}
+
+			return rsa.SignData(payload, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+		}
+
+		/// <summary>
+		/// Verifies an RSA PKCS#1 v1.5 SHA-256 signature.
+		/// </summary>
+		/// <param name="payload">Original payload bytes.</param>
+		/// <param name="signature">Signature bytes.</param>
+		/// <param name="certificate">Certificate containing the verification public key.</param>
+		/// <returns><see langword="true"/> when the signature is valid; otherwise <see langword="false"/>.</returns>
+		private static bool VerifySignature(byte[] payload, byte[] signature, X509Certificate2 certificate)
+		{
+			using var rsa = certificate.GetRSAPublicKey();
+
+			if (rsa == null)
+			{
+				throw new InvalidDataException("Certificate does not provide an RSA public key.");
+			}
+
+			return rsa.VerifyData(payload, signature, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+		}
+
+		/// <summary>
+		/// Gets or creates the local DPAPI-protected symmetric key used for trust-store envelope signing.
+		/// </summary>
+		/// <returns>Base64 key material, or fallback static key when key access fails.</returns>
+		private string GetLocalDPAPIKey()
+		{
+			var appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+			var keyDir = Path.Combine(appData, "MSBuildGuard");
+			var keyPath = Path.Combine(keyDir, "machine.key");
+
+			try
+			{
+				if (!Directory.Exists(keyDir))
+				{
+					Directory.CreateDirectory(keyDir);
+				}
+
+				if (File.Exists(keyPath))
+				{
+					var encrypted = File.ReadAllBytes(keyPath);
+					var decrypted = ProtectedData.Unprotect(encrypted, null, DataProtectionScope.CurrentUser);
+
+					return Encoding.UTF8.GetString(decrypted);
+				}
+				else
+				{
+					var keyBytes = new byte[32];
+
+					using (var rng = RandomNumberGenerator.Create())
+					{
+						rng.GetBytes(keyBytes);
+					}
+
+					var keyString = Convert.ToBase64String(keyBytes);
+					var rawKeyBytes = Encoding.UTF8.GetBytes(keyString);
+					var encrypted = ProtectedData.Protect(rawKeyBytes, null, DataProtectionScope.CurrentUser);
+
+					File.WriteAllBytes(keyPath, encrypted);
+
+					return keyString;
+				}
+			}
+			catch (Exception)
+			{
+				return GetLocalUnprotectedKey(keyDir);
+			}
+		}
+
+		/// <summary>
+		/// Gets or creates a local unprotected symmetric key used when DPAPI is unavailable.
+		/// </summary>
+		/// <param name="keyDir">The key directory path.</param>
+		/// <returns>Base64 key material, or fallback static key if file operations fail.</returns>
+		private string GetLocalUnprotectedKey(string keyDir)
+		{
+			try
+			{
+				var unprotectedKeyPath = Path.Combine(keyDir, "machine.key.fallback");
+
+				if (!Directory.Exists(keyDir))
+				{
+					Directory.CreateDirectory(keyDir);
+				}
+
+				if (File.Exists(unprotectedKeyPath))
+				{
+					return File.ReadAllText(unprotectedKeyPath);
+				}
+				else
+				{
+					var keyBytes = new byte[32];
+
+					using (var rng = RandomNumberGenerator.Create())
+					{
+						rng.GetBytes(keyBytes);
+					}
+
+					var keyString = Convert.ToBase64String(keyBytes);
+
+					File.WriteAllText(unprotectedKeyPath, keyString);
+
+					return keyString;
+				}
+			}
+			catch (Exception)
+			{
+				return TrustStoreSigningKey;
+			}
+		}
+
+		/// <summary>
+		/// Determines whether a trust-store path corresponds to the default user-level trust store.
+		/// </summary>
+		/// <param name="path">Trust store path.</param>
+		/// <returns><see langword="true"/> when the path is the default user trust store path; otherwise <see langword="false"/>.</returns>
+		private bool IsUserTrustPath(string path)
+		{
+			try
+			{
+				var userDefaultPath = GetDefaultUserTrustPath();
+
+				return string.Equals(Path.GetFullPath(path), Path.GetFullPath(userDefaultPath), StringComparison.OrdinalIgnoreCase);
+			}
+			catch
+			{
+				return false;
+			}
+		}
+
+		/// <summary>
+		/// Resolves the symmetric signing key for a trust-store path.
+		/// </summary>
+		/// <param name="path">Trust store path.</param>
+		/// <returns>Resolved signing key.</returns>
+		private string GetSigningKeyForPath(string path)
+		{
+			if (IsUserTrustPath(path))
+			{
+				return GetLocalDPAPIKey();
+			}
+
+			if (CoreSettings.AllowSharingTrustsInRepositories)
+			{
+				return TrustStoreSigningKey;
+			}
+
+			return GetLocalDPAPIKey();
+		}
+
+		/// <summary>
+		/// Pins a repository directory so future trust loads require asymmetric signatures.
+		/// </summary>
+		/// <param name="path">Trust store path used to determine repository directory.</param>
+		private void PinRepositoryAsAsymmetricRequired(string path)
+		{
+			try
+			{
+				var solutionDir = Path.GetDirectoryName(path);
+
+				if (string.IsNullOrWhiteSpace(solutionDir))
+				{
+					return;
+				}
+
+				if (string.Equals(Path.GetFileName(solutionDir), ".msbuildguard", StringComparison.OrdinalIgnoreCase))
+				{
+					solutionDir = Path.GetDirectoryName(solutionDir);
+				}
+
+				if (string.IsNullOrWhiteSpace(solutionDir))
+				{
+					return;
+				}
+
+				var pinned = LoadPinnedRepositories();
+
+				if (!pinned.Contains(solutionDir, StringComparer.OrdinalIgnoreCase))
+				{
+					pinned.Add(solutionDir);
+					SavePinnedRepositories(pinned);
+				}
+			}
+			catch
+			{
+			}
+		}
+
+		/// <summary>
+		/// Determines whether a repository directory is pinned to require asymmetric trust signatures.
+		/// </summary>
+		/// <param name="path">Trust store path used to determine repository directory.</param>
+		/// <returns><see langword="true"/> when the repository is pinned; otherwise <see langword="false"/>.</returns>
+		private bool IsRepositoryPinnedAsAsymmetricRequired(string path)
+		{
+			try
+			{
+				var solutionDir = Path.GetDirectoryName(path);
+
+				if (string.IsNullOrWhiteSpace(solutionDir))
+				{
+					return false;
+				}
+
+				if (string.Equals(Path.GetFileName(solutionDir), ".msbuildguard", StringComparison.OrdinalIgnoreCase))
+				{
+					solutionDir = Path.GetDirectoryName(solutionDir);
+				}
+
+				if (string.IsNullOrWhiteSpace(solutionDir))
+				{
+					return false;
+				}
+
+				var pinned = LoadPinnedRepositories();
+
+				return pinned.Contains(solutionDir, StringComparer.OrdinalIgnoreCase);
+			}
+			catch
+			{
+				return false;
+			}
+		}
+
+		/// <summary>
+		/// Loads the persisted list of repositories pinned for asymmetric-signature enforcement.
+		/// </summary>
+		/// <returns>List of pinned repository directories.</returns>
+		private List<string> LoadPinnedRepositories()
+		{
+			try
+			{
+				var appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+				var pinPath = Path.Combine(appData, "MSBuildGuard", "pinned.bson");
+
+				if (File.Exists(pinPath))
+				{
+					var encrypted = File.ReadAllBytes(pinPath);
+					var decrypted = ProtectedData.Unprotect(encrypted, null, DataProtectionScope.CurrentUser);
+					var json = Encoding.UTF8.GetString(decrypted);
+
+					return JsonSerializer.Deserialize<List<string>>(json) ?? new List<string>();
+				}
+			}
+			catch
+			{
+			}
+
+			return new List<string>();
+		}
+
+		/// <summary>
+		/// Persists the list of repositories pinned for asymmetric-signature enforcement.
+		/// </summary>
+		/// <param name="pinned">Pinned repository directories.</param>
+		private void SavePinnedRepositories(List<string> pinned)
+		{
+			try
+			{
+				var json = JsonSerializer.Serialize(pinned);
+				var rawBytes = Encoding.UTF8.GetBytes(json);
+				var encrypted = ProtectedData.Protect(rawBytes, null, DataProtectionScope.CurrentUser);
+
+				var appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+				var pinPath = Path.Combine(appData, "MSBuildGuard", "pinned.bson");
+
+				File.WriteAllBytes(pinPath, encrypted);
+			}
+			catch
+			{
+			}
+		}
 	}
 }
+
 

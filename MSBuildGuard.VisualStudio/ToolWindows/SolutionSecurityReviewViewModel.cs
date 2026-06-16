@@ -7,6 +7,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Security.Principal;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Xml.Linq;
@@ -116,6 +117,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				this.ApplyFilter();
 				this.OnPropertyChanged();
 				this.OnPropertyChanged(nameof(this.OnlyUntrustedIssues));
+				this.OnPropertyChanged(nameof(this.CanRemoveProjectTrusts));
 			}
 		}
 
@@ -163,6 +165,103 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 
 				this.ApplyFilter();
 				this.OnPropertyChanged();
+				this.OnPropertyChanged(nameof(this.CanRemoveProjectTrusts));
+			}
+		}
+
+		/// <summary>
+		/// Gets a value indicating whether project trusts can be removed.
+		/// </summary>
+		public bool CanRemoveProjectTrusts
+		{
+			get
+			{
+				return !this.OnlyUntrustedIssues;
+			}
+		}
+
+		/// <summary>
+		/// Removes all project-level trust files in the active solution directory.
+		/// </summary>
+		/// <returns>A task that completes when removal is done.</returns>
+		public async Task RemoveAllProjectTrustsAsync()
+		{
+			if (string.IsNullOrWhiteSpace(this.CurrentTargetPath))
+			{
+				return;
+			}
+
+			var solutionDir = Path.GetDirectoryName(this.CurrentTargetPath);
+
+			if (string.IsNullOrWhiteSpace(solutionDir))
+			{
+				return;
+			}
+
+			var deletedCount = 0;
+
+			try
+			{
+				foreach (var trustFile in Directory.GetFiles(solutionDir, "trust.json", SearchOption.AllDirectories))
+				{
+					var folderName = Path.GetFileName(Path.GetDirectoryName(trustFile));
+
+					if (string.Equals(folderName, ".msbuildguard", StringComparison.OrdinalIgnoreCase))
+					{
+						var parentDir = Path.GetDirectoryName(Path.GetDirectoryName(trustFile));
+
+						if (string.Equals(parentDir, solutionDir, StringComparison.OrdinalIgnoreCase))
+						{
+							continue;
+						}
+
+						try
+						{
+							File.Delete(trustFile);
+
+							var signaturePath = trustFile + ".signature";
+
+							if (File.Exists(signaturePath))
+							{
+								File.Delete(signaturePath);
+							}
+
+							deletedCount++;
+						}
+						catch
+						{
+						}
+					}
+				}
+			}
+			catch (Exception ex)
+			{
+				if (MSBuildGuardPackage.Instance != null)
+				{
+					await MSBuildGuardPackage.Instance.UiFeedbackService.WriteLineAsync($"Error scanning for project trusts: {ex.Message}", CancellationToken.None).ConfigureAwait(false);
+				}
+			}
+
+			if (deletedCount > 0)
+			{
+				MessageBox.Show(
+					$"Successfully removed project-level trusts from {deletedCount} project(s).",
+					"MSBuild Guard - Info",
+					MessageBoxButton.OK,
+					MessageBoxImage.Information);
+
+				if (MSBuildGuardPackage.Instance != null)
+				{
+					await MSBuildGuardPackage.Instance.RescanSolutionSecurityReviewAsync().ConfigureAwait(false);
+				}
+			}
+			else
+			{
+				MessageBox.Show(
+					"No project-level trust files found to remove.",
+					"MSBuild Guard - Info",
+					MessageBoxButton.OK,
+					MessageBoxImage.Information);
 			}
 		}
 

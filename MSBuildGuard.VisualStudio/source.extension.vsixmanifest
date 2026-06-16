@@ -1,6 +1,6 @@
 <PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011" xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
   <Metadata>
-    <Identity Id="MSBuildGuard.VisualStudio" Version="0.2.7" Language="en-US" Publisher="Hefaistos68" />
+    <Identity Id="MSBuildGuard.VisualStudio" Version="0.3.0" Language="en-US" Publisher="Hefaistos68" />
     <DisplayName>MSBuild Guard for Visual Studio</DisplayName>
     <Description xml:space="preserve">Real-time MSBuild security review, trust workflows, build blocking, and dynamic policy enforcement for Visual Studio.</Description>
     <MoreInfo>https://github.com/Hefaistos68/MSBuildGuard</MoreInfo>
@@ -11,7 +11,7 @@
     <Categories>
       <Category>Code Tools</Category>
     </Categories>
-    <Preview>true</Preview>
+    <Preview>false</Preview>
   </Metadata>
   <Installation>
     <InstallationTarget Id="Microsoft.VisualStudio.Community" Version="[17.0,19.0)">

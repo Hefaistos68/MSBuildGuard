@@ -113,9 +113,18 @@ export class WorkerClient implements vscode.Disposable {
         const packagedWorkerDll = path.resolve(context.extensionPath, 'dist', 'worker', 'MSBuildGuard.Worker.dll');
         const workerProject = path.resolve(context.extensionPath, '..', 'MSBuildGuard.Worker', 'MSBuildGuard.Worker.csproj');
         const workerArgs = this.getWorkerLaunchArguments(packagedWorkerDll, workerProject);
+        const config = vscode.workspace.getConfiguration('msbuildguard');
+        const enforceAsymmetric = config.get<boolean>('enforceAsymmetricSignatures', false);
+        const allowSharing = config.get<boolean>('trustManagement.allowSharingTrustsInRepositories', false);
+        const spawnEnv = {
+            ...process.env,
+            MSBUILDGUARD_ENFORCE_ASYMMETRIC_SIGNATURES: String(enforceAsymmetric),
+            MSBUILDGUARD_ALLOW_SHARING_TRUSTS: String(allowSharing)
+        };
 
         this.process = cp.spawn('dotnet', workerArgs, {
-            stdio: ['pipe', 'pipe', 'pipe']
+            stdio: ['pipe', 'pipe', 'pipe'],
+            env: spawnEnv
         });
 
         this.process.stdout.on('data', (data: Buffer) => {

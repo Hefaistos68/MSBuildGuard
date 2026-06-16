@@ -6,6 +6,21 @@ using Microsoft.VisualStudio.Shell;
 namespace MSBuildGuard.VisualStudio.Options
 {
 	/// <summary>
+	/// Represents the key management mode kinds.
+	/// </summary>
+	public enum KeyManagementModeKind
+	{
+		/// <summary>Mode is unconfigured.</summary>
+		Unconfigured,
+
+		/// <summary>Solo Developer mode using DPAPI.</summary>
+		DPAPI,
+
+		/// <summary>Team Environment mode using asymmetric certificates.</summary>
+		Certificates
+	}
+
+	/// <summary>
 	/// Represents persisted Visual Studio options placeholder for MSBuild Guard.
 	/// Enables the Tools > Options tree node registration linked to Unified Settings.
 	/// </summary>
@@ -27,6 +42,8 @@ namespace MSBuildGuard.VisualStudio.Options
 		/// Defines the default list of reflection and interop indicators.
 		/// </summary>
 		private const string DefaultReflectionInteropIndicators = "System.Reflection;Assembly.Load;Activator.CreateInstance;GetType(;dynamic ;DllImport;Marshal.GetDelegateForFunctionPointer;LoadLibrary";
+
+		private bool allowSharingTrustsInRepositories;
 
 		/// <summary>
 		/// Gets or sets a value indicating whether security review windows should auto-open when a solution or project is opened.
@@ -56,13 +73,48 @@ namespace MSBuildGuard.VisualStudio.Options
 		public bool ScanNuGetPackages { get; set; } = true;
 
 		/// <summary>
+		/// Gets or sets the key management mode used for signing and validating trust files.
+		/// </summary>
+		[Category("Trust Management")]
+		[DisplayName("Key Management Mode")]
+		[Description("Solo Developer (Local DPAPI) uses local machine keys, disabling repository sharing. Team Environment (Certificates) uses public/private certificate keys.")]
+		[DefaultValue(KeyManagementModeKind.Unconfigured)]
+		public KeyManagementModeKind KeyManagementMode { get; set; } = KeyManagementModeKind.Unconfigured;
+
+		/// <summary>
+		/// Gets or sets a value indicating whether strict asymmetric certificate-based signature verification is enforced.
+		/// </summary>
+		[Category("Trust Management")]
+		[DisplayName("Enforce Asymmetric Signatures")]
+		[Description("Strictly enforces asymmetric certificate-based signature verification for trust stores and policy documents.")]
+		[DefaultValue(false)]
+		public bool EnforceAsymmetricSignatures { get; set; }
+
+		/// <summary>
 		/// Gets or sets a value indicating whether trust files may be shared in repositories.
 		/// </summary>
 		[Category("Trust Management")]
 		[DisplayName("Allow sharing trusts in repositories")]
 		[Description("When enabled, MSBuild Guard removes managed .msbuildguard ignore entries from .gitignore files. When disabled, the entries are enforced.")]
 		[DefaultValue(false)]
-		public bool AllowSharingTrustsInRepositories { get; set; }
+		public bool AllowSharingTrustsInRepositories
+		{
+			get
+			{
+				return allowSharingTrustsInRepositories;
+			}
+			set
+			{
+				if (KeyManagementMode == KeyManagementModeKind.DPAPI && value)
+				{
+					allowSharingTrustsInRepositories = false;
+
+					return;
+				}
+
+				allowSharingTrustsInRepositories = value;
+			}
+		}
 
 		/// <summary>
 		/// Gets or sets a semicolon-separated list of file extensions to scan.

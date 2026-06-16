@@ -1,6 +1,9 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+using MSBuildGuard.Core.Baseline;
 using MSBuildGuard.Core.Trust;
 using NUnit.Framework;
 using Shouldly;
@@ -393,18 +396,55 @@ namespace MSBuildGuard.Core.Tests.Trust
 		}
 
 		/// <summary>
-		/// Verifies loading a raw JSON trust store with camelCase properties succeeds.
+		/// Verifies loading a raw JSON trust store fails.
 		/// </summary>
 		[Test]
-		public void Load_ShouldSucceed_WhenRawJsonHasCamelCaseProperties()
+		public void Load_ShouldFail_WhenRawJsonIsUnsigned()
 		{
 			var service = new TrustStoreService();
+
 			var path = Path.Combine(Path.GetTempPath(), $"trust-raw-{Guid.NewGuid():N}.json");
+
 			var rawJson = "{\r\n  \"version\": 1,\r\n  \"decisions\": [\r\n    {\r\n      \"decisionId\": \"5cd109faa53d41158955c652300e9ea9\",\r\n      \"scope\": \"Signer\",\r\n      \"subjectHash\": \"EC240824852A50662166EA955B4BAD3E180440AD\",\r\n      \"decision\": \"Trust\",\r\n      \"reason\": \"Trusted\",\r\n      \"userSid\": \"andreas\"\r\n    }\r\n  ]\r\n}";
 
 			try
 			{
 				File.WriteAllText(path, rawJson);
+
+				Should.Throw<InvalidDataException>(() => service.Load(path));
+			}
+			finally
+			{
+				if (File.Exists(path))
+				{
+					File.Delete(path);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Verifies loading a signed JSON trust store with camelCase properties inside envelope succeeds.
+		/// </summary>
+		[Test]
+		public void Load_ShouldSucceed_WhenSignedEnvelopeHasCamelCaseProperties()
+		{
+			var service = new TrustStoreService();
+
+			var path = Path.Combine(Path.GetTempPath(), $"trust-raw-{Guid.NewGuid():N}.json");
+
+			var rawJson = "{\r\n  \"version\": 1,\r\n  \"decisions\": [\r\n    {\r\n      \"decisionId\": \"5cd109faa53d41158955c652300e9ea9\",\r\n      \"scope\": \"Signer\",\r\n      \"subjectHash\": \"EC240824852A50662166EA955B4BAD3E180440AD\",\r\n      \"decision\": \"Trust\",\r\n      \"reason\": \"Trusted\",\r\n      \"userSid\": \"andreas\"\r\n    }\r\n  ]\r\n}";
+
+			var originalAllowSharing = CoreSettings.AllowSharingTrustsInRepositories;
+
+			try
+			{
+				CoreSettings.AllowSharingTrustsInRepositories = true;
+
+				var signatureService = new MSBuildGuard.Core.Baseline.JsonSignatureService();
+
+				var signedPayload = signatureService.CreateSignedEnvelopeJson(rawJson, "MSBuildGuard.TrustStore.v1");
+
+				File.WriteAllText(path, signedPayload);
 
 				var store = service.Load(path);
 
@@ -418,6 +458,8 @@ namespace MSBuildGuard.Core.Tests.Trust
 			}
 			finally
 			{
+				CoreSettings.AllowSharingTrustsInRepositories = originalAllowSharing;
+
 				if (File.Exists(path))
 				{
 					File.Delete(path);
@@ -540,6 +582,365 @@ namespace MSBuildGuard.Core.Tests.Trust
 			});
 
 			service.IsFindingApprovedByPackage(otherStore, packageId, packageVersion).ShouldBeFalse();
+		}
+
+		/// <summary>
+		/// Verifies that Load throws an InvalidDataException when EnforceAsymmetricSignatures is true and the signature stream is missing.
+		/// </summary>
+		[Test]
+		public void Load_ShouldThrowInvalidDataException_WhenEnforceAsymmetricSignaturesIsTrueAndSignatureIsMissing()
+		{
+			var service = new TrustStoreService();
+			var rootPath = Path.Combine(Path.GetTempPath(), $"trust-test-{Guid.NewGuid():N}");
+			var slnDir = Path.Combine(rootPath, "repo", ".msbuildguard");
+			var path = Path.Combine(slnDir, "trust.json");
+
+			var originalEnforce = CoreSettings.EnforceAsymmetricSignatures;
+			var originalAllowSharing = CoreSettings.AllowSharingTrustsInRepositories;
+
+			try
+			{
+				CoreSettings.EnforceAsymmetricSignatures = false;
+				CoreSettings.AllowSharingTrustsInRepositories = true;
+
+				service.Save(path, new TrustStoreDocument());
+
+				CoreSettings.EnforceAsymmetricSignatures = true;
+
+				Should.Throw<InvalidDataException>(() => service.Load(path))
+					.Message.ShouldContain("Asymmetric signature is required but missing");
+			}
+			finally
+			{
+				CoreSettings.EnforceAsymmetricSignatures = originalEnforce;
+				CoreSettings.AllowSharingTrustsInRepositories = originalAllowSharing;
+
+				if (Directory.Exists(rootPath))
+				{
+					Directory.Delete(rootPath, true);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Verifies that loading a trust store file which has an asymmetric signature triggers repository pinning,
+		/// and subsequent loads of an unsigned trust store in the same directory fail even if global enforcement is false.
+		/// </summary>
+		[Test]
+		public void Load_ShouldEnforceAsymmetricSignature_WhenRepositoryIsPinned()
+		{
+			var service = new TrustStoreService();
+			var rootPath = Path.Combine(Path.GetTempPath(), $"trust-pin-{Guid.NewGuid():N}");
+			var slnDir = Path.Combine(rootPath, "repo", ".msbuildguard");
+			var path = Path.Combine(slnDir, "trust.json");
+
+			using var certificate = CreateSelfSignedCertificate();
+
+			AddCertificate(StoreName.My, StoreLocation.CurrentUser, certificate);
+			AddCertificate(StoreName.TrustedPeople, StoreLocation.CurrentUser, certificate);
+			Environment.SetEnvironmentVariable("MSBUILDGUARD_POLICY_ALLOW_CURRENTUSER_TRUSTED_STORE", "true");
+
+			var originalAllowSharing = CoreSettings.AllowSharingTrustsInRepositories;
+			var originalEnforce = CoreSettings.EnforceAsymmetricSignatures;
+
+			try
+			{
+				CoreSettings.AllowSharingTrustsInRepositories = true;
+				CoreSettings.EnforceAsymmetricSignatures = false;
+
+				service.Save(path, new TrustStoreDocument());
+				service.Sign(path, certificate.Thumbprint);
+
+				// Loading the signed file should succeed and trigger pinning
+				var loaded = service.Load(path);
+
+				loaded.ShouldNotBeNull();
+
+				// Delete the signature stream to simulate an unsigned file update
+				var sigPath = path + ".signature";
+
+				if (File.Exists(sigPath))
+				{
+					File.Delete(sigPath);
+				}
+
+				// Trying to load the now-unsigned file in the pinned repository should throw
+				Should.Throw<InvalidDataException>(() => service.Load(path))
+					.Message.ShouldContain("Asymmetric signature is required for this pinned repository");
+			}
+			finally
+			{
+				CoreSettings.AllowSharingTrustsInRepositories = originalAllowSharing;
+				CoreSettings.EnforceAsymmetricSignatures = originalEnforce;
+				Environment.SetEnvironmentVariable("MSBUILDGUARD_POLICY_ALLOW_CURRENTUSER_TRUSTED_STORE", null);
+				RemoveCertificate(StoreName.My, StoreLocation.CurrentUser, certificate.Thumbprint);
+				RemoveCertificate(StoreName.TrustedPeople, StoreLocation.CurrentUser, certificate.Thumbprint);
+
+				if (Directory.Exists(rootPath))
+				{
+					Directory.Delete(rootPath, true);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Verifies that saving a trust store that already has an asymmetric signature automatically updates/re-signs the signature companion file.
+		/// </summary>
+		[Test]
+		public void Save_ShouldAutomaticallyUpdateSignature_WhenAlreadyAsymmetricSigned()
+		{
+			var service = new TrustStoreService();
+			var rootPath = Path.Combine(Path.GetTempPath(), $"trust-auto-resign-{Guid.NewGuid():N}");
+			var slnDir = Path.Combine(rootPath, "repo", ".msbuildguard");
+			var path = Path.Combine(slnDir, "trust.json");
+
+			using var certificate = CreateSelfSignedCertificate();
+
+			AddCertificate(StoreName.My, StoreLocation.CurrentUser, certificate);
+			AddCertificate(StoreName.TrustedPeople, StoreLocation.CurrentUser, certificate);
+			Environment.SetEnvironmentVariable("MSBUILDGUARD_POLICY_ALLOW_CURRENTUSER_TRUSTED_STORE", "true");
+
+			var originalAllowSharing = CoreSettings.AllowSharingTrustsInRepositories;
+			var originalEnforce = CoreSettings.EnforceAsymmetricSignatures;
+
+			try
+			{
+				CoreSettings.AllowSharingTrustsInRepositories = true;
+				CoreSettings.EnforceAsymmetricSignatures = false;
+
+				var store = new TrustStoreDocument();
+
+				service.Save(path, store);
+				service.Sign(path, certificate.Thumbprint);
+
+				// Modify document and save again
+				var loaded = service.Load(path);
+
+				loaded.Decisions.Add(new TrustDecisionEntry
+				{
+					DecisionId = Guid.NewGuid().ToString("N"),
+					Scope = "Finding",
+					SubjectHash = "fp-auto-resign",
+					Decision = "TrustUntilChanged",
+					CreatedAtUtc = DateTimeOffset.UtcNow
+				});
+
+				// Save should automatically re-sign using the existing thumbprint
+				service.Save(path, loaded);
+
+				// Subsequent load should succeed (validating the new asymmetric signature)
+				var reloaded = service.Load(path);
+
+				reloaded.ShouldNotBeNull();
+				service.IsFingerprintApproved(reloaded, "fp-auto-resign").ShouldBeTrue();
+			}
+			finally
+			{
+				CoreSettings.AllowSharingTrustsInRepositories = originalAllowSharing;
+				CoreSettings.EnforceAsymmetricSignatures = originalEnforce;
+				Environment.SetEnvironmentVariable("MSBUILDGUARD_POLICY_ALLOW_CURRENTUSER_TRUSTED_STORE", null);
+				RemoveCertificate(StoreName.My, StoreLocation.CurrentUser, certificate.Thumbprint);
+				RemoveCertificate(StoreName.TrustedPeople, StoreLocation.CurrentUser, certificate.Thumbprint);
+
+				if (Directory.Exists(rootPath))
+				{
+					Directory.Delete(rootPath, true);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Verifies that saving a trust store when EnforceAsymmetricSignatures is true automatically signs the trust store file.
+		/// </summary>
+		[Test]
+		public void Save_ShouldAutomaticallySign_WhenEnforceAsymmetricSignaturesIsTrue()
+		{
+			var service = new TrustStoreService();
+			var rootPath = Path.Combine(Path.GetTempPath(), $"trust-auto-sign-{Guid.NewGuid():N}");
+			var slnDir = Path.Combine(rootPath, "repo", ".msbuildguard");
+			var path = Path.Combine(slnDir, "trust.json");
+
+			using var certificate = CreateSelfSignedCertificate();
+
+			AddCertificate(StoreName.My, StoreLocation.CurrentUser, certificate);
+			AddCertificate(StoreName.TrustedPeople, StoreLocation.CurrentUser, certificate);
+			Environment.SetEnvironmentVariable("MSBUILDGUARD_POLICY_ALLOW_CURRENTUSER_TRUSTED_STORE", "true");
+			Environment.SetEnvironmentVariable("MSBUILDGUARD_POLICY_SIGNING_CERT_THUMBPRINT", certificate.Thumbprint);
+
+			var originalAllowSharing = CoreSettings.AllowSharingTrustsInRepositories;
+			var originalEnforce = CoreSettings.EnforceAsymmetricSignatures;
+
+			try
+			{
+				CoreSettings.AllowSharingTrustsInRepositories = true;
+				CoreSettings.EnforceAsymmetricSignatures = true;
+
+				var store = new TrustStoreDocument();
+
+				// Save should automatically sign because enforcement is enabled
+				service.Save(path, store);
+
+				// Subsequent load should succeed
+				var loaded = service.Load(path);
+
+				loaded.ShouldNotBeNull();
+			}
+			finally
+			{
+				CoreSettings.AllowSharingTrustsInRepositories = originalAllowSharing;
+				CoreSettings.EnforceAsymmetricSignatures = originalEnforce;
+				Environment.SetEnvironmentVariable("MSBUILDGUARD_POLICY_ALLOW_CURRENTUSER_TRUSTED_STORE", null);
+				Environment.SetEnvironmentVariable("MSBUILDGUARD_POLICY_SIGNING_CERT_THUMBPRINT", null);
+				RemoveCertificate(StoreName.My, StoreLocation.CurrentUser, certificate.Thumbprint);
+				RemoveCertificate(StoreName.TrustedPeople, StoreLocation.CurrentUser, certificate.Thumbprint);
+
+				if (Directory.Exists(rootPath))
+				{
+					Directory.Delete(rootPath, true);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Verifies that user trust store saves use a unique local DPAPI key (or fallback unprotected key) rather than the static shared key.
+		/// </summary>
+		[Test]
+		public void GetSigningKey_ShouldBeUniquePerUserMachine()
+		{
+			var service = new TrustStoreService();
+			var tempPath = Path.Combine(Path.GetTempPath(), $"user-trust-{Guid.NewGuid():N}.json");
+			var originalAllowSharing = CoreSettings.AllowSharingTrustsInRepositories;
+
+			try
+			{
+				CoreSettings.AllowSharingTrustsInRepositories = false;
+
+				var store = new TrustStoreDocument();
+
+				service.Save(tempPath, store);
+
+				// If we load it, it should succeed because it uses the local key
+				var loaded = service.Load(tempPath);
+
+				loaded.ShouldNotBeNull();
+
+				// If we try to verify the signature of the file using the static TrustStoreSigningKey, it should fail
+				var payload = File.ReadAllText(tempPath);
+				var signatureService = new JsonSignatureService();
+				string? trustPayload;
+				var verifiedWithStaticKey = signatureService.TryVerifyAndExtract<string>(payload, "MSBuildGuard.TrustStore.v1", out trustPayload);
+
+				verifiedWithStaticKey.ShouldBeFalse();
+			}
+			finally
+			{
+				CoreSettings.AllowSharingTrustsInRepositories = originalAllowSharing;
+
+				if (File.Exists(tempPath))
+				{
+					File.Delete(tempPath);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Verifies that loading a trust store fails when the audit log file has been modified (chain link broken).
+		/// </summary>
+		[Test]
+		public void Load_ShouldThrowInvalidDataException_WhenAuditTrailIsTampered()
+		{
+			var service = new TrustStoreService();
+			var path = Path.Combine(Path.GetTempPath(), $"trust-tamper-{Guid.NewGuid():N}.json");
+
+			try
+			{
+				service.AddDecision(path, new TrustDecisionEntry
+				{
+					CreatedAtUtc = DateTimeOffset.UtcNow,
+					Decision = "TrustUntilChanged",
+					DecisionId = Guid.NewGuid().ToString("N"),
+					Reason = "approval",
+					Scope = "Finding",
+					SubjectHash = "fp-1",
+					UserSid = "tester"
+				});
+
+				service.AddDecision(path, new TrustDecisionEntry
+				{
+					CreatedAtUtc = DateTimeOffset.UtcNow,
+					Decision = "TrustUntilChanged",
+					DecisionId = Guid.NewGuid().ToString("N"),
+					Reason = "approval",
+					Scope = "Finding",
+					SubjectHash = "fp-2",
+					UserSid = "tester"
+				});
+
+				var auditPath = service.GetAuditPathForStore(path);
+				var lines = File.ReadAllLines(auditPath);
+
+				// Modify a line in the middle to break the hash chain
+				if (lines.Length >= 2)
+				{
+					lines[0] = lines[0].Replace("fp-1", "fp-1-tampered");
+					File.WriteAllLines(auditPath, lines);
+				}
+
+				Should.Throw<InvalidDataException>(() => service.Load(path));
+			}
+			finally
+			{
+				if (File.Exists(path))
+				{
+					File.Delete(path);
+				}
+
+				var auditPath = service.GetAuditPathForStore(path);
+
+				if (File.Exists(auditPath))
+				{
+					File.Delete(auditPath);
+				}
+			}
+		}
+
+		private static X509Certificate2 CreateSelfSignedCertificate()
+		{
+			using var rsa = RSA.Create(2048);
+			var request = new CertificateRequest(
+				$"CN=MSBuildGuard-TrustTests-{Guid.NewGuid():N}",
+				rsa,
+				HashAlgorithmName.SHA256,
+				RSASignaturePadding.Pkcs1);
+
+			request.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, false));
+			request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature, false));
+
+			var certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(7));
+			var pfx = certificate.Export(X509ContentType.Pfx);
+
+			return X509CertificateLoader.LoadPkcs12(pfx, string.Empty, X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.Exportable);
+		}
+
+		private static void AddCertificate(StoreName storeName, StoreLocation storeLocation, X509Certificate2 certificate)
+		{
+			using var store = new X509Store(storeName, storeLocation);
+
+			store.Open(OpenFlags.ReadWrite);
+			store.Add(certificate);
+		}
+
+		private static void RemoveCertificate(StoreName storeName, StoreLocation storeLocation, string thumbprint)
+		{
+			using var store = new X509Store(storeName, storeLocation);
+
+			store.Open(OpenFlags.ReadWrite);
+			var certificates = store.Certificates.Find(X509FindType.FindByThumbprint, thumbprint, false);
+
+			foreach (var certificate in certificates)
+			{
+				store.Remove(certificate);
+			}
 		}
 	}
 }

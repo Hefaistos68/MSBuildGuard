@@ -94,6 +94,98 @@ export function activate(context: vscode.ExtensionContext) {
         })
     );
 
+    context.subscriptions.push(
+        vscode.commands.registerCommand('msbuildguard.removeAllSolutionTrusts', async () => {
+            await removeAllSolutionTrusts();
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('msbuildguard.removeAllProjectTrusts', async () => {
+            await removeAllProjectTrusts();
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('msbuildguard.removeAllUserTrusts', async () => {
+            await removeAllUserTrusts();
+        })
+    );
+
+    const config = vscode.workspace.getConfiguration('msbuildguard');
+    const currentEnforce = config.get<boolean>('enforceAsymmetricSignatures', false);
+    void context.globalState.update('lastEnforceAsymmetricSignatures', currentEnforce);
+
+    const keyMode = config.get<string>('trustManagement.keyManagementMode', 'unconfigured');
+    if (keyMode === 'unconfigured') {
+        void showFirstRunQuickPick(config);
+    }
+
+    context.subscriptions.push(
+        vscode.workspace.onDidChangeConfiguration(async (e) => {
+            if (e.affectsConfiguration('msbuildguard.enforceAsymmetricSignatures')) {
+                const conf = vscode.workspace.getConfiguration('msbuildguard');
+                const newValue = conf.get<boolean>('enforceAsymmetricSignatures', false);
+                const oldValue = context.globalState.get<boolean>('lastEnforceAsymmetricSignatures', false);
+
+                if (oldValue === true && newValue === false) {
+                    const confirm = await vscode.window.showWarningMessage(
+                        "Downgrading security settings: Disabling strict asymmetric signatures will permanently delete all local user, solution, and project trust files. Do you want to proceed?",
+                        { modal: true },
+                        "Yes",
+                        "No"
+                    );
+
+                    if (confirm === "Yes") {
+                        await purgeAllTrusts(context);
+                        restartWorkerClient();
+                        void runScan();
+                        await context.globalState.update('lastEnforceAsymmetricSignatures', newValue);
+                    } else {
+                        const inspect = conf.inspect<boolean>('enforceAsymmetricSignatures');
+                        let target = vscode.ConfigurationTarget.Global;
+                        if (inspect) {
+                            if (inspect.workspaceFolderValue === false) {
+                                target = vscode.ConfigurationTarget.WorkspaceFolder;
+                            } else if (inspect.workspaceValue === false) {
+                                target = vscode.ConfigurationTarget.Workspace;
+                            }
+                        }
+                        await conf.update('enforceAsymmetricSignatures', true, target);
+                        await context.globalState.update('lastEnforceAsymmetricSignatures', true);
+                    }
+                } else {
+                    restartWorkerClient();
+                    void runScan();
+                    await context.globalState.update('lastEnforceAsymmetricSignatures', newValue);
+                }
+            } else if (e.affectsConfiguration('msbuildguard.trustManagement.allowSharingTrustsInRepositories')) {
+                const conf = vscode.workspace.getConfiguration('msbuildguard');
+                const allowSharing = conf.get<boolean>('trustManagement.allowSharingTrustsInRepositories', false);
+                const mode = conf.get<string>('trustManagement.keyManagementMode', 'unconfigured');
+                if (allowSharing && mode === 'dpapi') {
+                    void vscode.window.showWarningMessage("Cannot enable repository trust sharing while key management is set to Solo Developer (Local DPAPI).");
+                    await conf.update('trustManagement.allowSharingTrustsInRepositories', false, vscode.ConfigurationTarget.Global);
+                } else {
+                    restartWorkerClient();
+                    void runScan();
+                }
+            } else if (e.affectsConfiguration('msbuildguard.trustManagement.keyManagementMode')) {
+                const conf = vscode.workspace.getConfiguration('msbuildguard');
+                const mode = conf.get<string>('trustManagement.keyManagementMode', 'unconfigured');
+                if (mode === 'dpapi') {
+                    const allowSharing = conf.get<boolean>('trustManagement.allowSharingTrustsInRepositories', false);
+                    if (allowSharing) {
+                        void vscode.window.showWarningMessage("In Solo Developer (Local DPAPI) mode, sharing trusts in repositories is not supported. Disabling repository trust sharing.");
+                        await conf.update('trustManagement.allowSharingTrustsInRepositories', false, vscode.ConfigurationTarget.Global);
+                    }
+                }
+                restartWorkerClient();
+                void runScan();
+            }
+        })
+    );
+
     // Watchers for NuGet restores and Policy modifications
     setupFileSystemWatchers(context);
 
@@ -172,7 +264,7 @@ async function runScan(targetUri?: vscode.Uri): Promise<void> {
         }
 
         outputChannel.appendLine(`Scan completed: ${report.findings.length} findings identified.`);
-        
+
         // Publish squiggles
         if (diagnosticPublisher) {
             diagnosticPublisher.publish(report);
@@ -226,7 +318,7 @@ async function createBaseline(): Promise<void> {
         return;
     }
 
-    const defaultBaselineDir = path.join(workspaceFolders[0].uri.fsPath, '.msbuildguard');
+    const defaultBaselineDir = path.join(path.dirname(latestReport.target.targetPath), '.msbuildguard');
     const defaultPath = path.join(defaultBaselineDir, 'baseline.json');
 
     const confirmed = await vscode.window.showInputBox({
@@ -428,8 +520,11 @@ async function editPolicy(): Promise<void> {
     const projectFiles = await vscode.workspace.findFiles('**/*.{csproj,fsproj,vbproj}', '**/node_modules/**');
     const projectPaths = projectFiles.map(f => f.fsPath);
 
+    const solutionUri = vscode.Uri.file(solutionPath);
+    const folder = vscode.workspace.getWorkspaceFolder(solutionUri) || workspaceFolders[0];
+
     PolicyEditorPanel.createOrShow(
-        contextUriResolver(workspaceFolders[0]),
+        contextUriResolver(folder),
         workerClient,
         solutionPath,
         projectPaths
@@ -466,11 +561,332 @@ async function manageTrusts(initialScope: 'User' | 'Solution' | 'Project' = 'Use
     const projectFiles = await vscode.workspace.findFiles('**/*.{csproj,fsproj,vbproj}', '**/node_modules/**');
     const projectPaths = projectFiles.map(f => f.fsPath);
 
+    const solutionUri = vscode.Uri.file(solutionPath);
+    const folder = vscode.workspace.getWorkspaceFolder(solutionUri) || workspaceFolders[0];
+
     TrustStorePanel.createOrShow(
-        contextUriResolver(workspaceFolders[0]),
+        contextUriResolver(folder),
         workerClient,
         solutionPath,
         projectPaths,
         initialScope
     );
+}
+
+// Security Hardening Helper functions
+
+function getUserTrustPath(): string {
+    const localAppData = process.env.LOCALAPPDATA ||
+        (process.platform === 'darwin' ? path.join(process.env.HOME || '', 'Library', 'Application Support') : path.join(process.env.HOME || '', '.local', 'share'));
+    return path.join(localAppData, 'MSBuildGuard', 'trust.json');
+}
+
+function getRecentWorkspaces(): string[] {
+    const paths: string[] = [];
+    try {
+        const appData = process.env.APPDATA ||
+            (process.platform === 'darwin' ? path.join(process.env.HOME || '', 'Library', 'Application Support') : path.join(process.env.HOME || '', '.config'));
+        const channelDirs = ['Code', 'Code - Insiders', 'VSCodium'];
+        for (const dir of channelDirs) {
+            const storagePath = path.join(appData, dir, 'User', 'globalStorage', 'storage.json');
+            if (fs.existsSync(storagePath)) {
+                const content = fs.readFileSync(storagePath, 'utf8');
+                const data = JSON.parse(content);
+                if (data.openedPathsList && Array.isArray(data.openedPathsList.entries)) {
+                    for (const entry of data.openedPathsList.entries) {
+                        if (entry.folderUri) {
+                            try {
+                                const uriPath = vscode.Uri.parse(entry.folderUri).fsPath;
+                                if (uriPath) {
+                                    paths.push(uriPath);
+                                }
+                            } catch { }
+                        } else if (entry.workspace && entry.workspace.configPath) {
+                            try {
+                                const uriPath = vscode.Uri.parse(entry.workspace.configPath).fsPath;
+                                const folder = path.dirname(uriPath);
+                                paths.push(folder);
+                            } catch { }
+                        }
+                    }
+                }
+            }
+        }
+    } catch (e) {
+    }
+    return paths;
+}
+
+function purgeTrustFilesInDir(dir: string, depth: number = 0): void {
+    if (depth > 25) {
+        return;
+    }
+    try {
+        const files = fs.readdirSync(dir);
+        for (const file of files) {
+            const fullPath = path.join(dir, file);
+            if (file === '.msbuildguard') {
+                const trustFile = path.join(fullPath, 'trust.json');
+                if (fs.existsSync(trustFile)) {
+                    try {
+                        fs.unlinkSync(trustFile);
+                        outputChannel?.appendLine(`Deleted trust store: ${trustFile}`);
+                        const sigFile = trustFile + '.signature';
+                        if (fs.existsSync(sigFile)) {
+                            fs.unlinkSync(sigFile);
+                            outputChannel?.appendLine(`Deleted signature companion: ${sigFile}`);
+                        }
+                    } catch (e: any) {
+                        outputChannel?.appendLine(`Failed to delete ${trustFile}: ${e.message}`);
+                    }
+                }
+            } else {
+                try {
+                    const stat = fs.statSync(fullPath);
+                    if (stat.isDirectory()) {
+                        if (file !== 'node_modules' && file !== '.git' && file !== 'bin' && file !== 'obj') {
+                            purgeTrustFilesInDir(fullPath, depth + 1);
+                        }
+                    }
+                } catch (e) { }
+            }
+        }
+    } catch (e) { }
+}
+
+async function purgeAllTrusts(context: vscode.ExtensionContext): Promise<void> {
+    outputChannel?.appendLine('Purging all trust stores due to enforceAsymmetricSignatures downgrade...');
+
+    // 1. Delete user-level trust store
+    const userPath = getUserTrustPath();
+    if (fs.existsSync(userPath)) {
+        try {
+            fs.unlinkSync(userPath);
+            outputChannel?.appendLine(`Deleted user trust store: ${userPath}`);
+            const sigPath = userPath + '.signature';
+            if (fs.existsSync(sigPath)) {
+                fs.unlinkSync(sigPath);
+                outputChannel?.appendLine(`Deleted user trust signature: ${sigPath}`);
+            }
+        } catch (e: any) {
+            outputChannel?.appendLine(`Failed to delete user trust store: ${e.message}`);
+        }
+    }
+
+    // 2. Scan recent and open workspace folders to delete .msbuildguard/trust.json
+    const foldersToScan = new Set<string>();
+
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (workspaceFolders) {
+        for (const folder of workspaceFolders) {
+            foldersToScan.add(folder.uri.fsPath);
+        }
+    }
+
+    const recent = getRecentWorkspaces();
+    for (const folder of recent) {
+        foldersToScan.add(folder);
+    }
+
+    for (const folder of foldersToScan) {
+        if (fs.existsSync(folder)) {
+            try {
+                purgeTrustFilesInDir(folder);
+            } catch (e: any) {
+                outputChannel?.appendLine(`Failed to purge trusts in folder ${folder}: ${e.message}`);
+            }
+        }
+    }
+
+    void vscode.window.showInformationMessage("All local, solution, and project trust stores have been successfully purged.");
+}
+
+function restartWorkerClient(): void {
+    if (workerClient) {
+        workerClient.dispose();
+    }
+    if (extensionContext) {
+        try {
+            workerClient = new WorkerClient(extensionContext);
+            outputChannel?.appendLine('MSBuild Guard C# background worker restarted.');
+        } catch (err: any) {
+            outputChannel?.appendLine(`Failed to launch background worker: ${err.message}`);
+            void vscode.window.showErrorMessage(`MSBuild Guard failed to activate background worker: ${err.message}`);
+        }
+    }
+}
+
+async function showFirstRunQuickPick(config: vscode.WorkspaceConfiguration): Promise<void> {
+    const selected = await vscode.window.showQuickPick([
+        { label: "Solo Developer (Local DPAPI)", description: "Keys are unique to this machine, secured via DPAPI. Sharing trusts in repositories is disabled.", value: "dpapi" },
+        { label: "Team Environment (Asymmetric Certificates)", description: "Enables sharing signed trusts. Requires public validation certificates.", value: "certificates" }
+    ], {
+        placeHolder: "MSBuild Guard: Choose Key Management Mode",
+        ignoreFocusOut: true
+    });
+
+    if (selected) {
+        await config.update('trustManagement.keyManagementMode', selected.value, vscode.ConfigurationTarget.Global);
+        if (selected.value === 'dpapi') {
+            await config.update('trustManagement.allowSharingTrustsInRepositories', false, vscode.ConfigurationTarget.Global);
+        }
+    }
+}
+
+async function removeAllSolutionTrusts(): Promise<void> {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders || workspaceFolders.length === 0) {
+        void vscode.window.showWarningMessage('No active workspace folders loaded.');
+        return;
+    }
+
+    const solutionPath = await resolveActiveScanTarget();
+    if (!solutionPath) {
+        void vscode.window.showWarningMessage('No active solution or project found to remove trusts.');
+        return;
+    }
+
+    const confirm = await vscode.window.showWarningMessage(
+        "Are you sure you want to permanently remove all solution-level trusts for this workspace?",
+        { modal: true },
+        "Yes",
+        "No"
+    );
+
+    if (confirm !== "Yes") {
+        return;
+    }
+
+    const solutionDir = path.dirname(solutionPath);
+    const solutionTrustPath = path.join(solutionDir, '.msbuildguard', 'trust.json');
+    if (fs.existsSync(solutionTrustPath)) {
+        try {
+            fs.unlinkSync(solutionTrustPath);
+            outputChannel?.appendLine(`Deleted solution trust file: ${solutionTrustPath}`);
+            const sigPath = solutionTrustPath + '.signature';
+            if (fs.existsSync(sigPath)) {
+                fs.unlinkSync(sigPath);
+                outputChannel?.appendLine(`Deleted solution trust signature: ${sigPath}`);
+            }
+            void vscode.window.showInformationMessage("Solution trusts successfully removed.");
+            restartWorkerClient();
+            void runScan();
+        } catch (e: any) {
+            void vscode.window.showErrorMessage(`Failed to remove solution trusts: ${e.message}`);
+        }
+    } else {
+        void vscode.window.showInformationMessage("No solution trust file found to remove.");
+    }
+}
+
+async function removeAllUserTrusts(): Promise<void> {
+    const confirm = await vscode.window.showWarningMessage(
+        "Are you sure you want to permanently remove all user-level trusts?",
+        { modal: true },
+        "Yes",
+        "No"
+    );
+
+    if (confirm !== "Yes") {
+        return;
+    }
+
+    const userPath = getUserTrustPath();
+    if (fs.existsSync(userPath)) {
+        try {
+            fs.unlinkSync(userPath);
+            outputChannel?.appendLine(`Deleted user trust store: ${userPath}`);
+            const sigPath = userPath + '.signature';
+            if (fs.existsSync(sigPath)) {
+                fs.unlinkSync(sigPath);
+                outputChannel?.appendLine(`Deleted user trust signature: ${sigPath}`);
+            }
+            void vscode.window.showInformationMessage("User-level trusts successfully removed.");
+            restartWorkerClient();
+            void runScan();
+        } catch (e: any) {
+            void vscode.window.showErrorMessage(`Failed to remove user trusts: ${e.message}`);
+        }
+    } else {
+        void vscode.window.showInformationMessage("No user trust file found to remove.");
+    }
+}
+
+async function removeAllProjectTrusts(): Promise<void> {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders || workspaceFolders.length === 0) {
+        void vscode.window.showWarningMessage('No active workspace folders loaded.');
+        return;
+    }
+
+    const solutionPath = await resolveActiveScanTarget();
+    if (!solutionPath) {
+        void vscode.window.showWarningMessage('No active solution or project found to remove trusts.');
+        return;
+    }
+
+    const confirm = await vscode.window.showWarningMessage(
+        "Are you sure you want to permanently remove all project-level trusts for this workspace?",
+        { modal: true },
+        "Yes",
+        "No"
+    );
+
+    if (confirm !== "Yes") {
+        return;
+    }
+
+    const solutionDir = path.dirname(solutionPath);
+    let deletedCount = 0;
+
+    function purgeProjectTrusts(dir: string, solutionDir: string, depth: number = 0): void {
+        if (depth > 5) {
+            return;
+        }
+        try {
+            const files = fs.readdirSync(dir);
+            for (const file of files) {
+                const fullPath = path.join(dir, file);
+                if (file === '.msbuildguard') {
+                    if (path.resolve(dir) === path.resolve(solutionDir)) {
+                        continue;
+                    }
+                    const trustFile = path.join(fullPath, 'trust.json');
+                    if (fs.existsSync(trustFile)) {
+                        try {
+                            fs.unlinkSync(trustFile);
+                            deletedCount++;
+                            outputChannel?.appendLine(`Deleted project trust store: ${trustFile}`);
+                            const sigFile = trustFile + '.signature';
+                            if (fs.existsSync(sigFile)) {
+                                fs.unlinkSync(sigFile);
+                                outputChannel?.appendLine(`Deleted project trust signature: ${sigFile}`);
+                            }
+                        } catch (e: any) {
+                            outputChannel?.appendLine(`Failed to delete ${trustFile}: ${e.message}`);
+                        }
+                    }
+                } else {
+                    try {
+                        const stat = fs.statSync(fullPath);
+                        if (stat.isDirectory()) {
+                            if (file !== 'node_modules' && file !== '.git' && file !== 'bin' && file !== 'obj') {
+                                purgeProjectTrusts(fullPath, solutionDir, depth + 1);
+                            }
+                        }
+                    } catch (e) { }
+                }
+            }
+        } catch (e) { }
+    }
+
+    purgeProjectTrusts(solutionDir, solutionDir);
+
+    if (deletedCount > 0) {
+        void vscode.window.showInformationMessage(`Successfully removed project-level trusts from ${deletedCount} project(s).`);
+        restartWorkerClient();
+        void runScan();
+    } else {
+        void vscode.window.showInformationMessage("No project-level trust files found to remove.");
+    }
 }

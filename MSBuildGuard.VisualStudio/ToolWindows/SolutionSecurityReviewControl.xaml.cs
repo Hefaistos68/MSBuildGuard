@@ -112,6 +112,35 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		}
 
 		/// <summary>
+		/// Handles the Remove All Project Trusts button click by prompting for confirmation and purging project trust stores.
+		/// </summary>
+		/// <param name="sender">Event sender.</param>
+		/// <param name="e">Routed event arguments.</param>
+		private void OnRemoveAllProjectTrustsClick(object sender, RoutedEventArgs e)
+		{
+			ThreadHelper.ThrowIfNotOnUIThread();
+
+			if (this.DataContext is not SolutionSecurityReviewViewModel viewModel)
+			{
+				return;
+			}
+
+			var confirm = MessageBox.Show(
+				"Are you sure you want to permanently remove all project-level trusts for this workspace?",
+				"MSBuild Guard - Confirm Removal",
+				MessageBoxButton.YesNo,
+				MessageBoxImage.Warning);
+
+			if (confirm == MessageBoxResult.Yes)
+			{
+				ThreadHelper.JoinableTaskFactory.RunAsync(async delegate
+				{
+					await viewModel.RemoveAllProjectTrustsAsync().ConfigureAwait(false);
+				}).FileAndForget(nameof(SolutionSecurityReviewControl));
+			}
+		}
+
+		/// <summary>
 		/// Handles double-click on a findings row by navigating to the finding's source location in the editor.
 		/// </summary>
 		/// <param name="sender">Event sender (the findings data grid).</param>

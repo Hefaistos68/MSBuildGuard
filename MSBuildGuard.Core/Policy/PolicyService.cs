@@ -323,6 +323,11 @@ namespace MSBuildGuard.Core.Policy
 
 			if (!TryReadSignatureRecord(policyPath, out var signatureRecord))
 			{
+				if (CoreSettings.EnforceAsymmetricSignatures)
+				{
+					throw new InvalidDataException("Policy asymmetric signature is required but missing. Run 'msbuildguard policy sign <policyPath>' to sign.");
+				}
+
 				return;
 			}
 
@@ -410,7 +415,7 @@ namespace MSBuildGuard.Core.Policy
 				throw new ArgumentNullException(nameof(policyPath));
 			}
 
-			return string.Concat(policyPath, ":", PolicySignatureStreamName);
+			return string.Concat(policyPath, ".signature");
 		}
 
 		/// <summary>
@@ -666,22 +671,47 @@ namespace MSBuildGuard.Core.Policy
 			var normalized = NormalizeThumbprint(thumbprint);
 			var certificate = TryFindCertificate(StoreName.TrustedPeople, StoreLocation.LocalMachine, normalized);
 
-			if (certificate != null)
-			{
-				return certificate;
-			}
-
-			if (AllowCurrentUserTrustedStore())
+			if (certificate == null && AllowCurrentUserTrustedStore())
 			{
 				certificate = TryFindCertificate(StoreName.TrustedPeople, StoreLocation.CurrentUser, normalized);
+			}
 
-				if (certificate != null)
+			if (certificate == null)
+			{
+				throw new InvalidDataException($"Trusted verification certificate '{normalized}' was not found in LocalMachine/TrustedPeople. Import signer public certificate there. For test/dev only, set {AllowCurrentUserTrustedStoreVariable}=true to allow CurrentUser/TrustedPeople fallback.");
+			}
+
+			var pinnedCa = Environment.GetEnvironmentVariable("MSBUILDGUARD_ROOT_CA_THUMBPRINT");
+
+			if (!string.IsNullOrWhiteSpace(pinnedCa))
+			{
+				var normalizedPinnedCa = pinnedCa!.Replace(" ", string.Empty).ToUpperInvariant();
+				var chain = new X509Chain();
+
+				chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
+				chain.Build(certificate);
+
+				var isChainValid = false;
+
+				foreach (var element in chain.ChainElements)
 				{
-					return certificate;
+					var elementThumb = element.Certificate.Thumbprint.Replace(" ", string.Empty).ToUpperInvariant();
+
+					if (string.Equals(elementThumb, normalizedPinnedCa, StringComparison.OrdinalIgnoreCase))
+					{
+						isChainValid = true;
+
+						break;
+					}
+				}
+
+				if (!isChainValid)
+				{
+					throw new InvalidDataException($"The verification certificate is not issued by the trusted Root CA '{normalizedPinnedCa}'.");
 				}
 			}
 
-			throw new InvalidDataException($"Trusted verification certificate '{normalized}' was not found in LocalMachine/TrustedPeople. Import signer public certificate there. For test/dev only, set {AllowCurrentUserTrustedStoreVariable}=true to allow CurrentUser/TrustedPeople fallback.");
+			return certificate;
 		}
 
 		/// <summary>
@@ -790,15 +820,15 @@ namespace MSBuildGuard.Core.Policy
 			}
 			catch (FileNotFoundException ex)
 			{
-				throw new InvalidDataException("Policy signature stream is missing. The policy may have been copied to a file system that strips alternate data streams (for example non-NTFS) or edited without re-signing. Run 'msbuildguard policy sign <policyPath>' after legitimate edits.", ex);
+				throw new InvalidDataException("Policy signature file is missing. The policy may have been copied or edited without re-signing. Run 'msbuildguard policy sign <policyPath>' after legitimate edits.", ex);
 			}
 			catch (DirectoryNotFoundException ex)
 			{
-				throw new InvalidDataException("Policy signature stream is missing. The policy may have been copied to a file system that strips alternate data streams (for example non-NTFS) or edited without re-signing. Run 'msbuildguard policy sign <policyPath>' after legitimate edits.", ex);
+				throw new InvalidDataException("Policy signature file is missing. The policy may have been copied or edited without re-signing. Run 'msbuildguard policy sign <policyPath>' after legitimate edits.", ex);
 			}
 			catch (NotSupportedException ex)
 			{
-				throw new InvalidDataException("Policy signature stream is not supported on this file system. Use NTFS policy paths.", ex);
+				throw new InvalidDataException("Policy signature is not supported.", ex);
 			}
 
 			var signatureRecord = JsonSerializer.Deserialize<PolicySignatureRecord>(signaturePayload, SignatureSerializerOptions);

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using MSBuildGuard.Core.Trust;
 using MSBuildGuard.VisualStudio.Models;
 using MSBuildGuard.VisualStudio.ToolWindows;
@@ -172,7 +173,8 @@ namespace MSBuildGuard.VisualStudio.ToolWindows.Tests
 				]
 			}";
 
-			File.WriteAllText(trustStorePath, json);
+			var doc = JsonSerializer.Deserialize<TrustStoreDocument>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true, Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() } });
+			new TrustStoreService().Save(trustStorePath, doc!);
 
 			var helper = new ManageSignerTrustsHelper(string.Empty, projectPath);
 
@@ -241,7 +243,8 @@ namespace MSBuildGuard.VisualStudio.ToolWindows.Tests
 				]
 			}";
 
-			File.WriteAllText(trustStorePath, json);
+			var doc = JsonSerializer.Deserialize<TrustStoreDocument>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true, Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() } });
+			new TrustStoreService().Save(trustStorePath, doc!);
 
 			helper.LoadTrustedSigners(TrustScope.Project, projectPath);
 
@@ -291,7 +294,8 @@ namespace MSBuildGuard.VisualStudio.ToolWindows.Tests
 				]
 			}";
 
-			File.WriteAllText(trustStorePath, json);
+			var doc = JsonSerializer.Deserialize<TrustStoreDocument>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true, Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() } });
+			new TrustStoreService().Save(trustStorePath, doc!);
 
 			helper.LoadTrustedSigners(TrustScope.Project, projectAPath);
 

@@ -112,11 +112,6 @@ namespace MSBuildGuard.Core.Tests.Policy
 		[Test]
 		public void SignAndValidate_ShouldSucceed_WhenPolicyHasNotChanged()
 		{
-			if (!OperatingSystem.IsWindows())
-			{
-				Assert.Ignore("Policy signature stream tests require Windows NTFS alternate stream support.");
-			}
-
 			var service = new PolicyService();
 			var policyPath = Path.Combine(Path.GetTempPath(), $"policy-sign-{Guid.NewGuid():N}.json");
 			using var certificate = CreateSelfSignedCertificate();
@@ -237,11 +232,6 @@ namespace MSBuildGuard.Core.Tests.Policy
 		[Test]
 		public void Validate_ShouldFail_WhenPolicyContentWasModifiedAfterSigning()
 		{
-			if (!OperatingSystem.IsWindows())
-			{
-				Assert.Ignore("Policy signature stream tests require Windows NTFS alternate stream support.");
-			}
-
 			var service = new PolicyService();
 			var policyPath = Path.Combine(Path.GetTempPath(), $"policy-tamper-{Guid.NewGuid():N}.json");
 			using var certificate = CreateSelfSignedCertificate();
@@ -305,7 +295,92 @@ namespace MSBuildGuard.Core.Tests.Policy
 			}
 		}
 
+		/// <summary>
+		/// Verifies that policy signature validation fails when Root CA chain pinning is enabled and the signing certificate is not issued by the pinned Root CA.
+		/// </summary>
+		[Test]
+		public void Validate_ShouldFail_WhenRootCaPinningIsEnforcedAndCertificateIsNotIssuedByPinnedRootCa()
+		{
+			var service = new PolicyService();
+			var policyPath = Path.Combine(Path.GetTempPath(), $"policy-ca-pin-fail-{Guid.NewGuid():N}.json");
+			using var certificate = CreateSelfSignedCertificate();
 
+			AddCertificate(StoreName.My, StoreLocation.CurrentUser, certificate);
+			AddCertificate(StoreName.TrustedPeople, StoreLocation.CurrentUser, certificate);
+			Environment.SetEnvironmentVariable("MSBUILDGUARD_POLICY_ALLOW_CURRENTUSER_TRUSTED_STORE", "true");
+			Environment.SetEnvironmentVariable("MSBUILDGUARD_ROOT_CA_THUMBPRINT", "0000000000000000000000000000000000000000");
+
+			try
+			{
+				service.Save(policyPath, service.CreateDefault());
+				service.Sign(policyPath, certificate.Thumbprint);
+
+				service.TryValidateSignature(policyPath, out var message).ShouldBeFalse();
+				message.ShouldContain("The verification certificate is not issued by the trusted Root CA");
+			}
+			finally
+			{
+				Environment.SetEnvironmentVariable("MSBUILDGUARD_POLICY_ALLOW_CURRENTUSER_TRUSTED_STORE", null);
+				Environment.SetEnvironmentVariable("MSBUILDGUARD_ROOT_CA_THUMBPRINT", null);
+				RemoveCertificate(StoreName.My, StoreLocation.CurrentUser, certificate.Thumbprint);
+				RemoveCertificate(StoreName.TrustedPeople, StoreLocation.CurrentUser, certificate.Thumbprint);
+
+				if (File.Exists(policyPath))
+				{
+					File.Delete(policyPath);
+				}
+
+				var signaturePath = policyPath + ".signature";
+
+				if (File.Exists(signaturePath))
+				{
+					File.Delete(signaturePath);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Verifies that policy signature validation succeeds when Root CA chain pinning is enabled and the signing certificate matches the pinned Root CA.
+		/// </summary>
+		[Test]
+		public void Validate_ShouldSucceed_WhenRootCaPinningIsEnforcedAndCertificateMatchesPinnedRootCa()
+		{
+			var service = new PolicyService();
+			var policyPath = Path.Combine(Path.GetTempPath(), $"policy-ca-pin-success-{Guid.NewGuid():N}.json");
+			using var certificate = CreateSelfSignedCertificate();
+
+			AddCertificate(StoreName.My, StoreLocation.CurrentUser, certificate);
+			AddCertificate(StoreName.TrustedPeople, StoreLocation.CurrentUser, certificate);
+			Environment.SetEnvironmentVariable("MSBUILDGUARD_POLICY_ALLOW_CURRENTUSER_TRUSTED_STORE", "true");
+			Environment.SetEnvironmentVariable("MSBUILDGUARD_ROOT_CA_THUMBPRINT", certificate.Thumbprint);
+
+			try
+			{
+				service.Save(policyPath, service.CreateDefault());
+				service.Sign(policyPath, certificate.Thumbprint);
+
+				service.TryValidateSignature(policyPath, out var message).ShouldBeTrue(message);
+			}
+			finally
+			{
+				Environment.SetEnvironmentVariable("MSBUILDGUARD_POLICY_ALLOW_CURRENTUSER_TRUSTED_STORE", null);
+				Environment.SetEnvironmentVariable("MSBUILDGUARD_ROOT_CA_THUMBPRINT", null);
+				RemoveCertificate(StoreName.My, StoreLocation.CurrentUser, certificate.Thumbprint);
+				RemoveCertificate(StoreName.TrustedPeople, StoreLocation.CurrentUser, certificate.Thumbprint);
+
+				if (File.Exists(policyPath))
+				{
+					File.Delete(policyPath);
+				}
+
+				var signaturePath = policyPath + ".signature";
+
+				if (File.Exists(signaturePath))
+				{
+					File.Delete(signaturePath);
+				}
+			}
+		}
 
 		private static X509Certificate2 CreateSelfSignedCertificate()
 		{

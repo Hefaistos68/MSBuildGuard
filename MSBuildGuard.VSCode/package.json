@@ -3,7 +3,7 @@
   "displayName": "MSBuild Guard",
   "description": "Cross-platform security analysis extension that scans MSBuild project files before execution and prevents malicious code delivery.",
   "icon": "resources/shield-icon.png",
-  "version": "0.0.7",
+  "version": "0.1.0",
   "preview": true,
   "publisher": "Hefaistos68",
   "author": {
@@ -81,6 +81,21 @@
         "command": "msbuildguard.manageSignerTrusts",
         "category": "MSBuild Guard",
         "title": "Manage Trusted Certificate Signers..."
+      },
+      {
+        "command": "msbuildguard.removeAllSolutionTrusts",
+        "category": "MSBuild Guard",
+        "title": "Remove All Solution Trusts"
+      },
+      {
+        "command": "msbuildguard.removeAllProjectTrusts",
+        "category": "MSBuild Guard",
+        "title": "Remove All Project Trusts"
+      },
+      {
+        "command": "msbuildguard.removeAllUserTrusts",
+        "category": "MSBuild Guard",
+        "title": "Remove All User Trusts"
       }
     ],
     "menus": {
@@ -100,6 +115,22 @@
           "type": "boolean",
           "default": true,
           "description": "Intelligently suggests baseline trust settings when loading a new workspace for the first time."
+        },
+        "msbuildguard.enforceAsymmetricSignatures": {
+          "type": "boolean",
+          "default": false,
+          "description": "Strictly enforces asymmetric certificate-based signature verification for trust stores and policy documents."
+        },
+        "msbuildguard.trustManagement.allowSharingTrustsInRepositories": {
+          "type": "boolean",
+          "default": false,
+          "description": "Allows trust settings to be shared in repository files. Only available when asymmetric certificate key management is configured."
+        },
+        "msbuildguard.trustManagement.keyManagementMode": {
+          "type": "string",
+          "default": "unconfigured",
+          "enum": ["unconfigured", "dpapi", "certificates"],
+          "description": "Specifies the mode used for signing and validating trust files. Local DPAPI uses local machine-specific keys, disabling repository sharing."
         },
         "msbuildguard.autoOpenSecurityReview": {
           "type": "boolean",
