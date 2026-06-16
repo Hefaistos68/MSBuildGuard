@@ -257,7 +257,9 @@ namespace MSBuildGuard.VisualStudio
 				this.RegisterHardeningCommands(commandService);
 			}
 
-			var options = await this.GetOptionsSnapshotAsync(cancellationToken).ConfigureAwait(false);
+			var options = await this.GetOptionsSnapshotAsync(cancellationToken);
+
+			await JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
 
 			MSBuildGuard.Core.CoreSettings.EnforceAsymmetricSignatures = options.EnforceAsymmetricSignatures;
 			MSBuildGuard.Core.CoreSettings.AllowSharingTrustsInRepositories = options.AllowSharingTrustsInRepositories;
@@ -329,8 +331,11 @@ namespace MSBuildGuard.VisualStudio
 			{
 				await JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
 
-				var options = await this.GetOptionsSnapshotAsync(cancellationToken).ConfigureAwait(false);
-				await this.ApplyTrustSharingPreferenceAsync().ConfigureAwait(false);
+				var options = await this.GetOptionsSnapshotAsync(cancellationToken);
+
+				await this.ApplyTrustSharingPreferenceAsync();
+
+				await JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
 
 				if (this.solutionMonitorService != null)
 				{
@@ -638,7 +643,10 @@ namespace MSBuildGuard.VisualStudio
 				await this.UiFeedbackService.WriteLineAsync($"[Flow] OnSolutionScanCompleted targetKind={e.Target.TargetKind}, findings={e.Findings.Count}", CancellationToken.None);
 				await this.JoinableTaskFactory.SwitchToMainThreadAsync(this.DisposalToken);
 
-				var options = await this.GetOptionsSnapshotAsync(this.DisposalToken).ConfigureAwait(false);
+				var options = await this.GetOptionsSnapshotAsync(this.DisposalToken);
+
+				await this.JoinableTaskFactory.SwitchToMainThreadAsync(this.DisposalToken);
+
 				var solutionPath = e.Target.TargetPath;
 				var solutionDir = !string.IsNullOrWhiteSpace(solutionPath) ? Path.GetDirectoryName(solutionPath) : null;
 				var isUnseen = false;

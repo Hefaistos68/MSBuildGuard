@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using MSBuildGuard.Core.Baseline;
 using MSBuildGuard.Core.Trust;
 using NUnit.Framework;
 using Shouldly;
@@ -599,10 +600,12 @@ namespace MSBuildGuard.Core.Tests.Trust
 
 			try
 			{
-				CoreSettings.EnforceAsymmetricSignatures = true;
+				CoreSettings.EnforceAsymmetricSignatures = false;
 				CoreSettings.AllowSharingTrustsInRepositories = true;
 
 				service.Save(path, new TrustStoreDocument());
+
+				CoreSettings.EnforceAsymmetricSignatures = true;
 
 				Should.Throw<InvalidDataException>(() => service.Load(path))
 					.Message.ShouldContain("Asymmetric signature is required but missing");
@@ -676,6 +679,166 @@ namespace MSBuildGuard.Core.Tests.Trust
 				if (Directory.Exists(rootPath))
 				{
 					Directory.Delete(rootPath, true);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Verifies that saving a trust store that already has an asymmetric signature automatically updates/re-signs the signature companion file.
+		/// </summary>
+		[Test]
+		public void Save_ShouldAutomaticallyUpdateSignature_WhenAlreadyAsymmetricSigned()
+		{
+			var service = new TrustStoreService();
+			var rootPath = Path.Combine(Path.GetTempPath(), $"trust-auto-resign-{Guid.NewGuid():N}");
+			var slnDir = Path.Combine(rootPath, "repo", ".msbuildguard");
+			var path = Path.Combine(slnDir, "trust.json");
+
+			using var certificate = CreateSelfSignedCertificate();
+
+			AddCertificate(StoreName.My, StoreLocation.CurrentUser, certificate);
+			AddCertificate(StoreName.TrustedPeople, StoreLocation.CurrentUser, certificate);
+			Environment.SetEnvironmentVariable("MSBUILDGUARD_POLICY_ALLOW_CURRENTUSER_TRUSTED_STORE", "true");
+
+			var originalAllowSharing = CoreSettings.AllowSharingTrustsInRepositories;
+			var originalEnforce = CoreSettings.EnforceAsymmetricSignatures;
+
+			try
+			{
+				CoreSettings.AllowSharingTrustsInRepositories = true;
+				CoreSettings.EnforceAsymmetricSignatures = false;
+
+				var store = new TrustStoreDocument();
+
+				service.Save(path, store);
+				service.Sign(path, certificate.Thumbprint);
+
+				// Modify document and save again
+				var loaded = service.Load(path);
+
+				loaded.Decisions.Add(new TrustDecisionEntry
+				{
+					DecisionId = Guid.NewGuid().ToString("N"),
+					Scope = "Finding",
+					SubjectHash = "fp-auto-resign",
+					Decision = "TrustUntilChanged",
+					CreatedAtUtc = DateTimeOffset.UtcNow
+				});
+
+				// Save should automatically re-sign using the existing thumbprint
+				service.Save(path, loaded);
+
+				// Subsequent load should succeed (validating the new asymmetric signature)
+				var reloaded = service.Load(path);
+
+				reloaded.ShouldNotBeNull();
+				service.IsFingerprintApproved(reloaded, "fp-auto-resign").ShouldBeTrue();
+			}
+			finally
+			{
+				CoreSettings.AllowSharingTrustsInRepositories = originalAllowSharing;
+				CoreSettings.EnforceAsymmetricSignatures = originalEnforce;
+				Environment.SetEnvironmentVariable("MSBUILDGUARD_POLICY_ALLOW_CURRENTUSER_TRUSTED_STORE", null);
+				RemoveCertificate(StoreName.My, StoreLocation.CurrentUser, certificate.Thumbprint);
+				RemoveCertificate(StoreName.TrustedPeople, StoreLocation.CurrentUser, certificate.Thumbprint);
+
+				if (Directory.Exists(rootPath))
+				{
+					Directory.Delete(rootPath, true);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Verifies that saving a trust store when EnforceAsymmetricSignatures is true automatically signs the trust store file.
+		/// </summary>
+		[Test]
+		public void Save_ShouldAutomaticallySign_WhenEnforceAsymmetricSignaturesIsTrue()
+		{
+			var service = new TrustStoreService();
+			var rootPath = Path.Combine(Path.GetTempPath(), $"trust-auto-sign-{Guid.NewGuid():N}");
+			var slnDir = Path.Combine(rootPath, "repo", ".msbuildguard");
+			var path = Path.Combine(slnDir, "trust.json");
+
+			using var certificate = CreateSelfSignedCertificate();
+
+			AddCertificate(StoreName.My, StoreLocation.CurrentUser, certificate);
+			AddCertificate(StoreName.TrustedPeople, StoreLocation.CurrentUser, certificate);
+			Environment.SetEnvironmentVariable("MSBUILDGUARD_POLICY_ALLOW_CURRENTUSER_TRUSTED_STORE", "true");
+			Environment.SetEnvironmentVariable("MSBUILDGUARD_POLICY_SIGNING_CERT_THUMBPRINT", certificate.Thumbprint);
+
+			var originalAllowSharing = CoreSettings.AllowSharingTrustsInRepositories;
+			var originalEnforce = CoreSettings.EnforceAsymmetricSignatures;
+
+			try
+			{
+				CoreSettings.AllowSharingTrustsInRepositories = true;
+				CoreSettings.EnforceAsymmetricSignatures = true;
+
+				var store = new TrustStoreDocument();
+
+				// Save should automatically sign because enforcement is enabled
+				service.Save(path, store);
+
+				// Subsequent load should succeed
+				var loaded = service.Load(path);
+
+				loaded.ShouldNotBeNull();
+			}
+			finally
+			{
+				CoreSettings.AllowSharingTrustsInRepositories = originalAllowSharing;
+				CoreSettings.EnforceAsymmetricSignatures = originalEnforce;
+				Environment.SetEnvironmentVariable("MSBUILDGUARD_POLICY_ALLOW_CURRENTUSER_TRUSTED_STORE", null);
+				Environment.SetEnvironmentVariable("MSBUILDGUARD_POLICY_SIGNING_CERT_THUMBPRINT", null);
+				RemoveCertificate(StoreName.My, StoreLocation.CurrentUser, certificate.Thumbprint);
+				RemoveCertificate(StoreName.TrustedPeople, StoreLocation.CurrentUser, certificate.Thumbprint);
+
+				if (Directory.Exists(rootPath))
+				{
+					Directory.Delete(rootPath, true);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Verifies that user trust store saves use a unique local DPAPI key (or fallback unprotected key) rather than the static shared key.
+		/// </summary>
+		[Test]
+		public void GetSigningKey_ShouldBeUniquePerUserMachine()
+		{
+			var service = new TrustStoreService();
+			var tempPath = Path.Combine(Path.GetTempPath(), $"user-trust-{Guid.NewGuid():N}.json");
+			var originalAllowSharing = CoreSettings.AllowSharingTrustsInRepositories;
+
+			try
+			{
+				CoreSettings.AllowSharingTrustsInRepositories = false;
+
+				var store = new TrustStoreDocument();
+
+				service.Save(tempPath, store);
+
+				// If we load it, it should succeed because it uses the local key
+				var loaded = service.Load(tempPath);
+
+				loaded.ShouldNotBeNull();
+
+				// If we try to verify the signature of the file using the static TrustStoreSigningKey, it should fail
+				var payload = File.ReadAllText(tempPath);
+				var signatureService = new JsonSignatureService();
+				string? trustPayload;
+				var verifiedWithStaticKey = signatureService.TryVerifyAndExtract<string>(payload, "MSBuildGuard.TrustStore.v1", out trustPayload);
+
+				verifiedWithStaticKey.ShouldBeFalse();
+			}
+			finally
+			{
+				CoreSettings.AllowSharingTrustsInRepositories = originalAllowSharing;
+
+				if (File.Exists(tempPath))
+				{
+					File.Delete(tempPath);
 				}
 			}
 		}

@@ -127,7 +127,7 @@ export function activate(context: vscode.ExtensionContext) {
                 const conf = vscode.workspace.getConfiguration('msbuildguard');
                 const newValue = conf.get<boolean>('enforceAsymmetricSignatures', false);
                 const oldValue = context.globalState.get<boolean>('lastEnforceAsymmetricSignatures', false);
-                
+
                 if (oldValue === true && newValue === false) {
                     const confirm = await vscode.window.showWarningMessage(
                         "Downgrading security settings: Disabling strict asymmetric signatures will permanently delete all local user, solution, and project trust files. Do you want to proceed?",
@@ -264,7 +264,7 @@ async function runScan(targetUri?: vscode.Uri): Promise<void> {
         }
 
         outputChannel.appendLine(`Scan completed: ${report.findings.length} findings identified.`);
-        
+
         // Publish squiggles
         if (diagnosticPublisher) {
             diagnosticPublisher.publish(report);
@@ -576,7 +576,7 @@ async function manageTrusts(initialScope: 'User' | 'Solution' | 'Project' = 'Use
 // Security Hardening Helper functions
 
 function getUserTrustPath(): string {
-    const localAppData = process.env.LOCALAPPDATA || 
+    const localAppData = process.env.LOCALAPPDATA ||
         (process.platform === 'darwin' ? path.join(process.env.HOME || '', 'Library', 'Application Support') : path.join(process.env.HOME || '', '.local', 'share'));
     return path.join(localAppData, 'MSBuildGuard', 'trust.json');
 }
@@ -584,7 +584,7 @@ function getUserTrustPath(): string {
 function getRecentWorkspaces(): string[] {
     const paths: string[] = [];
     try {
-        const appData = process.env.APPDATA || 
+        const appData = process.env.APPDATA ||
             (process.platform === 'darwin' ? path.join(process.env.HOME || '', 'Library', 'Application Support') : path.join(process.env.HOME || '', '.config'));
         const channelDirs = ['Code', 'Code - Insiders', 'VSCodium'];
         for (const dir of channelDirs) {
@@ -600,13 +600,13 @@ function getRecentWorkspaces(): string[] {
                                 if (uriPath) {
                                     paths.push(uriPath);
                                 }
-                            } catch {}
+                            } catch { }
                         } else if (entry.workspace && entry.workspace.configPath) {
                             try {
                                 const uriPath = vscode.Uri.parse(entry.workspace.configPath).fsPath;
                                 const folder = path.dirname(uriPath);
                                 paths.push(folder);
-                            } catch {}
+                            } catch { }
                         }
                     }
                 }
@@ -618,7 +618,7 @@ function getRecentWorkspaces(): string[] {
 }
 
 function purgeTrustFilesInDir(dir: string, depth: number = 0): void {
-    if (depth > 5) {
+    if (depth > 25) {
         return;
     }
     try {
@@ -648,15 +648,15 @@ function purgeTrustFilesInDir(dir: string, depth: number = 0): void {
                             purgeTrustFilesInDir(fullPath, depth + 1);
                         }
                     }
-                } catch (e) {}
+                } catch (e) { }
             }
         }
-    } catch (e) {}
+    } catch (e) { }
 }
 
 async function purgeAllTrusts(context: vscode.ExtensionContext): Promise<void> {
     outputChannel?.appendLine('Purging all trust stores due to enforceAsymmetricSignatures downgrade...');
-    
+
     // 1. Delete user-level trust store
     const userPath = getUserTrustPath();
     if (fs.existsSync(userPath)) {
@@ -675,7 +675,7 @@ async function purgeAllTrusts(context: vscode.ExtensionContext): Promise<void> {
 
     // 2. Scan recent and open workspace folders to delete .msbuildguard/trust.json
     const foldersToScan = new Set<string>();
-    
+
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (workspaceFolders) {
         for (const folder of workspaceFolders) {
@@ -697,7 +697,7 @@ async function purgeAllTrusts(context: vscode.ExtensionContext): Promise<void> {
             }
         }
     }
-    
+
     void vscode.window.showInformationMessage("All local, solution, and project trust stores have been successfully purged.");
 }
 
@@ -874,10 +874,10 @@ async function removeAllProjectTrusts(): Promise<void> {
                                 purgeProjectTrusts(fullPath, solutionDir, depth + 1);
                             }
                         }
-                    } catch (e) {}
+                    } catch (e) { }
                 }
             }
-        } catch (e) {}
+        } catch (e) { }
     }
 
     purgeProjectTrusts(solutionDir, solutionDir);

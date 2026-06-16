@@ -162,11 +162,34 @@ namespace MSBuildGuard.Core.Trust
 				Directory.CreateDirectory(directory);
 			}
 
+			var hasAsymmetricSignature = TryReadSignatureRecord(path, out var signatureRecord);
+			string? signingThumbprint = null;
+
+			if (hasAsymmetricSignature)
+			{
+				signingThumbprint = signatureRecord.SigningCertificateThumbprint;
+			}
+			else
+			{
+				var solutionDir = Path.GetDirectoryName(path);
+				var isSolutionOrProjectScope = !string.IsNullOrWhiteSpace(solutionDir) && (solutionDir.Contains(".msbuildguard") || path.Contains(".msbuildguard"));
+
+				if (isSolutionOrProjectScope && (CoreSettings.EnforceAsymmetricSignatures || IsRepositoryPinnedAsAsymmetricRequired(path)))
+				{
+					signingThumbprint = ResolveSigningCertificateThumbprint(null);
+				}
+			}
+
 			var trustPayload = JsonSerializer.Serialize(document, SerializerOptions);
 			var signingKey = GetSigningKeyForPath(path);
 			var payload = new JsonSignatureService().CreateSignedEnvelopeJson(trustPayload, signingKey);
 
 			WriteAllTextAtomic(path, payload);
+
+			if (signingThumbprint != null)
+			{
+				Sign(path, signingThumbprint);
+			}
 		}
 
 		/// <summary>
@@ -1645,12 +1668,12 @@ namespace MSBuildGuard.Core.Trust
 		/// <returns>Base64 key material, or fallback static key when key access fails.</returns>
 		private string GetLocalDPAPIKey()
 		{
+			var appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+			var keyDir = Path.Combine(appData, "MSBuildGuard");
+			var keyPath = Path.Combine(keyDir, "machine.key");
+
 			try
 			{
-				var appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-				var keyDir = Path.Combine(appData, "MSBuildGuard");
-				var keyPath = Path.Combine(keyDir, "machine.key");
-
 				if (!Directory.Exists(keyDir))
 				{
 					Directory.CreateDirectory(keyDir);
@@ -1677,6 +1700,48 @@ namespace MSBuildGuard.Core.Trust
 					var encrypted = ProtectedData.Protect(rawKeyBytes, null, DataProtectionScope.CurrentUser);
 
 					File.WriteAllBytes(keyPath, encrypted);
+
+					return keyString;
+				}
+			}
+			catch (Exception)
+			{
+				return GetLocalUnprotectedKey(keyDir);
+			}
+		}
+
+		/// <summary>
+		/// Gets or creates a local unprotected symmetric key used when DPAPI is unavailable.
+		/// </summary>
+		/// <param name="keyDir">The key directory path.</param>
+		/// <returns>Base64 key material, or fallback static key if file operations fail.</returns>
+		private string GetLocalUnprotectedKey(string keyDir)
+		{
+			try
+			{
+				var unprotectedKeyPath = Path.Combine(keyDir, "machine.key.fallback");
+
+				if (!Directory.Exists(keyDir))
+				{
+					Directory.CreateDirectory(keyDir);
+				}
+
+				if (File.Exists(unprotectedKeyPath))
+				{
+					return File.ReadAllText(unprotectedKeyPath);
+				}
+				else
+				{
+					var keyBytes = new byte[32];
+
+					using (var rng = RandomNumberGenerator.Create())
+					{
+						rng.GetBytes(keyBytes);
+					}
+
+					var keyString = Convert.ToBase64String(keyBytes);
+
+					File.WriteAllText(unprotectedKeyPath, keyString);
 
 					return keyString;
 				}
