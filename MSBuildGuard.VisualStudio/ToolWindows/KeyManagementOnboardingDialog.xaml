@@ -1,0 +1,113 @@
+<platformUi:DialogWindow x:Class="MSBuildGuard.VisualStudio.ToolWindows.KeyManagementOnboardingDialog"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:platformUi="clr-namespace:Microsoft.VisualStudio.PlatformUI;assembly=Microsoft.VisualStudio.Shell.15.0"
+             xmlns:vsshell="clr-namespace:Microsoft.VisualStudio.Shell;assembly=Microsoft.VisualStudio.Shell.15.0"
+             mc:Ignorable="d"
+             Title="MSBuild Guard - Key Management Onboarding"
+             Width="800"
+             Height="460"
+             ResizeMode="NoResize"
+             WindowStartupLocation="CenterOwner"
+             Background="{DynamicResource {x:Static vsshell:VsBrushes.WindowKey}}"
+             Foreground="{DynamicResource {x:Static vsshell:VsBrushes.WindowTextKey}}"
+             platformUi:ThemedDialogStyleLoader.UseDefaultThemedDialogStyles="True">
+    <platformUi:DialogWindow.Resources>
+        <ResourceDictionary>
+            <Style TargetType="TextBlock">
+                <Setter Property="Foreground" Value="{DynamicResource {x:Static vsshell:VsBrushes.WindowTextKey}}"/>
+            </Style>
+            <Style TargetType="Button">
+                <Setter Property="Padding" Value="12,6"/>
+            </Style>
+        </ResourceDictionary>
+    </platformUi:DialogWindow.Resources>
+    
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        
+        <!-- Header -->
+        <TextBlock Grid.Row="0" Text="MSBuild Guard - Key Management Setup" FontSize="18" FontWeight="Bold" Margin="0,0,0,8"/>
+        
+        <TextBlock Grid.Row="1" Text="To secure your solution's build process, MSBuild Guard signs and verifies project trust policies. Please select the key management mode that fits your setup:" 
+                   TextWrapping="Wrap" Margin="0,0,0,20" FontSize="12" Opacity="0.9"/>
+        
+        <!-- Option Cards (Side-by-Side) -->
+        <Grid Grid.Row="2" Margin="0,0,0,20">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="16"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            
+            <!-- Solo Developer Card -->
+            <Border Grid.Column="0" BorderThickness="1" BorderBrush="{DynamicResource {x:Static vsshell:VsBrushes.PanelBorderKey}}" Background="{DynamicResource {x:Static vsshell:VsBrushes.GridHeadingBackgroundKey}}" CornerRadius="4" Padding="12">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    
+                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
+                        <TextBlock Text="👤" FontSize="20" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                        <TextBlock Text="Solo Developer" FontSize="14" FontWeight="Bold" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    
+                    <TextBlock Grid.Row="1" Text="Local DPAPI Key Management" FontSize="11" FontStyle="Italic" Opacity="0.7" Margin="0,0,0,12"/>
+                    
+                    <StackPanel Grid.Row="2" Orientation="Vertical" Margin="0,0,0,12">
+                        <TextBlock Text="• Secures trust policies using Windows Data Protection API (DPAPI)." Margin="0,0,0,6" TextWrapping="Wrap" FontSize="11"/>
+                        <TextBlock Text="• Keys are machine-specific and tied to your Windows user profile." Margin="0,0,0,6" TextWrapping="Wrap" FontSize="11"/>
+                        <TextBlock Text="• Recommended for individual developers. Trust sharing in repositories is disabled." TextWrapping="Wrap" FontSize="11"/>
+                    </StackPanel>
+                    
+                    <Button Grid.Row="3" Content="Select Solo Developer" HorizontalAlignment="Stretch" Click="SoloDeveloperButton_Click"/>
+                </Grid>
+            </Border>
+            
+            <!-- Team Environment Card -->
+            <Border Grid.Column="2" BorderThickness="1" BorderBrush="{DynamicResource {x:Static vsshell:VsBrushes.PanelBorderKey}}" Background="{DynamicResource {x:Static vsshell:VsBrushes.GridHeadingBackgroundKey}}" CornerRadius="4" Padding="12">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    
+                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
+                        <TextBlock Text="👥" FontSize="20" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                        <TextBlock Text="Team Environment" FontSize="14" FontWeight="Bold" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    
+                    <TextBlock Grid.Row="1" Text="Asymmetric Certificates" FontSize="11" FontStyle="Italic" Opacity="0.7" Margin="0,0,0,12"/>
+                    
+                    <StackPanel Grid.Row="2" Orientation="Vertical" Margin="0,0,0,12">
+                        <TextBlock Text="• Uses asymmetric cryptography (certificates) to sign trust policies." Margin="0,0,0,6" TextWrapping="Wrap" FontSize="11"/>
+                        <TextBlock Text="• Trust files are signed and can be committed to the repository." Margin="0,0,0,6" TextWrapping="Wrap" FontSize="11"/>
+                        <TextBlock Text="• Recommended for teams sharing and enforcing trust baselines." TextWrapping="Wrap" FontSize="11"/>
+                    </StackPanel>
+                    
+                    <Button Grid.Row="3" Content="Select Team Environment" HorizontalAlignment="Stretch" Click="TeamEnvironmentButton_Click"/>
+                </Grid>
+            </Border>
+        </Grid>
+        
+        <Separator Grid.Row="3" Margin="0,0,0,12" Background="{DynamicResource {x:Static vsshell:VsBrushes.PanelBorderKey}}"/>
+        
+        <!-- Bottom Cancel Button -->
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="Configure Later" Click="ConfigureLaterButton_Click" IsCancel="True"/>
+        </StackPanel>
+    </Grid>
+</platformUi:DialogWindow>

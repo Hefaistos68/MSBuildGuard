@@ -76,10 +76,18 @@ namespace MSBuildGuard.VisualStudio.Options
 			snapshot.EnableBaselineOnboarding = ReadBoolean(store, SettingsNames.EnableBaselineOnboarding, snapshot.EnableBaselineOnboarding);
 			snapshot.ScanNuGetPackages = ReadBoolean(store, SettingsNames.ScanNuGetPackages, snapshot.ScanNuGetPackages);
 			snapshot.AllowSharingTrustsInRepositories = ReadBoolean(store, SettingsNames.AllowSharingTrustsInRepositories, snapshot.AllowSharingTrustsInRepositories);
+			snapshot.EnforceAsymmetricSignatures = ReadBoolean(store, SettingsNames.EnforceAsymmetricSignatures, snapshot.EnforceAsymmetricSignatures);
 			snapshot.FileTypesToScan = ReadString(store, SettingsNames.FileTypesToScan, snapshot.FileTypesToScan);
 			snapshot.ProcessCreationIndicators = ReadString(store, SettingsNames.ProcessCreationIndicators, snapshot.ProcessCreationIndicators);
 			snapshot.ReflectionInteropIndicators = ReadString(store, SettingsNames.ReflectionInteropIndicators, snapshot.ReflectionInteropIndicators);
 			snapshot.AdditionalBlockedAssemblies = ReadString(store, SettingsNames.AdditionalBlockedAssemblies, snapshot.AdditionalBlockedAssemblies);
+
+			var keyModeStr = ReadString(store, SettingsNames.KeyManagementMode, "unconfigured");
+
+			if (Enum.TryParse<KeyManagementModeKind>(keyModeStr, true, out var keyMode))
+			{
+				snapshot.KeyManagementMode = keyMode;
+			}
 
 			return snapshot;
 		}
@@ -90,6 +98,8 @@ namespace MSBuildGuard.VisualStudio.Options
 				left.EnableBaselineOnboarding == right.EnableBaselineOnboarding &&
 				left.ScanNuGetPackages == right.ScanNuGetPackages &&
 				left.AllowSharingTrustsInRepositories == right.AllowSharingTrustsInRepositories &&
+				left.KeyManagementMode == right.KeyManagementMode &&
+				left.EnforceAsymmetricSignatures == right.EnforceAsymmetricSignatures &&
 				string.Equals(left.FileTypesToScan, right.FileTypesToScan, StringComparison.Ordinal) &&
 				string.Equals(left.ProcessCreationIndicators, right.ProcessCreationIndicators, StringComparison.Ordinal) &&
 				string.Equals(left.ReflectionInteropIndicators, right.ReflectionInteropIndicators, StringComparison.Ordinal) &&

@@ -50,6 +50,9 @@ export class SecurityReviewViewProvider implements vscode.WebviewViewProvider {
                     const config = vscode.workspace.getConfiguration('msbuildguard');
                     void config.update('onlyUntrustedIssues', data.value, vscode.ConfigurationTarget.Workspace);
                     break;
+                case 'removeAllProjectTrusts':
+                    void vscode.commands.executeCommand('msbuildguard.removeAllProjectTrusts');
+                    break;
             }
         });
 
@@ -490,6 +493,9 @@ export class SecurityReviewViewProvider implements vscode.WebviewViewProvider {
                     <option value="project">Project Level</option>
                 </select>
             </div>
+            <div style="margin-bottom: 4px;">
+                <button id="btnRemoveProjectTrusts" class="secondary-button" style="margin: 0; font-size: 0.7rem; padding: 5px; width: 100%;">🗑️ Remove All Project Trusts</button>
+            </div>
             <div style="display: flex; align-items: center; gap: 6px; padding: 2px 4px;">
                 <input type="checkbox" id="untrustedFilter" style="cursor: pointer; width: 14px; height: 14px; margin: 0; accent-color: var(--accent-color);" />
                 <label for="untrustedFilter" style="font-size: 0.72rem; color: var(--text-secondary); cursor: pointer; user-select: none;">Only untrusted issues</label>
@@ -532,6 +538,20 @@ export class SecurityReviewViewProvider implements vscode.WebviewViewProvider {
         let filterOnlyUntrusted = ${onlyUntrusted};
         let overallAction = 'Allow';
 
+        function updateProjectTrustsButtonState() {
+            const btn = document.getElementById('btnRemoveProjectTrusts');
+            if (btn) {
+                btn.disabled = filterOnlyUntrusted;
+                if (filterOnlyUntrusted) {
+                    btn.style.opacity = '0.5';
+                    btn.style.cursor = 'not-allowed';
+                } else {
+                    btn.style.opacity = '1';
+                    btn.style.cursor = 'pointer';
+                }
+            }
+        }
+
         function getSeverityRisk(severity) {
             switch (severity.toLowerCase()) {
                 case 'critical': return 100;
@@ -566,9 +586,13 @@ export class SecurityReviewViewProvider implements vscode.WebviewViewProvider {
             } else if (message.command === 'updateOnlyUntrustedSetting') {
                 filterOnlyUntrusted = message.value;
                 untrustedFilterEl.checked = filterOnlyUntrusted;
+                updateProjectTrustsButtonState();
                 applyFiltersAndRender();
             }
         });
+
+        // Initialize state
+        setTimeout(updateProjectTrustsButtonState, 50);
 
         document.getElementById('btnScan').addEventListener('click', () => {
             vscode.postMessage({ command: 'scanWorkspace' });
@@ -603,7 +627,12 @@ export class SecurityReviewViewProvider implements vscode.WebviewViewProvider {
         untrustedFilterEl.addEventListener('change', (e) => {
             filterOnlyUntrusted = e.target.checked;
             vscode.postMessage({ command: 'saveOnlyUntrustedSetting', value: filterOnlyUntrusted });
+            updateProjectTrustsButtonState();
             applyFiltersAndRender();
+        });
+
+        document.getElementById('btnRemoveProjectTrusts').addEventListener('click', () => {
+            vscode.postMessage({ command: 'removeAllProjectTrusts' });
         });
 
         function renderReport(report) {

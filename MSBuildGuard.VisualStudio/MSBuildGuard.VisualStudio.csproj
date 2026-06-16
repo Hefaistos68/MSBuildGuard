@@ -37,7 +37,7 @@
     <RootNamespace>MSBuildGuard.VisualStudio</RootNamespace>
     <Product>MSBuildGuard</Product>
     <Title>MSBuildGuard</Title>
-    <Version>0.2.7</Version>
+    <Version>0.3.0</Version>
     <SignAssembly>False</SignAssembly>
     <Authors>Hefaistos68</Authors>
     <Company>Hefaistos68.dev</Company>

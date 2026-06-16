@@ -97,6 +97,53 @@
           }
         }
       }
+    },
+    "extensions.msbuildguard.general.enableBaselineOnboarding": {
+      "type": "boolean",
+      "default": true,
+      "title": "Enable Baseline Onboarding",
+      "description": "Prompt to set up a trusted baseline when loading a new solution or project.",
+      "migration": {
+        "pass": {
+          "input": {
+            "store": "VsUserSettingsRegistry",
+            "path": "MSBuild Guard\\General\\EnableBaselineOnboarding"
+          }
+        }
+      }
+    },
+    "extensions.msbuildguard.trustManagement.keyManagementMode": {
+      "type": "string",
+      "default": "unconfigured",
+      "enum": [
+        "unconfigured",
+        "dpapi",
+        "certificates"
+      ],
+      "title": "Key Management Mode",
+      "description": "Solo Developer (Local DPAPI) uses local machine keys, disabling repository sharing. Team Environment (Certificates) uses public/private certificate keys.",
+      "migration": {
+        "pass": {
+          "input": {
+            "store": "VsUserSettingsRegistry",
+            "path": "MSBuild Guard\\General\\KeyManagementMode"
+          }
+        }
+      }
+    },
+    "extensions.msbuildguard.trustManagement.enforceAsymmetricSignatures": {
+      "type": "boolean",
+      "default": false,
+      "title": "Enforce Asymmetric Signatures",
+      "description": "Strictly enforces asymmetric certificate-based signature verification for trust stores and policy documents.",
+      "migration": {
+        "pass": {
+          "input": {
+            "store": "VsUserSettingsRegistry",
+            "path": "MSBuild Guard\\General\\EnforceAsymmetricSignatures"
+          }
+        }
+      }
     }
   },
   "categories": {
@@ -115,7 +162,8 @@
       "title": "Rule Indicators"
     },
     "extensions.msbuildguard.trustManagement": {
-      "title": "Trust Management"
+      "title": "Trust Management",
+      "legacyOptionPageId": "a706a1c4-02be-4c9f-b6c8-1a95159ea9d2"
     }
   }
 }

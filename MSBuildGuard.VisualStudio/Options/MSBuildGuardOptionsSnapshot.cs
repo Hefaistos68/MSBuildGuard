@@ -26,6 +26,16 @@ namespace MSBuildGuard.VisualStudio.Options
 		internal bool AllowSharingTrustsInRepositories { get; set; }
 
 		/// <summary>
+		/// Gets or sets the key management mode used for signing and validating trust files.
+		/// </summary>
+		internal KeyManagementModeKind KeyManagementMode { get; set; } = KeyManagementModeKind.Unconfigured;
+
+		/// <summary>
+		/// Gets or sets a value indicating whether strict asymmetric certificate-based signature verification is enforced.
+		/// </summary>
+		internal bool EnforceAsymmetricSignatures { get; set; }
+
+		/// <summary>
 		/// Gets or sets a semicolon-separated list of file types to scan.
 		/// </summary>
 		internal string FileTypesToScan { get; set; } = ".csproj;.vbproj;.fsproj;.proj;.props;.targets;.sln;.slnx";

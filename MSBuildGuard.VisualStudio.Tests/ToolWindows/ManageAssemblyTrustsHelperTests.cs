@@ -198,7 +198,9 @@ namespace MSBuildGuard.VisualStudio.ToolWindows.Tests
 				]
 			}";
 
-			File.WriteAllText(trustStorePath, json);
+			var doc = System.Text.Json.JsonSerializer.Deserialize<TrustStoreDocument>(json, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+			new TrustStoreService().Save(trustStorePath, doc!);
 
 			var helper = new ManageAssemblyTrustsHelper(string.Empty, projectPath);
 
@@ -283,7 +285,9 @@ namespace MSBuildGuard.VisualStudio.ToolWindows.Tests
 				]
 			}";
 
-			File.WriteAllText(trustStorePath, json);
+			var doc = System.Text.Json.JsonSerializer.Deserialize<TrustStoreDocument>(json, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+			new TrustStoreService().Save(trustStorePath, doc!);
 
 			helper.LoadTrustedAssemblies(TrustScope.Project, projectAPath);
 

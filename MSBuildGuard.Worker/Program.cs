@@ -12,6 +12,20 @@ namespace MSBuildGuard.Worker
 			Console.InputEncoding = System.Text.Encoding.UTF8;
 			Console.OutputEncoding = System.Text.Encoding.UTF8;
 
+			var envEnforceAsymmetric = Environment.GetEnvironmentVariable("MSBUILDGUARD_ENFORCE_ASYMMETRIC_SIGNATURES");
+
+			if (bool.TryParse(envEnforceAsymmetric, out var enforceAsymmetric))
+			{
+				MSBuildGuard.Core.CoreSettings.EnforceAsymmetricSignatures = enforceAsymmetric;
+			}
+
+			var envAllowSharing = Environment.GetEnvironmentVariable("MSBUILDGUARD_ALLOW_SHARING_TRUSTS");
+
+			if (bool.TryParse(envAllowSharing, out var allowSharing))
+			{
+				MSBuildGuard.Core.CoreSettings.AllowSharingTrustsInRepositories = allowSharing;
+			}
+
 			if (args == null)
 			{
 				throw new ArgumentNullException(nameof(args));

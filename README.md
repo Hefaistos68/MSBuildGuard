@@ -283,6 +283,8 @@ Other supported scopes include **File** (normalized file hash) and **Repository/
 
 Trust decisions must include explicit reason text and are auditable. Trust entries can also be time-limited with a **valid-until** date (`ExpiresAtUtc`); expired entries are ignored during trust evaluation.
 
+For detailed guidelines on setting up certificate-based signing, enterprise-level root CA pinning (via Active Directory GPO or Microsoft Intune), and machine-isolated DPAPI trust databases for solo developers, see the [Advanced Trust Management Guide](documentation/ADVANCED-TRUST-MANAGEMENT.md).
+
 For team repositories, decide whether solution/project trust files should be committed. If not, add `**/.msbuildguard/trust.json` and `**/.msbuildguard/trust.json.audit.jsonl` to `.gitignore`.
 
 ```json
@@ -333,6 +335,7 @@ Module-specific documentation is split into dedicated files:
 
 - [Visual Studio extension documentation](documentation/VisualStudioExtension.md)
 - [VS Code extension documentation](MSBuildGuard.VSCode/README.md)
+- [Advanced Trust Management Guide](documentation/ADVANCED-TRUST-MANAGEMENT.md)
 
 
 ## Visual Studio Unified Settings Migration Guide

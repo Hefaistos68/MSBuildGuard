@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.Design;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
@@ -89,6 +90,11 @@ namespace MSBuildGuard.VisualStudio
 		private bool isInitialized;
 
 		/// <summary>
+		/// Tracks the last known EnforceAsymmetricSignatures setting state to detect downgrades.
+		/// </summary>
+		private bool lastEnforceAsymmetric;
+
+		/// <summary>
 		/// Tracks solution paths for which baseline onboarding has been prompted during this session.
 		/// </summary>
 		private readonly System.Collections.Generic.HashSet<string> promptedSolutions = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -134,6 +140,33 @@ namespace MSBuildGuard.VisualStudio
 		internal void NotifyOptionsChanged()
 		{
 			this.unifiedSettingsOptionsProvider.NotifyChanged();
+
+			var page = (MSBuildGuardOptionsPage)this.GetDialogPage(typeof(MSBuildGuardOptionsPage));
+			var currentEnforce = page.EnforceAsymmetricSignatures;
+
+			if (this.lastEnforceAsymmetric && !currentEnforce)
+			{
+				var confirm = MessageBox.Show(
+					"Downgrading security settings: Disabling strict asymmetric signatures will permanently delete all local user, solution, and project trust files on this machine. Do you want to proceed?",
+					"MSBuild Guard - Warning",
+					MessageBoxButton.YesNo,
+					MessageBoxImage.Warning);
+
+				if (confirm == MessageBoxResult.Yes)
+				{
+					this.JoinableTaskFactory.Run(async delegate
+					{
+						await this.PurgeAllTrustsAsync().ConfigureAwait(false);
+					});
+				}
+				else
+				{
+					page.EnforceAsymmetricSignatures = true;
+					page.SaveSettingsToStorage();
+				}
+			}
+
+			this.lastEnforceAsymmetric = page.EnforceAsymmetricSignatures;
 		}
 
 		/// <summary>
@@ -213,6 +246,18 @@ namespace MSBuildGuard.VisualStudio
 			await Commands.ManageAssemblyTrustsCommand.InitializeAsync(this);
 			await Commands.ManageSignerTrustsCommand.InitializeAsync(this);
 			await Commands.ManagePackageTrustsCommand.InitializeAsync(this);
+
+			var commandService = await this.GetServiceAsync(typeof(IMenuCommandService)) as OleMenuCommandService;
+
+			if (commandService != null)
+			{
+				this.RegisterHardeningCommands(commandService);
+			}
+
+			var page = (MSBuildGuardOptionsPage)this.GetDialogPage(typeof(MSBuildGuardOptionsPage));
+
+			PerformOnboardingCheck(page);
+			this.lastEnforceAsymmetric = page.EnforceAsymmetricSignatures;
 
 			this.shieldStatusBarControl = new Services.ShieldStatusBarControl(this);
 			this.shieldStatusBarControl.UpdateState(this.latestScanReport);
@@ -1229,6 +1274,431 @@ namespace MSBuildGuard.VisualStudio
 			}
 
 			return candidate.CompletedAtUtc >= current.CompletedAtUtc ? candidate : current;
+		}
+
+		/// <summary>
+		/// Registers the hardening commands with the Visual Studio OleMenuCommandService.
+		/// </summary>
+		/// <param name="commandService">Command service.</param>
+		private void RegisterHardeningCommands(OleMenuCommandService commandService)
+		{
+			var removeSolutionId = new CommandID(new Guid(PackageGuids.CommandSetString), PackageIds.RemoveAllSolutionTrustsCommandId);
+			var removeSolutionItem = new OleMenuCommand(this.ExecuteRemoveAllSolutionTrusts, removeSolutionId);
+
+			removeSolutionItem.BeforeQueryStatus += (s, e) =>
+			{
+				ThreadHelper.ThrowIfNotOnUIThread();
+
+				if (s is OleMenuCommand menuCmd)
+				{
+					menuCmd.Visible = true;
+					menuCmd.Enabled = Services.SolutionDiscoveryService.HasOpenSolution();
+				}
+			};
+
+			commandService.AddCommand(removeSolutionItem);
+
+			var removeUserId = new CommandID(new Guid(PackageGuids.CommandSetString), PackageIds.RemoveAllUserTrustsCommandId);
+			var removeUserItem = new OleMenuCommand(this.ExecuteRemoveAllUserTrusts, removeUserId);
+
+			commandService.AddCommand(removeUserItem);
+		}
+
+		/// <summary>
+		/// Prompts the user to configure key management mode on the first run of the extension.
+		/// </summary>
+		/// <param name="page">Options page.</param>
+		private static void PerformOnboardingCheck(MSBuildGuardOptionsPage page)
+		{
+			if (page.KeyManagementMode != KeyManagementModeKind.Unconfigured)
+			{
+				return;
+			}
+
+			if (System.Windows.Application.Current == null)
+			{
+				return;
+			}
+
+			var mainWindow = System.Windows.Application.Current.MainWindow;
+
+			if (mainWindow != null && mainWindow.IsVisible)
+			{
+				ShowOnboardingDialog(page);
+			}
+			else if (mainWindow != null)
+			{
+				DependencyPropertyChangedEventHandler? handler = null;
+
+				handler = (s, e) =>
+				{
+					if (mainWindow.IsVisible)
+					{
+						mainWindow.IsVisibleChanged -= handler;
+						ShowOnboardingDialog(page);
+					}
+				};
+
+				mainWindow.IsVisibleChanged += handler;
+			}
+			else
+			{
+				EventHandler? activatedHandler = null;
+
+				activatedHandler = (s, e) =>
+				{
+					var mainWin = System.Windows.Application.Current.MainWindow;
+
+					if (mainWin != null && mainWin.IsVisible)
+					{
+						System.Windows.Application.Current.Activated -= activatedHandler;
+						ShowOnboardingDialog(page);
+					}
+				};
+
+				System.Windows.Application.Current.Activated += activatedHandler;
+			}
+		}
+
+		/// <summary>
+		/// Displays the key management onboarding dialog and saves the user choice.
+		/// </summary>
+		/// <param name="page">Options page.</param>
+		private static void ShowOnboardingDialog(MSBuildGuardOptionsPage page)
+		{
+			if (page.KeyManagementMode != KeyManagementModeKind.Unconfigured)
+			{
+				return;
+			}
+
+			var viewModel = new ToolWindows.KeyManagementOnboardingViewModel();
+			var dialog    = new ToolWindows.KeyManagementOnboardingDialog(viewModel)
+			{
+				Owner                 = System.Windows.Application.Current.MainWindow,
+				WindowStartupLocation = System.Windows.WindowStartupLocation.CenterOwner
+			};
+
+			var result = dialog.ShowDialog();
+
+			if (result == true)
+			{
+				page.KeyManagementMode = viewModel.SelectedMode;
+
+				if (viewModel.SelectedMode == KeyManagementModeKind.DPAPI)
+				{
+					page.AllowSharingTrustsInRepositories = false;
+				}
+
+				page.SaveSettingsToStorage();
+			}
+		}
+
+		/// <summary>
+		/// Handles execution of the Remove All Solution Trusts command.
+		/// </summary>
+		/// <param name="sender">Event sender.</param>
+		/// <param name="e">Event arguments.</param>
+		private void ExecuteRemoveAllSolutionTrusts(object? sender, EventArgs e)
+		{
+			ThreadHelper.ThrowIfNotOnUIThread();
+
+			var result = MessageBox.Show(
+				"Are you sure you want to permanently remove all solution-level trusts for this solution?",
+				"MSBuild Guard - Confirm",
+				MessageBoxButton.YesNo,
+				MessageBoxImage.Warning);
+
+			if (result == MessageBoxResult.Yes)
+			{
+				this.JoinableTaskFactory.Run(async delegate
+				{
+					await this.RemoveSolutionTrustsInternalAsync().ConfigureAwait(false);
+				});
+			}
+		}
+
+		/// <summary>
+		/// Internal helper to delete solution trust files and trigger a scan.
+		/// </summary>
+		/// <returns>A task that completes when deletion is finished.</returns>
+		private async Task RemoveSolutionTrustsInternalAsync()
+		{
+			await this.JoinableTaskFactory.SwitchToMainThreadAsync(this.DisposalToken);
+
+			var dte = await this.GetServiceAsync(typeof(SDTE)) as EnvDTE.DTE;
+
+			if (dte != null && dte.Solution != null && !string.IsNullOrWhiteSpace(dte.Solution.FullName))
+			{
+				var solutionDir = Path.GetDirectoryName(dte.Solution.FullName);
+
+				if (!string.IsNullOrWhiteSpace(solutionDir))
+				{
+					var solutionTrustPath = Path.Combine(solutionDir, ".msbuildguard", "trust.json");
+
+					if (File.Exists(solutionTrustPath))
+					{
+						try
+						{
+							File.Delete(solutionTrustPath);
+							await this.UiFeedbackService.WriteLineAsync($"Deleted solution trust store: {solutionTrustPath}", CancellationToken.None);
+
+							var signaturePath = solutionTrustPath + ".signature";
+
+							if (File.Exists(signaturePath))
+							{
+								File.Delete(signaturePath);
+								await this.UiFeedbackService.WriteLineAsync($"Deleted solution trust signature: {signaturePath}", CancellationToken.None);
+							}
+
+							MessageBox.Show(
+								"Solution-level trusts successfully removed.",
+								"MSBuild Guard - Info",
+								MessageBoxButton.OK,
+								MessageBoxImage.Information);
+
+							await this.RescanSolutionSecurityReviewAsync().ConfigureAwait(false);
+						}
+						catch (Exception ex)
+						{
+							await this.UiFeedbackService.WriteLineAsync($"Failed to delete solution trust store: {ex.Message}", CancellationToken.None);
+						}
+					}
+					else
+					{
+						MessageBox.Show(
+							"No solution-level trust file was found.",
+							"MSBuild Guard - Info",
+							MessageBoxButton.OK,
+							MessageBoxImage.Information);
+					}
+				}
+			}
+		}
+
+		/// <summary>
+		/// Handles execution of the Remove All User Trusts command.
+		/// </summary>
+		/// <param name="sender">Event sender.</param>
+		/// <param name="e">Event arguments.</param>
+		private void ExecuteRemoveAllUserTrusts(object? sender, EventArgs e)
+		{
+			ThreadHelper.ThrowIfNotOnUIThread();
+
+			var result = MessageBox.Show(
+				"Are you sure you want to permanently remove all user-level trusts?",
+				"MSBuild Guard - Confirm",
+				MessageBoxButton.YesNo,
+				MessageBoxImage.Warning);
+
+			if (result == MessageBoxResult.Yes)
+			{
+				this.JoinableTaskFactory.Run(async delegate
+				{
+					await this.RemoveUserTrustsInternalAsync().ConfigureAwait(false);
+				});
+			}
+		}
+
+		/// <summary>
+		/// Internal helper to delete user trust files.
+		/// </summary>
+		/// <returns>A task that completes when deletion is finished.</returns>
+		private async Task RemoveUserTrustsInternalAsync()
+		{
+			await this.JoinableTaskFactory.SwitchToMainThreadAsync(this.DisposalToken);
+
+			var trustStoreService = new Core.Trust.TrustStoreService();
+			var userPath          = trustStoreService.GetDefaultUserTrustPath();
+
+			if (File.Exists(userPath))
+			{
+				try
+				{
+					File.Delete(userPath);
+					await this.UiFeedbackService.WriteLineAsync($"Deleted user trust store: {userPath}", CancellationToken.None);
+
+					var signaturePath = userPath + ".signature";
+
+					if (File.Exists(signaturePath))
+					{
+						File.Delete(signaturePath);
+						await this.UiFeedbackService.WriteLineAsync($"Deleted user trust signature: {signaturePath}", CancellationToken.None);
+					}
+
+					MessageBox.Show(
+						"User-level trusts successfully removed.",
+						"MSBuild Guard - Info",
+						MessageBoxButton.OK,
+						MessageBoxImage.Information);
+
+					await this.RescanSolutionSecurityReviewAsync().ConfigureAwait(false);
+				}
+				catch (Exception ex)
+				{
+					await this.UiFeedbackService.WriteLineAsync($"Failed to delete user trust store: {ex.Message}", CancellationToken.None);
+				}
+			}
+			else
+			{
+				MessageBox.Show(
+					"No user-level trust file was found.",
+					"MSBuild Guard - Info",
+					MessageBoxButton.OK,
+					MessageBoxImage.Information);
+			}
+		}
+
+		/// <summary>
+		/// Purges all trust files across user profile, active solution, and recent project paths.
+		/// </summary>
+		/// <returns>A task that completes when purging is done.</returns>
+		private async Task PurgeAllTrustsAsync()
+		{
+			await this.JoinableTaskFactory.SwitchToMainThreadAsync(this.DisposalToken);
+			await this.UiFeedbackService.WriteLineAsync("Purging all trust stores due to EnforceAsymmetricSignatures downgrade...", CancellationToken.None);
+
+			var trustStoreService = new Core.Trust.TrustStoreService();
+			var userPath          = trustStoreService.GetDefaultUserTrustPath();
+
+			if (File.Exists(userPath))
+			{
+				try
+				{
+					File.Delete(userPath);
+					await this.UiFeedbackService.WriteLineAsync($"Deleted user trust store: {userPath}", CancellationToken.None);
+
+					var signaturePath = userPath + ".signature";
+
+					if (File.Exists(signaturePath))
+					{
+						File.Delete(signaturePath);
+						await this.UiFeedbackService.WriteLineAsync($"Deleted user trust signature: {signaturePath}", CancellationToken.None);
+					}
+				}
+				catch (Exception ex)
+				{
+					await this.UiFeedbackService.WriteLineAsync($"Failed to delete user trust store: {ex.Message}", CancellationToken.None);
+				}
+			}
+
+			var currentSolutionDir = string.Empty;
+			var dte                = await this.GetServiceAsync(typeof(SDTE)) as EnvDTE.DTE;
+
+			if (dte != null && dte.Solution != null && !string.IsNullOrWhiteSpace(dte.Solution.FullName))
+			{
+				currentSolutionDir = Path.GetDirectoryName(dte.Solution.FullName);
+			}
+
+			var foldersToScan = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+			if (!string.IsNullOrWhiteSpace(currentSolutionDir))
+			{
+				foldersToScan.Add(currentSolutionDir);
+			}
+
+			try
+			{
+				using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(dte?.RegistryRoot?.Replace("_Config", "") + "\\MRUItems\\Solution\\Items"))
+				{
+					if (key != null)
+					{
+						foreach (var valName in key.GetValueNames())
+						{
+							var val = key.GetValue(valName) as string;
+
+							if (!string.IsNullOrWhiteSpace(val))
+							{
+								var pathPart = val.Split('|')[0];
+
+								if (File.Exists(pathPart))
+								{
+									var dir = Path.GetDirectoryName(pathPart);
+
+									if (!string.IsNullOrWhiteSpace(dir))
+									{
+										foldersToScan.Add(dir);
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+			catch
+			{
+			}
+
+			foreach (var folder in foldersToScan)
+			{
+				if (Directory.Exists(folder))
+				{
+					try
+					{
+						PurgeTrustFilesInDir(folder);
+					}
+					catch (Exception ex)
+					{
+						await this.UiFeedbackService.WriteLineAsync($"Failed to purge trusts in folder {folder}: {ex.Message}", CancellationToken.None);
+					}
+				}
+			}
+
+			MessageBox.Show(
+				"All local, solution, and project trust stores have been successfully purged.",
+				"MSBuild Guard - Info",
+				MessageBoxButton.OK,
+				MessageBoxImage.Information);
+		}
+
+		/// <summary>
+		/// Recursively deletes .msbuildguard/trust.json files within directory.
+		/// </summary>
+		/// <param name="dir">Root directory.</param>
+		/// <param name="depth">Current recursion depth.</param>
+		private static void PurgeTrustFilesInDir(string dir, int depth = 0)
+		{
+			if (depth > 5)
+			{
+				return;
+			}
+
+			try
+			{
+				foreach (var subDir in Directory.GetDirectories(dir))
+				{
+					var dirName = Path.GetFileName(subDir);
+
+					if (string.Equals(dirName, ".msbuildguard", StringComparison.OrdinalIgnoreCase))
+					{
+						var trustFile = Path.Combine(subDir, "trust.json");
+
+						if (File.Exists(trustFile))
+						{
+							try
+							{
+								File.Delete(trustFile);
+
+								var signaturePath = trustFile + ".signature";
+
+								if (File.Exists(signaturePath))
+								{
+									File.Delete(signaturePath);
+								}
+							}
+							catch
+							{
+							}
+						}
+					}
+					else if (dirName != "node_modules" && dirName != ".git" && dirName != "bin" && dirName != "obj")
+					{
+						PurgeTrustFilesInDir(subDir, depth + 1);
+					}
+				}
+			}
+			catch
+			{
+			}
 		}
 	}
 }
