@@ -157,6 +157,12 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 					}
 				}
 
+				if (string.IsNullOrWhiteSpace(finding.PackageId) && TryInferPackageFromPath(finding.FilePath, out var inferredId, out var inferredVersion))
+				{
+					finding.PackageId      = inferredId;
+					finding.PackageVersion = inferredVersion;
+				}
+
 				var fileRecord           = report.FilesScanned.FirstOrDefault(item => string.Equals(item.Path, finding.FilePath, StringComparison.OrdinalIgnoreCase));
 				var projectTrustStore    = GetProjectTrustStore(solutionPath, finding.IntroducedViaProject, trustStoreService, projectTrustStoreCache);
 				var isTrusted            = !string.IsNullOrWhiteSpace(finding.Fingerprint) &&
@@ -339,6 +345,52 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			{
 				return trustStoreService.IsSignerTrusted(trustStore, sig.Thumbprint, sig.Subject, sig.Issuer, sig.SerialNumber) ||
 					(projectTrustStore != null && trustStoreService.IsSignerTrusted(projectTrustStore, sig.Thumbprint, sig.Subject, sig.Issuer, sig.SerialNumber));
+			}
+
+			return false;
+		}
+
+		private static bool TryInferPackageFromPath(string filePath, out string packageId, out string packageVersion)
+		{
+			packageId      = string.Empty;
+			packageVersion = string.Empty;
+
+			if (string.IsNullOrWhiteSpace(filePath))
+			{
+				return false;
+			}
+
+			var directory = Path.GetDirectoryName(filePath);
+
+			var candidate = directory;
+
+			for (var depth = 0; depth < 6 && !string.IsNullOrWhiteSpace(candidate) && Directory.Exists(candidate); depth++)
+			{
+				if (Directory.Exists(Path.Combine(candidate, "lib")) ||
+					Directory.Exists(Path.Combine(candidate, "tools")) ||
+					Directory.Exists(Path.Combine(candidate, "runtimes")))
+				{
+					var version = Path.GetFileName(candidate);
+
+					var parentDir = Path.GetDirectoryName(candidate);
+
+					if (!string.IsNullOrWhiteSpace(version) && !string.IsNullOrWhiteSpace(parentDir))
+					{
+						var id = Path.GetFileName(parentDir);
+
+						if (!string.IsNullOrWhiteSpace(id))
+						{
+							packageId      = id;
+							packageVersion = version;
+
+							return true;
+						}
+					}
+
+					break;
+				}
+
+				candidate = Path.GetDirectoryName(candidate);
 			}
 
 			return false;

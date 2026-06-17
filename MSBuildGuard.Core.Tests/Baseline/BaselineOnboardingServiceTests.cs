@@ -131,5 +131,37 @@ namespace MSBuildGuard.Core.Tests.Baseline
 				trustStoreService.RemoveDecisionsBySubject(userTrustPath, packageHash, "Clean up", "TestUser");
 			}
 		}
+
+		/// <summary>
+		/// Verifies that the recommendation reason for a Signer trust suggestion is formatted correctly.
+		/// </summary>
+		[Test]
+		[Explicit("Requires internet access and local NuGet package cache.")]
+		public async Task GenerateSuggestionsAsync_ShouldFormatRecommendationReasonForSigner()
+		{
+			var service = new BaselineOnboardingService();
+			var report = new ScanReport();
+
+			report.Findings.Add(new Finding
+			{
+				Id             = "MBG001",
+				Fingerprint    = "fp-1",
+				PackageId      = "System.Text.Json",
+				PackageVersion = "10.0.7",
+				FilePath       = "somepath"
+			});
+
+			var result = await service.GenerateSuggestionsAsync(report, CancellationToken.None);
+
+			result.ShouldNotBeNull();
+
+			var signerSuggestion = result.FirstOrDefault(item => item.Scope == TrustSuggestionScope.Signer);
+
+			signerSuggestion.ShouldNotBeNull();
+			signerSuggestion.RecommendationReason.ShouldStartWith("Signer:");
+			signerSuggestion.RecommendationReason.ShouldContain("System.Text.Json");
+			signerSuggestion.RecommendationReason.ShouldContain("System.Text.Json.dll");
+			signerSuggestion.RecommendationReason.ShouldContain(signerSuggestion.DisplayName);
+		}
 	}
 }

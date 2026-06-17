@@ -46,6 +46,11 @@ namespace MSBuildGuard.VisualStudio
 		/// </summary>
 		private Core.ScanReport? latestScanReport;
 
+		/// <summary>
+		/// Stores the scan report for which the effective risk was calculated.
+		/// </summary>
+		private Core.ScanReport? calculatedRiskReport;
+
 		private bool isLatestReportGreen;
 		private int latestReportEffectiveRiskScore;
 
@@ -203,6 +208,9 @@ namespace MSBuildGuard.VisualStudio
 		{
 			await this.UiFeedbackService.WriteLineAsync("Solution unloaded. Clearing scan and review state.", CancellationToken.None);
 			this.latestScanReport = null;
+			this.calculatedRiskReport = null;
+			this.latestReportEffectiveRiskScore = 0;
+			this.isLatestReportGreen = false;
 			this.reviewSelectionService.SolutionReviewTargetPath = null;
 
 			await JoinableTaskFactory.SwitchToMainThreadAsync(DisposalToken);
@@ -377,7 +385,7 @@ namespace MSBuildGuard.VisualStudio
 
 			int? effectiveRiskScore = null;
 
-			if (this.latestScanReport != null)
+			if (this.latestScanReport != null && this.latestScanReport == this.calculatedRiskReport)
 			{
 				effectiveRiskScore = this.latestReportEffectiveRiskScore;
 			}
@@ -857,6 +865,7 @@ namespace MSBuildGuard.VisualStudio
 			{
 				this.isLatestReportGreen = false;
 				this.latestReportEffectiveRiskScore = 0;
+				this.calculatedRiskReport = null;
 
 				return;
 			}
@@ -870,11 +879,21 @@ namespace MSBuildGuard.VisualStudio
 
 			var buildBlockViewModel = new ToolWindows.BuildBlockDialogViewModel(report, solutionPath);
 
-			this.isLatestReportGreen = string.Equals(buildBlockViewModel.RecommendedAction, Core.RecommendedAction.Allow.ToString(), StringComparison.OrdinalIgnoreCase);
-			this.latestReportEffectiveRiskScore = buildBlockViewModel.RiskScore;
+			var isGreen = string.Equals(buildBlockViewModel.RecommendedAction, Core.RecommendedAction.Allow.ToString(), StringComparison.OrdinalIgnoreCase);
+
+			var riskScore = buildBlockViewModel.RiskScore;
 
 			// Switch back to the UI thread to update controls and trigger VS menu updates
 			await JoinableTaskFactory.SwitchToMainThreadAsync(DisposalToken);
+
+			if (report != this.latestScanReport)
+			{
+				return;
+			}
+
+			this.isLatestReportGreen = isGreen;
+			this.latestReportEffectiveRiskScore = riskScore;
+			this.calculatedRiskReport = report;
 
 			await this.RefreshStatusBarShieldAsync().ConfigureAwait(false);
 

@@ -139,13 +139,13 @@ namespace MSBuildGuard.Core.Baseline
 				processedPackages.Add(packageKey);
 
 				var assemblyPath = AssemblySignatureService.ResolveAssemblyFilePathFromPackageId(packageId, packageVersion);
+				var assemblyName = !string.IsNullOrEmpty(assemblyPath) ? Path.GetFileName(assemblyPath) : string.Empty;
 				var signatureInfo = signatureService.ReadSignature(assemblyPath);
 				var reputationInfo = await this.reputationService.GetReputationAsync(packageId, cancellationToken).ConfigureAwait(false);
 
 				if (signatureInfo != null && signatureInfo.HasEmbeddedSignature && signatureInfo.IsSignatureValid)
 				{
-					var isMicrosoft = signatureInfo.Signer.IndexOf("Microsoft", StringComparison.OrdinalIgnoreCase) >= 0 ||
-									signatureInfo.Subject.IndexOf("Microsoft", StringComparison.OrdinalIgnoreCase) >= 0;
+					var isMicrosoft = IsTrustedMicrosoftSigner(signatureInfo);
 
 					if (isMicrosoft)
 					{
@@ -161,10 +161,10 @@ namespace MSBuildGuard.Core.Baseline
 							IsSelected = true,
 							Scope = TrustSuggestionScope.Signer,
 							Subject = signatureInfo.Thumbprint,
-							DisplayName = signatureInfo.Signer,
-							RecommendationReason = "This package is signed by Microsoft Corporation with a valid Authenticode signature.",
+							DisplayName = $"{packageId} ({signatureInfo.Signer})", // signatureInfo.Signer,
+							RecommendationReason = $"Trusted signer: {signatureInfo.Signer}",
 							ReputationSourceDescription = "Verified Publisher (Microsoft)"
-						};
+						}; 
 
 						suggestion.Metadata["SignerThumbprint"] = signatureInfo.Thumbprint;
 						suggestion.Metadata["SignerSubject"] = signatureInfo.Subject;
@@ -186,11 +186,11 @@ namespace MSBuildGuard.Core.Baseline
 					{
 						var suggestion = new TrustSuggestion
 						{
-							IsSelected = true,
-							Scope = TrustSuggestionScope.Package,
-							Subject = packageHash,
-							DisplayName = $"{packageId} v{packageVersion}",
-							RecommendationReason = $"Verified package on NuGet.org with very high download volume ({reputationInfo.TotalDownloads:N0} downloads).",
+							IsSelected                  = true,
+							Scope                       = TrustSuggestionScope.Package,
+							Subject                     = packageHash,
+							DisplayName                 = $"{packageId} v{packageVersion}",
+							RecommendationReason        = $"Verified package on NuGet.org with very high download volume ({reputationInfo.TotalDownloads:N0} downloads).",
 							ReputationSourceDescription = "Verified NuGet.org Publisher"
 						};
 
@@ -214,10 +214,10 @@ namespace MSBuildGuard.Core.Baseline
 
 					var suggestion = new TrustSuggestion
 					{
-						IsSelected = true,
-						Scope = TrustSuggestionScope.Signer,
-						Subject = signatureInfo.Thumbprint,
-						DisplayName = signatureInfo.Signer,
+						IsSelected                  = true,
+						Scope                       = TrustSuggestionScope.Signer,
+						Subject                     = signatureInfo.Thumbprint,
+						DisplayName                 = signatureInfo.Signer,
 						RecommendationReason = $"Signed by a valid certificate signer: '{signatureInfo.Signer}'.",
 						ReputationSourceDescription = "Valid Authenticode Signer"
 					};
@@ -301,6 +301,28 @@ namespace MSBuildGuard.Core.Baseline
 			}
 
 			return false;
+		}
+
+		/// <summary>
+		/// Verifies that the signature belongs to a trusted Microsoft signer.
+		/// </summary>
+		/// <param name="signatureInfo">The signature info to check.</param>
+		/// <returns><see langword="true"/> if the signature belongs to Microsoft; otherwise <see langword="false"/>.</returns>
+		private static bool IsTrustedMicrosoftSigner(AssemblySignatureInfo signatureInfo)
+		{
+			if (signatureInfo == null || !signatureInfo.IsSignatureValid)
+			{
+				return false;
+			}
+
+			var subject = signatureInfo.Subject;
+
+			return subject.IndexOf("O=Microsoft Corporation", StringComparison.OrdinalIgnoreCase) >= 0 ||
+				   subject.IndexOf("O=\"Microsoft Corporation\"", StringComparison.OrdinalIgnoreCase) >= 0 ||
+				   subject.IndexOf("OU=Microsoft Corporation", StringComparison.OrdinalIgnoreCase) >= 0 ||
+				   subject.IndexOf("OU=\"Microsoft Corporation\"", StringComparison.OrdinalIgnoreCase) >= 0 ||
+				   subject.IndexOf("CN=Microsoft Corporation", StringComparison.OrdinalIgnoreCase) >= 0 ||
+				   subject.IndexOf("CN=\"Microsoft Corporation\"", StringComparison.OrdinalIgnoreCase) >= 0;
 		}
 	}
 }

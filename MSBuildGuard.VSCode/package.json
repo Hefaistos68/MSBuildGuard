@@ -3,7 +3,7 @@
   "displayName": "MSBuild Guard",
   "description": "Cross-platform security analysis extension that scans MSBuild project files before execution and prevents malicious code delivery.",
   "icon": "resources/shield-icon.png",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "preview": true,
   "publisher": "Hefaistos68",
   "author": {
