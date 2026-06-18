@@ -22,6 +22,11 @@ namespace MSBuildGuard.VisualStudio.Services
 		private string? lastScannedSolutionPath;
 
 		/// <summary>
+		/// Watcher for Git HEAD file changes.
+		/// </summary>
+		private FileSystemWatcher? gitWatcher;
+
+		/// <summary>
 		/// Initializes a new instance of the <see cref="SolutionMonitorService"/> class.
 		/// </summary>
 		/// <param name="package">Owning package.</param>
@@ -57,6 +62,13 @@ namespace MSBuildGuard.VisualStudio.Services
 			SolutionEvents.OnBeforeOpenProject += this.OnBeforeOpenProject;
 			this.isStarted = true;
 
+			var openSolutionPath = SolutionDiscoveryService.GetOpenSolutionPath();
+
+			if (!string.IsNullOrWhiteSpace(openSolutionPath))
+			{
+				this.StartGitWatcher(openSolutionPath!);
+			}
+
 			await this.package.UiFeedbackService.WriteLineAsync("Solution monitor started.", CancellationToken.None);
 			_ = this.QueueScanAsync(null, cancellationToken);
 		}
@@ -74,6 +86,7 @@ namespace MSBuildGuard.VisualStudio.Services
 				this.isStarted = false;
 			}
 
+			this.StopGitWatcher();
 			this.scanGate.Dispose();
 		}
 
@@ -84,8 +97,20 @@ namespace MSBuildGuard.VisualStudio.Services
 		/// <param name="e">Solution open event arguments.</param>
 		private void OnAfterOpenSolution(object? sender, OpenSolutionEventArgs e)
 		{
-			_ = this.package.UiFeedbackService.WriteLineAsync("Solution opened.", CancellationToken.None);
-			_ = this.QueueScanAsync(null, this.package.DisposalToken);
+			ThreadHelper.JoinableTaskFactory.RunAsync(async delegate
+			{
+				await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync(this.package.DisposalToken);
+
+				await this.package.UiFeedbackService.WriteLineAsync("Solution opened.", CancellationToken.None);
+				_ = this.QueueScanAsync(null, this.package.DisposalToken);
+
+				var openSolutionPath = SolutionDiscoveryService.GetOpenSolutionPath();
+
+				if (!string.IsNullOrWhiteSpace(openSolutionPath))
+				{
+					this.StartGitWatcher(openSolutionPath!);
+				}
+			}).FileAndForget(nameof(SolutionMonitorService));
 		}
 
 		/// <summary>
@@ -112,7 +137,124 @@ namespace MSBuildGuard.VisualStudio.Services
 				this.lastScannedSolutionPath = null;
 			}
 
+			this.StopGitWatcher();
+
 			_ = this.package.OnSolutionUnloadedAsync();
+		}
+
+		/// <summary>
+		/// Resolves the actual git directory path, handling submodules and worktrees.
+		/// </summary>
+		/// <param name="repositoryRoot">The repository root directory.</param>
+		/// <returns>The resolved git directory path, or null.</returns>
+		private static string? GetGitDir(string repositoryRoot)
+		{
+			var gitPath = Path.Combine(repositoryRoot, ".git");
+
+			if (Directory.Exists(gitPath))
+			{
+				return gitPath;
+			}
+
+			if (File.Exists(gitPath))
+			{
+				try
+				{
+					var content = File.ReadAllText(gitPath).Trim();
+
+					if (content.StartsWith("gitdir:", StringComparison.OrdinalIgnoreCase))
+					{
+						var relativePath = content.Substring(7).Trim();
+						var absolutePath = Path.IsPathRooted(relativePath)
+							? relativePath
+							: Path.GetFullPath(Path.Combine(repositoryRoot, relativePath));
+
+						if (Directory.Exists(absolutePath))
+						{
+							return absolutePath;
+						}
+					}
+				}
+				catch
+				{
+					// Ignore
+				}
+			}
+
+			return null;
+		}
+
+		/// <summary>
+		/// Starts monitoring Git HEAD changes for the specified solution directory.
+		/// </summary>
+		/// <param name="solutionPath">The path to the solution.</param>
+		private void StartGitWatcher(string solutionPath)
+		{
+			this.StopGitWatcher();
+
+			var repoRoot = SolutionDiscoveryService.TryResolveRepositoryRoot(solutionPath);
+
+			if (string.IsNullOrWhiteSpace(repoRoot))
+			{
+				return;
+			}
+
+			var gitDir = GetGitDir(repoRoot!);
+
+			if (string.IsNullOrWhiteSpace(gitDir) || !Directory.Exists(gitDir))
+			{
+				return;
+			}
+
+			try
+			{
+				this.gitWatcher = new FileSystemWatcher(gitDir!, "HEAD")
+				{
+					NotifyFilter = NotifyFilters.LastWrite
+				};
+
+				this.gitWatcher.Changed += this.OnGitHeadChanged;
+				this.gitWatcher.EnableRaisingEvents = true;
+			}
+			catch (Exception ex)
+			{
+				_ = this.package.UiFeedbackService.WriteLineAsync($"Failed to start Git watcher: {ex.Message}", CancellationToken.None);
+			}
+		}
+
+		/// <summary>
+		/// Stops and disposes the Git HEAD watcher.
+		/// </summary>
+		private void StopGitWatcher()
+		{
+			if (this.gitWatcher != null)
+			{
+				this.gitWatcher.EnableRaisingEvents = false;
+				this.gitWatcher.Changed -= this.OnGitHeadChanged;
+				this.gitWatcher.Dispose();
+				this.gitWatcher = null;
+			}
+		}
+
+		/// <summary>
+		/// Handles Git HEAD file change events.
+		/// </summary>
+		/// <param name="sender">Event sender.</param>
+		/// <param name="e">File system event arguments.</param>
+		private void OnGitHeadChanged(object sender, FileSystemEventArgs e)
+		{
+			ThreadHelper.JoinableTaskFactory.RunAsync(async delegate
+			{
+				try
+				{
+					await this.package.UiFeedbackService.WriteLineAsync("Git HEAD changed. Re-applying trust sharing preference.", CancellationToken.None);
+					await this.package.ApplyTrustSharingPreferenceAsync();
+				}
+				catch (Exception ex)
+				{
+					System.Diagnostics.Debug.WriteLine($"Failed to apply trust sharing preference: {ex.Message}");
+				}
+			}).FileAndForget(nameof(SolutionMonitorService));
 		}
 
 		/// <summary>

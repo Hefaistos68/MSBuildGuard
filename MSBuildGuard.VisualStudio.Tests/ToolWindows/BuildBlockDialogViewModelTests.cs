@@ -77,47 +77,30 @@ namespace MSBuildGuard.VisualStudio.ToolWindows.Tests
 
 			report.FilesScanned.Add(fileRecord);
 
-			var userTrustPath = new TrustStoreService().GetDefaultUserTrustPath();
-			var model         = new BuildBlockDialogViewModel(report, this.tempDir);
+			var userTrustPath = Path.Combine(this.tempDir, "user-trust.json");
+			var model         = new BuildBlockDialogViewModel(report, report.Target.TargetPath, null, userTrustPath);
 
 			// Initially, the finding is not trusted.
 			model.RiskScore.ShouldBe(20);
 
 			// Now we write a trust entry for it.
 			var trustStoreService = new TrustStoreService();
-			var userTrustStore    = trustStoreService.Load(userTrustPath);
-			var originalDecisions = new List<TrustDecisionEntry>(userTrustStore.Decisions);
 
-			try
+			trustStoreService.AddDecision(userTrustPath, new TrustDecisionEntry
 			{
-				trustStoreService.AddDecision(userTrustPath, new TrustDecisionEntry
-				{
-					DecisionId   = Guid.NewGuid().ToString("N"),
-					Scope        = "Finding",
-					SubjectHash  = "fingerprint-1",
-					Decision     = "Trust",
-					Reason       = "Test trust",
-					UserSid      = "TestSid",
-					CreatedAtUtc = DateTimeOffset.UtcNow
-				});
+				DecisionId   = Guid.NewGuid().ToString("N"),
+				Scope        = "Finding",
+				SubjectHash  = "fingerprint-1",
+				Decision     = "Trust",
+				Reason       = "Test trust",
+				UserSid      = "TestSid",
+				CreatedAtUtc = DateTimeOffset.UtcNow
+			});
 
-				var model2 = new BuildBlockDialogViewModel(report, this.tempDir);
+			var model2 = new BuildBlockDialogViewModel(report, report.Target.TargetPath, null, userTrustPath);
 
-				model2.RiskScore.ShouldBe(0);
-				model2.RecommendedAction.ShouldBe(RecommendedAction.Allow.ToString());
-			}
-			finally
-			{
-				// Restore the original user trust store to not pollute the host.
-				userTrustStore.Decisions.Clear();
-
-				foreach (var d in originalDecisions)
-				{
-					userTrustStore.Decisions.Add(d);
-				}
-
-				trustStoreService.Save(userTrustPath, userTrustStore);
-			}
+			model2.RiskScore.ShouldBe(0);
+			model2.RecommendedAction.ShouldBe(RecommendedAction.Allow.ToString());
 		}
 	}
 }
