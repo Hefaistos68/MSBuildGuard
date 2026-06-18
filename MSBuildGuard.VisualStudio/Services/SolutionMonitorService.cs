@@ -97,16 +97,20 @@ namespace MSBuildGuard.VisualStudio.Services
 		/// <param name="e">Solution open event arguments.</param>
 		private void OnAfterOpenSolution(object? sender, OpenSolutionEventArgs e)
 		{
-			ThreadHelper.ThrowIfNotOnUIThread();
-			_ = this.package.UiFeedbackService.WriteLineAsync("Solution opened.", CancellationToken.None);
-			_ = this.QueueScanAsync(null, this.package.DisposalToken);
-
-			var openSolutionPath = SolutionDiscoveryService.GetOpenSolutionPath();
-
-			if (!string.IsNullOrWhiteSpace(openSolutionPath))
+			ThreadHelper.JoinableTaskFactory.RunAsync(async delegate
 			{
-				this.StartGitWatcher(openSolutionPath!);
-			}
+				await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync(this.package.DisposalToken);
+
+				await this.package.UiFeedbackService.WriteLineAsync("Solution opened.", CancellationToken.None);
+				_ = this.QueueScanAsync(null, this.package.DisposalToken);
+
+				var openSolutionPath = SolutionDiscoveryService.GetOpenSolutionPath();
+
+				if (!string.IsNullOrWhiteSpace(openSolutionPath))
+				{
+					this.StartGitWatcher(openSolutionPath!);
+				}
+			}).FileAndForget(nameof(SolutionMonitorService));
 		}
 
 		/// <summary>
@@ -206,11 +210,11 @@ namespace MSBuildGuard.VisualStudio.Services
 			{
 				this.gitWatcher = new FileSystemWatcher(gitDir!, "HEAD")
 				{
-					NotifyFilter        = NotifyFilters.LastWrite | NotifyFilters.FileName,
-					EnableRaisingEvents = true
+					NotifyFilter = NotifyFilters.LastWrite
 				};
 
 				this.gitWatcher.Changed += this.OnGitHeadChanged;
+				this.gitWatcher.EnableRaisingEvents = true;
 			}
 			catch (Exception ex)
 			{
@@ -239,8 +243,18 @@ namespace MSBuildGuard.VisualStudio.Services
 		/// <param name="e">File system event arguments.</param>
 		private void OnGitHeadChanged(object sender, FileSystemEventArgs e)
 		{
-			_ = this.package.UiFeedbackService.WriteLineAsync("Git HEAD changed. Re-applying trust sharing preference.", CancellationToken.None);
-			_ = this.package.ApplyTrustSharingPreferenceAsync();
+			ThreadHelper.JoinableTaskFactory.RunAsync(async delegate
+			{
+				try
+				{
+					await this.package.UiFeedbackService.WriteLineAsync("Git HEAD changed. Re-applying trust sharing preference.", CancellationToken.None);
+					await this.package.ApplyTrustSharingPreferenceAsync();
+				}
+				catch (Exception ex)
+				{
+					System.Diagnostics.Debug.WriteLine($"Failed to apply trust sharing preference: {ex.Message}");
+				}
+			}).FileAndForget(nameof(SolutionMonitorService));
 		}
 
 		/// <summary>

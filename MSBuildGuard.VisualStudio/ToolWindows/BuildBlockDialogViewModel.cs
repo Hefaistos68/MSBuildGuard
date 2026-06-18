@@ -152,7 +152,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				  report.Target.TargetPath.EndsWith(".fsproj", StringComparison.OrdinalIgnoreCase) ||
 				  report.Target.TargetPath.EndsWith(".proj", StringComparison.OrdinalIgnoreCase)));
 			var currentProjectPath     = !string.IsNullOrWhiteSpace(projectPathFilter) ? projectPathFilter : (isProject ? report.Target.TargetPath : null);
-			var userPath               = userTrustPath ?? trustStoreService.GetDefaultUserTrustPath();
+			var userPath               = !string.IsNullOrWhiteSpace(userTrustPath) ? userTrustPath! : trustStoreService.GetDefaultUserTrustPath();
 			var trustStore             = trustStoreService.LoadMergedTrustStore(userPath, solutionPath, currentProjectPath);
 			var signatureCache         = new Dictionary<string, AssemblySignatureService>(StringComparer.OrdinalIgnoreCase);
 			var projectTrustStoreCache = new Dictionary<string, TrustStoreDocument>(StringComparer.OrdinalIgnoreCase);

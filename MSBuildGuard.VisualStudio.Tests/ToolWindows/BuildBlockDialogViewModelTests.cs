@@ -78,7 +78,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows.Tests
 			report.FilesScanned.Add(fileRecord);
 
 			var userTrustPath = Path.Combine(this.tempDir, "user-trust.json");
-			var model         = new BuildBlockDialogViewModel(report, this.tempDir, null, userTrustPath);
+			var model         = new BuildBlockDialogViewModel(report, report.Target.TargetPath, null, userTrustPath);
 
 			// Initially, the finding is not trusted.
 			model.RiskScore.ShouldBe(20);
@@ -97,7 +97,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows.Tests
 				CreatedAtUtc = DateTimeOffset.UtcNow
 			});
 
-			var model2 = new BuildBlockDialogViewModel(report, this.tempDir, null, userTrustPath);
+			var model2 = new BuildBlockDialogViewModel(report, report.Target.TargetPath, null, userTrustPath);
 
 			model2.RiskScore.ShouldBe(0);
 			model2.RecommendedAction.ShouldBe(RecommendedAction.Allow.ToString());
