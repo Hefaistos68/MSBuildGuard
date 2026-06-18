@@ -113,7 +113,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		/// <param name="report">The scan report.</param>
 		/// <param name="solutionPath">The solution path.</param>
 		public BuildBlockDialogViewModel(ScanReport report, string? solutionPath)
-			: this(report, solutionPath, null)
+			: this(report, solutionPath, null, null)
 		{
 		}
 
@@ -124,6 +124,18 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		/// <param name="solutionPath">The solution path.</param>
 		/// <param name="projectPathFilter">The project path filter.</param>
 		public BuildBlockDialogViewModel(ScanReport report, string? solutionPath, string? projectPathFilter)
+			: this(report, solutionPath, projectPathFilter, null)
+		{
+		}
+
+		/// <summary>
+		/// Initializes a new instance of the <see cref="BuildBlockDialogViewModel"/> class with an explicit solution path, optional project path filter, and optional user-level trust store path override.
+		/// </summary>
+		/// <param name="report">The scan report.</param>
+		/// <param name="solutionPath">The solution path.</param>
+		/// <param name="projectPathFilter">The project path filter.</param>
+		/// <param name="userTrustPath">Optional user-level trust store path to override the default.</param>
+		public BuildBlockDialogViewModel(ScanReport report, string? solutionPath, string? projectPathFilter, string? userTrustPath)
 		{
 			if (report == null)
 			{
@@ -140,7 +152,8 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				  report.Target.TargetPath.EndsWith(".fsproj", StringComparison.OrdinalIgnoreCase) ||
 				  report.Target.TargetPath.EndsWith(".proj", StringComparison.OrdinalIgnoreCase)));
 			var currentProjectPath     = !string.IsNullOrWhiteSpace(projectPathFilter) ? projectPathFilter : (isProject ? report.Target.TargetPath : null);
-			var trustStore             = trustStoreService.LoadMergedTrustStore(trustStoreService.GetDefaultUserTrustPath(), solutionPath, currentProjectPath);
+			var userPath               = userTrustPath ?? trustStoreService.GetDefaultUserTrustPath();
+			var trustStore             = trustStoreService.LoadMergedTrustStore(userPath, solutionPath, currentProjectPath);
 			var signatureCache         = new Dictionary<string, AssemblySignatureService>(StringComparer.OrdinalIgnoreCase);
 			var projectTrustStoreCache = new Dictionary<string, TrustStoreDocument>(StringComparer.OrdinalIgnoreCase);
 			var activeRiskScore        = 0;
