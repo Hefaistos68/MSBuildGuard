@@ -136,6 +136,10 @@ export class WorkerClient implements vscode.Disposable {
             console.warn(`MSBuildGuard worker: ${data.toString().trim()}`);
         });
 
+        this.process.on('error', (err: Error) => {
+            this.failAllPending(`MSBuildGuard worker failed to start: ${err.message}`);
+        });
+
         this.process.on('exit', (code: number | null, signal: NodeJS.Signals | null) => {
             this.failAllPending(`MSBuildGuard worker exited (code=${code}, signal=${signal}).`);
         });

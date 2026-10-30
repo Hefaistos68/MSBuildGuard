@@ -1,7 +1,6 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows.Interop;
 using EnvDTE;
 using Microsoft.VisualStudio;
 using Microsoft.VisualStudio.Shell;
@@ -28,7 +27,7 @@ namespace MSBuildGuard.VisualStudio.Services
 		/// <param name="package">Owning package.</param>
 		public BuildEnforcementService(MSBuildGuardPackage package)
 		{
-			this.package = package;
+			this.package        = package;
 			this.scannerService = new VisualStudioScannerService(package);
 		}
 
@@ -51,6 +50,7 @@ namespace MSBuildGuard.VisualStudio.Services
 			if (this.solutionBuildManager == null)
 			{
 				await this.package.UiFeedbackService.WriteLineAsync("Build enforcement unavailable: solution build manager service not found.", CancellationToken.None);
+
 				return;
 			}
 
@@ -74,8 +74,8 @@ namespace MSBuildGuard.VisualStudio.Services
 				}
 
 				this.solutionBuildEventsCookie = 0;
-				this.solutionBuildManager = null;
-				this.isStarted = false;
+				this.solutionBuildManager      = null;
+				this.isStarted                 = false;
 			});
 		}
 
@@ -164,22 +164,9 @@ namespace MSBuildGuard.VisualStudio.Services
 						return VSConstants.S_OK;
 					}
 
-					var dialog          = new MSBuildGuard.VisualStudio.ToolWindows.BuildBlockDialog(viewModel);
-					var serviceProvider = (IServiceProvider)this.package;
-					var uiShell         = serviceProvider.GetService(typeof(SVsUIShell)) as IVsUIShell;
-					var ownerHandle     = IntPtr.Zero;
+					var dialog = new MSBuildGuard.VisualStudio.ToolWindows.BuildBlockDialog(viewModel);
 
-					if (uiShell != null)
-					{
-						ErrorHandler.ThrowOnFailure(uiShell.GetDialogOwnerHwnd(out ownerHandle));
-					}
-
-					if (ownerHandle != IntPtr.Zero)
-					{
-						new WindowInteropHelper(dialog).Owner = ownerHandle;
-					}
-
-					dialog.ShowDialog();
+					dialog.ShowModal();
 
 					if (dialog.UserChoseToProceed)
 					{

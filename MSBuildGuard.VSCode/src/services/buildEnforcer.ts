@@ -5,7 +5,7 @@ import { ScanReport, Finding } from './workerClient';
 export class BuildEnforcer implements vscode.Disposable {
     private readonly disposables: vscode.Disposable[] = [];
     private latestReport: ScanReport | null = null;
-    private bypassActive = false;
+    private approvedTaskKey: string | null = null;
 
     public constructor() {
         this.disposables.push(
@@ -29,33 +29,31 @@ export class BuildEnforcer implements vscode.Disposable {
     }
 
     private async onTaskStarted(event: vscode.TaskStartEvent): Promise<void> {
-        const taskName = event.execution.task.name.toLowerCase();
-        const taskSource = event.execution.task.source.toLowerCase();
+        const task = event.execution.task;
+        const taskKey = `${task.source}:${task.name}`;
 
-        // Detect .NET compile or build tasks
-        const isBuildTask = 
-            taskName.includes('build') || 
-            taskName.includes('restore') || 
-            taskName.includes('publish') ||
-            taskSource.includes('dotnet') ||
-            taskSource.includes('msbuild');
+        if (!this.isBuildOrDotnetTask(task)) {
+            return;
+        }
 
-        if (!isBuildTask || this.bypassActive) {
+        if (this.approvedTaskKey === taskKey) {
+            this.approvedTaskKey = null;
             return;
         }
 
         if (!this.latestReport) {
-            // No scan has run yet; we allow standard execution but trigger a background scan
+            // No scan has run yet; trigger a scan in the background
+            void vscode.commands.executeCommand('msbuildguard.scan');
             return;
         }
 
         // Resolve target project/solution paths from the VS Code task
-        const projectPaths = this.getProjectPathsFromTask(event.execution.task);
+        const projectPaths = this.getProjectPathsFromTask(task);
         let filteredFindings = this.latestReport.findings;
 
         if (projectPaths.length > 0) {
             const solutionPath = this.latestReport.target.targetPath;
-            filteredFindings = this.latestReport.findings.filter(finding => 
+            filteredFindings = this.latestReport.findings.filter(finding =>
                 projectPaths.some(projPath => this.isFindingForProject(finding, projPath, solutionPath))
             );
         }
@@ -63,44 +61,53 @@ export class BuildEnforcer implements vscode.Disposable {
         // Filter active findings (not trusted and policy requires action)
         const activeFindings = filteredFindings.filter(finding => {
             const isTrusted = finding.isTrusted || false;
-            return !isTrusted && finding.policyEvaluatedAction?.toLowerCase() !== 'allow';
+            const evaluatedAction = (finding.policyEvaluatedAction || finding.policyAction || '').toLowerCase();
+            return !isTrusted && evaluatedAction !== 'allow';
         });
 
         if (activeFindings.length === 0) {
             return;
         }
 
-        // Calculate risk score and action for filtered findings
+        // Calculate risk score and effective policy action for filtered findings
         let riskScore = 0;
+        let highestPolicyRank = 0;
+
         for (const finding of activeFindings) {
             riskScore += this.getSeverityRisk(finding.severity);
+            const evaluatedAction = (finding.policyEvaluatedAction || finding.policyAction || '').toLowerCase();
+            const rank = this.getActionRank(evaluatedAction);
+            if (rank > highestPolicyRank) {
+                highestPolicyRank = rank;
+            }
         }
 
-        let action = 'allow';
+        let riskRank = 0;
         if (riskScore >= 100) {
-            action = 'block';
+            riskRank = 3;
         } else if (riskScore >= 50) {
-            action = 'requireapproval';
+            riskRank = 2;
         } else if (riskScore >= 20) {
-            action = 'warn';
+            riskRank = 1;
         }
 
-        const requiresEnforcement = action === 'block' || action === 'requireapproval';
+        const effectiveRank = Math.max(riskRank, highestPolicyRank);
+        const requiresEnforcement = effectiveRank >= 2;
 
         if (!requiresEnforcement) {
             return;
         }
 
-        const isBlockMode = action === 'block';
+        const isBlockMode = effectiveRank >= 3;
 
-        // High-value interactive freezing prompt
+        // Always terminate immediately so MSBuild cannot execute before user approval
+        event.execution.terminate();
+
         const promptMessage = isBlockMode
             ? `[MSBuild Guard] CRITICAL: Build blocked by security policy. Risk Score: ${riskScore}. Risky configuration identified.`
             : `[MSBuild Guard] ALERT: Risky MSBuild configurations detected. Risk Score: ${riskScore}. Do you want to allow this build to run?`;
 
         if (isBlockMode) {
-            // Strict Block Mode: Terminate instantly and notify
-            event.execution.terminate();
             await vscode.window.showErrorMessage(
                 `${promptMessage}\n\nPlease review findings in the Security Review dashboard.`,
                 { modal: true },
@@ -111,7 +118,6 @@ export class BuildEnforcer implements vscode.Disposable {
                 }
             });
         } else {
-            // Conditional Approval Mode: Freeze task (keep it running but prompt, terminate if cancelled)
             const choice = await vscode.window.showWarningMessage(
                 promptMessage,
                 { modal: true },
@@ -120,15 +126,64 @@ export class BuildEnforcer implements vscode.Disposable {
             );
 
             if (choice !== 'Allow & Continue Build') {
-                event.execution.terminate();
                 void vscode.window.showInformationMessage('Build cancelled and terminated by MSBuild Guard.');
             } else {
-                // Allow task to continue
-                this.bypassActive = true;
-                setTimeout(() => {
-                    this.bypassActive = false; // Reset bypass window
-                }, 5000);
+                this.approvedTaskKey = taskKey;
+                void vscode.tasks.executeTask(task);
             }
+        }
+    }
+
+    private isBuildOrDotnetTask(task: vscode.Task): boolean {
+        const taskName = task.name.toLowerCase();
+        const taskSource = task.source.toLowerCase();
+
+        if (
+            taskName.includes('build') ||
+            taskName.includes('restore') ||
+            taskName.includes('publish') ||
+            taskName.includes('test') ||
+            taskName.includes('run') ||
+            taskName.includes('pack') ||
+            taskName.includes('clean') ||
+            taskSource.includes('dotnet') ||
+            taskSource.includes('msbuild')
+        ) {
+            return true;
+        }
+
+        const execution = task.execution;
+        if (execution) {
+            if ('process' in execution && typeof execution.process === 'string') {
+                const proc = execution.process.toLowerCase();
+                if (proc.includes('dotnet') || proc.includes('msbuild')) {
+                    return true;
+                }
+            }
+            if ('commandLine' in execution && typeof execution.commandLine === 'string') {
+                const cmd = execution.commandLine.toLowerCase();
+                if (cmd.includes('dotnet') || cmd.includes('msbuild')) {
+                    return true;
+                }
+            }
+            if ('command' in execution) {
+                const cmdVal = typeof execution.command === 'string' ? execution.command : (execution.command?.value || '');
+                const cmdLower = cmdVal.toLowerCase();
+                if (cmdLower.includes('dotnet') || cmdLower.includes('msbuild')) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private getActionRank(action: string): number {
+        switch (action) {
+            case 'block': return 3;
+            case 'requireapproval': return 2;
+            case 'warn': return 1;
+            default: return 0;
         }
     }
 
@@ -164,11 +219,11 @@ export class BuildEnforcer implements vscode.Disposable {
 
             for (const arg of args) {
                 if (
-                    arg.endsWith('.csproj') || 
-                    arg.endsWith('.vbproj') || 
-                    arg.endsWith('.fsproj') || 
-                    arg.endsWith('.proj') || 
-                    arg.endsWith('.sln') || 
+                    arg.endsWith('.csproj') ||
+                    arg.endsWith('.vbproj') ||
+                    arg.endsWith('.fsproj') ||
+                    arg.endsWith('.proj') ||
+                    arg.endsWith('.sln') ||
                     arg.endsWith('.slnx')
                 ) {
                     paths.push(arg);

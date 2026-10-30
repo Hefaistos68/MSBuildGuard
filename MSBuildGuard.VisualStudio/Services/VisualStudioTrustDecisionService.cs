@@ -130,7 +130,7 @@ namespace MSBuildGuard.VisualStudio.Services
 				WindowStartupLocation  = System.Windows.WindowStartupLocation.CenterOwner
 			};
 
-			if (dialog.ShowDialog() != true)
+			if (dialog.ShowModal() != true)
 			{
 				return;
 			}
@@ -190,7 +190,7 @@ namespace MSBuildGuard.VisualStudio.Services
 				WindowStartupLocation  = System.Windows.WindowStartupLocation.CenterOwner
 			};
 
-			if (dialog.ShowDialog() != true)
+			if (dialog.ShowModal() != true)
 			{
 
 				return;

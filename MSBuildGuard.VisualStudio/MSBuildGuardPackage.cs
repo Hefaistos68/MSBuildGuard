@@ -105,6 +105,11 @@ namespace MSBuildGuard.VisualStudio
 		private readonly System.Collections.Generic.HashSet<string> promptedSolutions = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
 		/// <summary>
+		/// Signals when the initial developer onboarding check (and dialog, if needed) has completed.
+		/// </summary>
+		private readonly AsyncManualResetEvent developerOnboardingCompleted = new AsyncManualResetEvent(initialState: false);
+
+		/// <summary>
 		/// Gets the active package instance.
 		/// </summary>
 		internal static MSBuildGuardPackage? Instance { get; private set; }
@@ -277,7 +282,12 @@ namespace MSBuildGuard.VisualStudio
 			page.EnforceAsymmetricSignatures = options.EnforceAsymmetricSignatures;
 			page.AllowSharingTrustsInRepositories = options.AllowSharingTrustsInRepositories;
 
-			PerformOnboardingCheck(page);
+			if (page.KeyManagementMode == KeyManagementModeKind.Unconfigured && options.KeyManagementMode != KeyManagementModeKind.Unconfigured)
+			{
+				page.KeyManagementMode = options.KeyManagementMode;
+			}
+
+			this.PerformOnboardingCheck(page);
 			this.lastEnforceAsymmetric = page.EnforceAsymmetricSignatures;
 
 			this.shieldStatusBarControl = new Services.ShieldStatusBarControl(this);
@@ -337,6 +347,10 @@ namespace MSBuildGuard.VisualStudio
 		{
 			try
 			{
+				await JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
+
+				await this.developerOnboardingCompleted.WaitAsync(cancellationToken);
+
 				await JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
 
 				var options = await this.GetOptionsSnapshotAsync(cancellationToken);
@@ -558,7 +572,7 @@ namespace MSBuildGuard.VisualStudio
 				WindowStartupLocation = System.Windows.WindowStartupLocation.CenterOwner
 			};
 
-			var result = dialog.ShowDialog();
+			var result = dialog.ShowModal();
 
 			if (result == true)
 			{
@@ -591,7 +605,7 @@ namespace MSBuildGuard.VisualStudio
 				WindowStartupLocation = System.Windows.WindowStartupLocation.CenterOwner
 			};
 
-			var result = dialog.ShowDialog();
+			var result = dialog.ShowModal();
 
 			if (result == true)
 			{
@@ -622,7 +636,7 @@ namespace MSBuildGuard.VisualStudio
 				WindowStartupLocation = System.Windows.WindowStartupLocation.CenterOwner
 			};
 
-			var result = dialog.ShowDialog();
+			var result = dialog.ShowModal();
 
 			if (result == true)
 			{
@@ -647,6 +661,7 @@ namespace MSBuildGuard.VisualStudio
 			this.UpdateLatestScanReport(e);
 			_ = this.JoinableTaskFactory.RunAsync(async delegate
 			{
+				await this.developerOnboardingCompleted.WaitAsync(this.DisposalToken);
 				await this.UiFeedbackService.WriteLineAsync($"Solution scan completed: {e.Target.TargetPath}", CancellationToken.None);
 				await this.UiFeedbackService.WriteLineAsync($"[Flow] OnSolutionScanCompleted targetKind={e.Target.TargetKind}, findings={e.Findings.Count}", CancellationToken.None);
 				await this.JoinableTaskFactory.SwitchToMainThreadAsync(this.DisposalToken);
@@ -942,7 +957,7 @@ namespace MSBuildGuard.VisualStudio
 				WindowStartupLocation = System.Windows.WindowStartupLocation.CenterOwner
 			};
 
-			var dialogResult = dialog.ShowDialog();
+			var dialogResult = dialog.ShowModal();
 			var trustService = new Core.Trust.TrustStoreService();
 			var solutionTrustPath = trustService.GetSolutionTrustPath(solutionPath);
 
@@ -1100,7 +1115,7 @@ namespace MSBuildGuard.VisualStudio
 						{
 							foreach (var finding in report.Findings)
 							{
-								if (string.Equals(finding.PackageSignatureState, thumbprint, StringComparison.OrdinalIgnoreCase))
+								if (DoesFindingMatchSignerThumbprint(finding, thumbprint))
 								{
 									var proj = ResolveProjectPath(solutionPath, finding);
 
@@ -1186,6 +1201,28 @@ namespace MSBuildGuard.VisualStudio
 		{
 			var trustService = new Core.Trust.TrustStoreService();
 			var currentTrustStore = trustService.LoadMergedTrustStore(trustService.GetDefaultUserTrustPath(), solutionPath, null);
+
+			foreach (var file in report.FilesScanned)
+			{
+				if (file.FileKind == Core.MsBuildFileKind.Project ||
+					file.Path.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase) ||
+					file.Path.EndsWith(".fsproj", StringComparison.OrdinalIgnoreCase) ||
+					file.Path.EndsWith(".vbproj", StringComparison.OrdinalIgnoreCase))
+				{
+					try
+					{
+						var projStore = trustService.Load(trustService.GetProjectTrustPath(file.Path));
+
+						foreach (var decision in projStore.Decisions)
+						{
+							currentTrustStore.Decisions.Add(decision);
+						}
+					}
+					catch
+					{
+					}
+				}
+			}
 			var filteredFindings = report.Findings.Where(f => !IsFindingTrusted(f, currentTrustStore)).ToList();
 			var filteredReport = new Core.ScanReport
 			{
@@ -1233,12 +1270,13 @@ namespace MSBuildGuard.VisualStudio
 
 			if (!string.IsNullOrWhiteSpace(f.PackageId) && !string.IsNullOrWhiteSpace(f.PackageVersion))
 			{
-				if (trustService.IsFindingApprovedByAssembly(currentTrustStore, f.PackageId, f.PackageVersion))
+				if (trustService.IsFindingApprovedByAssembly(currentTrustStore, f.PackageId, f.PackageVersion) ||
+					trustService.IsFindingApprovedByPackage(currentTrustStore, f.PackageId, f.PackageVersion))
 				{
 					return true;
 				}
 
-				if (f.FilePath.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) || f.FilePath.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+				if (!string.IsNullOrWhiteSpace(f.PackageId))
 				{
 					var assemblyPath = Core.Trust.AssemblySignatureService.ResolveAssemblyFilePathFromPackageId(f.PackageId, f.PackageVersion);
 					var sig = new Core.Trust.AssemblySignatureService().ReadSignature(assemblyPath);
@@ -1252,6 +1290,30 @@ namespace MSBuildGuard.VisualStudio
 			}
 
 			return false;
+		}
+
+		private static bool DoesFindingMatchSignerThumbprint(Core.Finding finding, string thumbprint)
+		{
+			if (string.Equals(finding.PackageSignatureState, thumbprint, StringComparison.OrdinalIgnoreCase))
+			{
+				return true;
+			}
+
+			if (string.IsNullOrWhiteSpace(finding.PackageId) || string.IsNullOrWhiteSpace(finding.PackageVersion))
+			{
+				return false;
+			}
+
+			var assemblyPath = Core.Trust.AssemblySignatureService.ResolveAssemblyFilePathFromPackageId(finding.PackageId, finding.PackageVersion);
+
+			if (string.IsNullOrWhiteSpace(assemblyPath) || !File.Exists(assemblyPath))
+			{
+				return false;
+			}
+
+			var sig = new Core.Trust.AssemblySignatureService().ReadSignature(assemblyPath);
+
+			return sig != null && string.Equals(sig.Thumbprint, thumbprint, StringComparison.OrdinalIgnoreCase);
 		}
 
 		/// <summary>
@@ -1346,7 +1408,23 @@ namespace MSBuildGuard.VisualStudio
 		/// Prompts the user to configure key management mode on the first run of the extension.
 		/// </summary>
 		/// <param name="page">Options page.</param>
-		private static void PerformOnboardingCheck(MSBuildGuardOptionsPage page)
+		private void PerformOnboardingCheck(MSBuildGuardOptionsPage page)
+		{
+			if (page.KeyManagementMode != KeyManagementModeKind.Unconfigured || System.Windows.Application.Current == null)
+			{
+				this.developerOnboardingCompleted.Set();
+
+				return;
+			}
+
+			this.PerformOnboardingCheckCore(page);
+		}
+
+		/// <summary>
+		/// Subscribes to window visibility or activation events when needed to display the onboarding dialog.
+		/// </summary>
+		/// <param name="page">Options page.</param>
+		private void PerformOnboardingCheckCore(MSBuildGuardOptionsPage page)
 		{
 			if (page.KeyManagementMode != KeyManagementModeKind.Unconfigured)
 			{
@@ -1362,7 +1440,7 @@ namespace MSBuildGuard.VisualStudio
 
 			if (mainWindow != null && mainWindow.IsVisible)
 			{
-				ShowOnboardingDialog(page);
+				this.ShowOnboardingDialog(page);
 			}
 			else if (mainWindow != null)
 			{
@@ -1373,7 +1451,7 @@ namespace MSBuildGuard.VisualStudio
 					if (mainWindow.IsVisible)
 					{
 						mainWindow.IsVisibleChanged -= handler;
-						ShowOnboardingDialog(page);
+						this.ShowOnboardingDialog(page);
 					}
 				};
 
@@ -1390,7 +1468,7 @@ namespace MSBuildGuard.VisualStudio
 					if (mainWin != null && mainWin.IsVisible)
 					{
 						System.Windows.Application.Current.Activated -= activatedHandler;
-						ShowOnboardingDialog(page);
+						this.ShowOnboardingDialog(page);
 					}
 				};
 
@@ -1402,7 +1480,23 @@ namespace MSBuildGuard.VisualStudio
 		/// Displays the key management onboarding dialog and saves the user choice.
 		/// </summary>
 		/// <param name="page">Options page.</param>
-		private static void ShowOnboardingDialog(MSBuildGuardOptionsPage page)
+		private void ShowOnboardingDialog(MSBuildGuardOptionsPage page)
+		{
+			try
+			{
+				this.ShowOnboardingDialogCore(page);
+			}
+			finally
+			{
+				this.developerOnboardingCompleted.Set();
+			}
+		}
+
+		/// <summary>
+		/// Displays the modal key management onboarding dialog and persists the selected mode.
+		/// </summary>
+		/// <param name="page">Options page.</param>
+		private void ShowOnboardingDialogCore(MSBuildGuardOptionsPage page)
 		{
 			if (page.KeyManagementMode != KeyManagementModeKind.Unconfigured)
 			{
@@ -1416,7 +1510,7 @@ namespace MSBuildGuard.VisualStudio
 				WindowStartupLocation = System.Windows.WindowStartupLocation.CenterOwner
 			};
 
-			var result = dialog.ShowDialog();
+			var result = dialog.ShowModal();
 
 			if (result == true)
 			{
@@ -1428,6 +1522,9 @@ namespace MSBuildGuard.VisualStudio
 				}
 
 				page.SaveSettingsToStorage();
+				MSBuildGuard.Core.CoreSettings.EnforceAsymmetricSignatures      = page.EnforceAsymmetricSignatures;
+				MSBuildGuard.Core.CoreSettings.AllowSharingTrustsInRepositories = page.AllowSharingTrustsInRepositories;
+				this.unifiedSettingsOptionsProvider.NotifyChanged();
 			}
 		}
 
@@ -1704,6 +1801,11 @@ namespace MSBuildGuard.VisualStudio
 			{
 				foreach (var subDir in Directory.GetDirectories(dir))
 				{
+					if ((File.GetAttributes(subDir) & FileAttributes.ReparsePoint) != 0)
+					{
+						continue;
+					}
+
 					var dirName = Path.GetFileName(subDir);
 
 					if (string.Equals(dirName, ".msbuildguard", StringComparison.OrdinalIgnoreCase))

@@ -4,31 +4,13 @@
 			 xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
 			 xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
 			 xmlns:vsshell="clr-namespace:Microsoft.VisualStudio.Shell;assembly=Microsoft.VisualStudio.Shell.15.0"
+			 xmlns:platformUi="clr-namespace:Microsoft.VisualStudio.PlatformUI;assembly=Microsoft.VisualStudio.Shell.15.0"
 			 mc:Ignorable="d"
 			 d:DesignHeight="600"
 			 d:DesignWidth="700">
 	<UserControl.Resources>
 		<ResourceDictionary>
 			<BooleanToVisibilityConverter x:Key="BoolToVis" />
-			<SolidColorBrush x:Key="EditorBackgroundBrush" Color="#0B0F19" />
-			<SolidColorBrush x:Key="HeaderStartBrush" Color="#1E293B" />
-			<SolidColorBrush x:Key="HeaderEndBrush" Color="#0F172A" />
-			<SolidColorBrush x:Key="CardBackgroundBrush" Color="#111827" />
-			<SolidColorBrush x:Key="BorderBrushDark" Color="#2A3447" />
-			<SolidColorBrush x:Key="PrimaryTextBrush" Color="#F1F5F9" />
-			<SolidColorBrush x:Key="SecondaryTextBrush" Color="#94A3B8" />
-			<SolidColorBrush x:Key="AccentBrush" Color="#3B82F6" />
-			<SolidColorBrush x:Key="SuccessBrush" Color="#10B981" />
-
-			<LinearGradientBrush x:Key="HeaderBackgroundBrush" StartPoint="0,0" EndPoint="1,1">
-				<GradientStop Color="{Binding Color, Source={StaticResource HeaderStartBrush}}" Offset="0" />
-				<GradientStop Color="{Binding Color, Source={StaticResource HeaderEndBrush}}" Offset="1" />
-			</LinearGradientBrush>
-
-			<LinearGradientBrush x:Key="SaveButtonBrush" StartPoint="0,0" EndPoint="1,1">
-				<GradientStop Color="#10B981" Offset="0" />
-				<GradientStop Color="#059669" Offset="1" />
-			</LinearGradientBrush>
 
 			<Style TargetType="TextBlock">
 				<Setter Property="Foreground" Value="{DynamicResource {x:Static vsshell:VsBrushes.ToolWindowTextKey}}"/>
@@ -60,22 +42,22 @@
 			</Style>
 
 			<Style x:Key="CardBorderStyle" TargetType="Border">
-				<Setter Property="Background" Value="{StaticResource CardBackgroundBrush}" />
-				<Setter Property="BorderBrush" Value="{StaticResource BorderBrushDark}" />
+				<Setter Property="Background" Value="{DynamicResource {x:Static vsshell:VsBrushes.GridHeadingBackgroundKey}}" />
+				<Setter Property="BorderBrush" Value="{DynamicResource {x:Static vsshell:VsBrushes.PanelBorderKey}}" />
 				<Setter Property="BorderThickness" Value="1" />
 				<Setter Property="CornerRadius" Value="16" />
 				<Setter Property="Padding" Value="20" />
 			</Style>
 
 			<Style x:Key="SectionTitleStyle" TargetType="TextBlock">
-                <Setter Property="Foreground" Value="{StaticResource SecondaryTextBrush}" />
-                <Setter Property="FontSize" Value="28" />
+				<Setter Property="Foreground" Value="{DynamicResource {x:Static vsshell:VsBrushes.ToolWindowTextKey}}" />
+				<Setter Property="FontSize" Value="28" />
 				<Setter Property="FontWeight" Value="SemiBold" />
 				<Setter Property="Margin" Value="0,0,0,8" />
 			</Style>
 
 			<Style x:Key="FieldLabelStyle" TargetType="TextBlock">
-				<Setter Property="Foreground" Value="{StaticResource SecondaryTextBrush}" />
+				<Setter Property="Foreground" Value="{DynamicResource {x:Static vsshell:VsBrushes.GrayTextKey}}" />
 				<Setter Property="FontSize" Value="12" />
 				<Setter Property="FontWeight" Value="SemiBold" />
 				<Setter Property="Margin" Value="0,0,0,4" />
@@ -86,9 +68,9 @@
 				<Setter Property="OverridesDefaultStyle" Value="True" />
 				<Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Auto" />
 				<Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto" />
-				<Setter Property="Background" Value="#0F172A" />
-				<Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
-				<Setter Property="BorderBrush" Value="{StaticResource BorderBrushDark}" />
+				<Setter Property="Background" Value="{DynamicResource {x:Static vsshell:VsBrushes.ComboBoxBackgroundKey}}" />
+				<Setter Property="Foreground" Value="{DynamicResource {x:Static vsshell:VsBrushes.WindowTextKey}}" />
+				<Setter Property="BorderBrush" Value="{DynamicResource {x:Static vsshell:VsBrushes.ComboBoxBorderKey}}" />
 				<Setter Property="BorderThickness" Value="1" />
 				<Setter Property="Padding" Value="8,4" />
 				<Setter Property="MinHeight" Value="34" />
@@ -141,13 +123,13 @@
 									   PlacementTarget="{Binding ElementName=ToggleButton}"
 									   PopupAnimation="Slide">
 									<Border x:Name="DropDownBorder"
-											Background="#0F172A"
+											Background="{DynamicResource {x:Static vsshell:VsBrushes.ComboBoxBackgroundKey}}"
 											BorderBrush="{TemplateBinding BorderBrush}"
 											BorderThickness="1"
 											CornerRadius="8"
 											MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
 											MaxHeight="260">
-										<ScrollViewer Background="#0F172A" SnapsToDevicePixels="True" CanContentScroll="True">
+										<ScrollViewer Background="{DynamicResource {x:Static vsshell:VsBrushes.ComboBoxBackgroundKey}}" SnapsToDevicePixels="True" CanContentScroll="True">
 											<StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Contained" />
 										</ScrollViewer>
 									</Border>
@@ -158,7 +140,7 @@
 									<Setter TargetName="DropDownBorder" Property="MinHeight" Value="30" />
 								</Trigger>
 								<Trigger Property="IsDropDownOpen" Value="True">
-									<Setter TargetName="ClosedStateBorder" Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+									<Setter TargetName="ClosedStateBorder" Property="BorderBrush" Value="{DynamicResource {x:Static vsshell:VsBrushes.AccentMediumKey}}" />
 								</Trigger>
 								<Trigger Property="IsEnabled" Value="False">
 									<Setter Property="Opacity" Value="0.7" />
@@ -170,8 +152,8 @@
 			</Style>
 
 			<Style x:Key="EditorComboItemStyle" TargetType="ComboBoxItem">
-				<Setter Property="Background" Value="#0F172A" />
-				<Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
+				<Setter Property="Background" Value="{DynamicResource {x:Static vsshell:VsBrushes.ComboBoxBackgroundKey}}" />
+				<Setter Property="Foreground" Value="{DynamicResource {x:Static vsshell:VsBrushes.WindowTextKey}}" />
 				<Setter Property="BorderBrush" Value="Transparent" />
 				<Setter Property="BorderThickness" Value="0" />
 				<Setter Property="Padding" Value="8,4" />
@@ -186,12 +168,12 @@
 							</Border>
 							<ControlTemplate.Triggers>
 								<Trigger Property="IsHighlighted" Value="True">
-									<Setter TargetName="Bd" Property="Background" Value="#1E293B" />
-									<Setter Property="Foreground" Value="#FFFFFF" />
+									<Setter TargetName="Bd" Property="Background" Value="{DynamicResource {x:Static vsshell:VsBrushes.HighlightKey}}" />
+									<Setter Property="Foreground" Value="{DynamicResource {x:Static vsshell:VsBrushes.HighlightTextKey}}" />
 								</Trigger>
 								<Trigger Property="IsSelected" Value="True">
-									<Setter TargetName="Bd" Property="Background" Value="#1E293B" />
-									<Setter Property="Foreground" Value="#FFFFFF" />
+									<Setter TargetName="Bd" Property="Background" Value="{DynamicResource {x:Static vsshell:VsBrushes.HighlightKey}}" />
+									<Setter Property="Foreground" Value="{DynamicResource {x:Static vsshell:VsBrushes.HighlightTextKey}}" />
 								</Trigger>
 							</ControlTemplate.Triggers>
 						</ControlTemplate>
@@ -202,16 +184,16 @@
 			<Style x:Key="ImpactColorItemStyle" TargetType="ComboBoxItem" BasedOn="{StaticResource EditorComboItemStyle}">
 				<Style.Triggers>
 					<DataTrigger Binding="{Binding}" Value="Allow">
-						<Setter Property="Foreground" Value="#10B981" />
+						<Setter Property="Foreground" Value="{DynamicResource {x:Static platformUi:EnvironmentColors.VizSurfaceGreenMediumBrushKey}}" />
 					</DataTrigger>
 					<DataTrigger Binding="{Binding}" Value="Warn">
-						<Setter Property="Foreground" Value="#3B82F6" />
+						<Setter Property="Foreground" Value="{DynamicResource {x:Static platformUi:EnvironmentColors.VizSurfaceSteelBlueMediumBrushKey}}" />
 					</DataTrigger>
 					<DataTrigger Binding="{Binding}" Value="RequireApproval">
-						<Setter Property="Foreground" Value="#EAB308" />
+						<Setter Property="Foreground" Value="{DynamicResource {x:Static platformUi:EnvironmentColors.VizSurfaceGoldMediumBrushKey}}" />
 					</DataTrigger>
 					<DataTrigger Binding="{Binding}" Value="Block">
-						<Setter Property="Foreground" Value="#EF4444" />
+						<Setter Property="Foreground" Value="{DynamicResource {x:Static platformUi:EnvironmentColors.VizSurfaceRedMediumBrushKey}}" />
 					</DataTrigger>
 				</Style.Triggers>
 			</Style>
@@ -220,16 +202,16 @@
 				<TextBlock x:Name="Txt" Text="{Binding}" FontWeight="SemiBold" />
 				<DataTemplate.Triggers>
 					<DataTrigger Binding="{Binding}" Value="Allow">
-						<Setter TargetName="Txt" Property="Foreground" Value="#10B981" />
+						<Setter TargetName="Txt" Property="Foreground" Value="{DynamicResource {x:Static platformUi:EnvironmentColors.VizSurfaceGreenMediumBrushKey}}" />
 					</DataTrigger>
 					<DataTrigger Binding="{Binding}" Value="Warn">
-						<Setter TargetName="Txt" Property="Foreground" Value="#3B82F6" />
+						<Setter TargetName="Txt" Property="Foreground" Value="{DynamicResource {x:Static platformUi:EnvironmentColors.VizSurfaceSteelBlueMediumBrushKey}}" />
 					</DataTrigger>
 					<DataTrigger Binding="{Binding}" Value="RequireApproval">
-						<Setter TargetName="Txt" Property="Foreground" Value="#EAB308" />
+						<Setter TargetName="Txt" Property="Foreground" Value="{DynamicResource {x:Static platformUi:EnvironmentColors.VizSurfaceGoldMediumBrushKey}}" />
 					</DataTrigger>
 					<DataTrigger Binding="{Binding}" Value="Block">
-						<Setter TargetName="Txt" Property="Foreground" Value="#EF4444" />
+						<Setter TargetName="Txt" Property="Foreground" Value="{DynamicResource {x:Static platformUi:EnvironmentColors.VizSurfaceRedMediumBrushKey}}" />
 					</DataTrigger>
 				</DataTemplate.Triggers>
 			</DataTemplate>
@@ -239,16 +221,16 @@
 				<Setter Property="ItemTemplate" Value="{StaticResource ImpactColorItemTemplate}" />
 				<Style.Triggers>
 					<DataTrigger Binding="{Binding SelectedItem, RelativeSource={RelativeSource Self}}" Value="Allow">
-						<Setter Property="Foreground" Value="#10B981" />
+						<Setter Property="Foreground" Value="{DynamicResource {x:Static platformUi:EnvironmentColors.VizSurfaceGreenMediumBrushKey}}" />
 					</DataTrigger>
 					<DataTrigger Binding="{Binding SelectedItem, RelativeSource={RelativeSource Self}}" Value="Warn">
-						<Setter Property="Foreground" Value="#3B82F6" />
+						<Setter Property="Foreground" Value="{DynamicResource {x:Static platformUi:EnvironmentColors.VizSurfaceSteelBlueMediumBrushKey}}" />
 					</DataTrigger>
 					<DataTrigger Binding="{Binding SelectedItem, RelativeSource={RelativeSource Self}}" Value="RequireApproval">
-						<Setter Property="Foreground" Value="#EAB308" />
+						<Setter Property="Foreground" Value="{DynamicResource {x:Static platformUi:EnvironmentColors.VizSurfaceGoldMediumBrushKey}}" />
 					</DataTrigger>
 					<DataTrigger Binding="{Binding SelectedItem, RelativeSource={RelativeSource Self}}" Value="Block">
-						<Setter Property="Foreground" Value="#EF4444" />
+						<Setter Property="Foreground" Value="{DynamicResource {x:Static platformUi:EnvironmentColors.VizSurfaceRedMediumBrushKey}}" />
 					</DataTrigger>
 				</Style.Triggers>
 			</Style>
@@ -257,10 +239,10 @@
 				<TextBlock x:Name="Txt" Text="{Binding}" FontWeight="SemiBold" />
 				<DataTemplate.Triggers>
 					<DataTrigger Binding="{Binding}" Value="warn">
-						<Setter TargetName="Txt" Property="Foreground" Value="#3B82F6" />
+						<Setter TargetName="Txt" Property="Foreground" Value="{DynamicResource {x:Static platformUi:EnvironmentColors.VizSurfaceSteelBlueMediumBrushKey}}" />
 					</DataTrigger>
 					<DataTrigger Binding="{Binding}" Value="block">
-						<Setter TargetName="Txt" Property="Foreground" Value="#EF4444" />
+						<Setter TargetName="Txt" Property="Foreground" Value="{DynamicResource {x:Static platformUi:EnvironmentColors.VizSurfaceRedMediumBrushKey}}" />
 					</DataTrigger>
 				</DataTemplate.Triggers>
 			</DataTemplate>
@@ -268,10 +250,10 @@
 			<Style x:Key="ImpactColorModeItemStyle" TargetType="ComboBoxItem" BasedOn="{StaticResource EditorComboItemStyle}">
 				<Style.Triggers>
 					<DataTrigger Binding="{Binding}" Value="warn">
-						<Setter Property="Foreground" Value="#3B82F6" />
+						<Setter Property="Foreground" Value="{DynamicResource {x:Static platformUi:EnvironmentColors.VizSurfaceSteelBlueMediumBrushKey}}" />
 					</DataTrigger>
 					<DataTrigger Binding="{Binding}" Value="block">
-						<Setter Property="Foreground" Value="#EF4444" />
+						<Setter Property="Foreground" Value="{DynamicResource {x:Static platformUi:EnvironmentColors.VizSurfaceRedMediumBrushKey}}" />
 					</DataTrigger>
 				</Style.Triggers>
 			</Style>
@@ -281,17 +263,17 @@
 				<Setter Property="ItemTemplate" Value="{StaticResource ImpactColorModeTemplate}" />
 				<Style.Triggers>
 					<DataTrigger Binding="{Binding SelectedItem, RelativeSource={RelativeSource Self}}" Value="warn">
-						<Setter Property="Foreground" Value="#3B82F6" />
+						<Setter Property="Foreground" Value="{DynamicResource {x:Static platformUi:EnvironmentColors.VizSurfaceSteelBlueMediumBrushKey}}" />
 					</DataTrigger>
 					<DataTrigger Binding="{Binding SelectedItem, RelativeSource={RelativeSource Self}}" Value="block">
-						<Setter Property="Foreground" Value="#EF4444" />
+						<Setter Property="Foreground" Value="{DynamicResource {x:Static platformUi:EnvironmentColors.VizSurfaceRedMediumBrushKey}}" />
 					</DataTrigger>
 				</Style.Triggers>
 			</Style>
 
 			<Style x:Key="TabListStyle" TargetType="ListBox">
-				<Setter Property="Background" Value="#0F172A" />
-				<Setter Property="BorderBrush" Value="{StaticResource BorderBrushDark}" />
+				<Setter Property="Background" Value="{DynamicResource {x:Static vsshell:VsBrushes.WindowKey}}" />
+				<Setter Property="BorderBrush" Value="{DynamicResource {x:Static vsshell:VsBrushes.PanelBorderKey}}" />
 				<Setter Property="BorderThickness" Value="1" />
 				<Setter Property="Padding" Value="4" />
 				<Setter Property="HorizontalContentAlignment" Value="Stretch" />
@@ -313,7 +295,7 @@
 			<Style x:Key="TabItemStyle" TargetType="ListBoxItem">
 				<Setter Property="Margin" Value="2,0" />
 				<Setter Property="Padding" Value="16,8" />
-				<Setter Property="Foreground" Value="{StaticResource SecondaryTextBrush}" />
+				<Setter Property="Foreground" Value="{DynamicResource {x:Static vsshell:VsBrushes.GrayTextKey}}" />
 				<Setter Property="Cursor" Value="Hand" />
 				<Setter Property="Template">
 					<Setter.Value>
@@ -326,20 +308,20 @@
 							</Border>
 							<ControlTemplate.Triggers>
 								<Trigger Property="IsSelected" Value="True">
-									<Setter TargetName="Bd" Property="Background" Value="{StaticResource AccentBrush}" />
-									<Setter Property="Foreground" Value="#FFFFFF" />
+									<Setter TargetName="Bd" Property="Background" Value="{DynamicResource {x:Static vsshell:VsBrushes.AccentMediumKey}}" />
+									<Setter Property="Foreground" Value="{DynamicResource {x:Static vsshell:VsBrushes.HighlightTextKey}}" />
 								</Trigger>
 								<Trigger Property="IsMouseOver" Value="True">
-									<Setter TargetName="Bd" Property="Background" Value="#1E293B" />
-									<Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
+									<Setter TargetName="Bd" Property="Background" Value="{DynamicResource {x:Static vsshell:VsBrushes.HighlightKey}}" />
+									<Setter Property="Foreground" Value="{DynamicResource {x:Static vsshell:VsBrushes.HighlightTextKey}}" />
 								</Trigger>
 								<MultiTrigger>
 									<MultiTrigger.Conditions>
 										<Condition Property="IsSelected" Value="True" />
 										<Condition Property="IsMouseOver" Value="True" />
 									</MultiTrigger.Conditions>
-									<Setter TargetName="Bd" Property="Background" Value="{StaticResource AccentBrush}" />
-									<Setter Property="Foreground" Value="#FFFFFF" />
+									<Setter TargetName="Bd" Property="Background" Value="{DynamicResource {x:Static vsshell:VsBrushes.AccentMediumKey}}" />
+									<Setter Property="Foreground" Value="{DynamicResource {x:Static vsshell:VsBrushes.HighlightTextKey}}" />
 								</MultiTrigger>
 							</ControlTemplate.Triggers>
 						</ControlTemplate>
@@ -348,7 +330,7 @@
 			</Style>
 		</ResourceDictionary>
 	</UserControl.Resources>
-	<Grid Margin="8" Background="{StaticResource EditorBackgroundBrush}">
+	<Grid Margin="8" Background="{DynamicResource {x:Static vsshell:VsBrushes.ToolWindowBackgroundKey}}">
 		<Grid.RowDefinitions>
 			<RowDefinition Height="Auto" />
 			<RowDefinition Height="Auto" />
@@ -357,7 +339,7 @@
 		</Grid.RowDefinitions>
 
 		<!-- Header -->
-		<Border Grid.Row="0" Style="{StaticResource CardBorderStyle}" Background="{StaticResource HeaderBackgroundBrush}">
+		<Border Grid.Row="0" Style="{StaticResource CardBorderStyle}">
 			<Grid>
 				<Grid.ColumnDefinitions>
 					<ColumnDefinition Width="*" />
@@ -374,11 +356,11 @@
 						<TextBlock Text="MSBuild Guard: Policy Settings" Style="{StaticResource SectionTitleStyle}" Margin="0" />
 					</StackPanel>
 					<TextBlock Text="Define rules and severity actions that regulate MSBuild project files before execution."
-							   Foreground="{StaticResource SecondaryTextBrush}"
+							   Foreground="{DynamicResource {x:Static vsshell:VsBrushes.GrayTextKey}}"
 							   Margin="0,8,0,8" />
 
 					<StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-						<TextBlock Text="Policy file: " FontWeight="SemiBold" Foreground="{StaticResource SecondaryTextBrush}" />
+						<TextBlock Text="Policy file: " FontWeight="SemiBold" Foreground="{DynamicResource {x:Static vsshell:VsBrushes.GrayTextKey}}" />
 						<TextBlock VerticalAlignment="Center"
 								   Style="{StaticResource PolicyPathLinkStyle}"
 								   MouseLeftButtonUp="OnPolicyPathClick"
@@ -440,25 +422,25 @@
 
 					<Border Grid.Column="0" Style="{StaticResource CardBorderStyle}">
 						<StackPanel>
-							<TextBlock Text="⚙ General Configurations" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,12" Foreground="{StaticResource PrimaryTextBrush}"/>
-							<Separator Background="{StaticResource BorderBrushDark}" Margin="0,0,0,12" />
+							<TextBlock Text="⚙ General Configurations" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,12" Foreground="{DynamicResource {x:Static vsshell:VsBrushes.ToolWindowTextKey}}"/>
+							<Separator Background="{DynamicResource {x:Static vsshell:VsBrushes.PanelBorderKey}}" Margin="0,0,0,12" />
 
 							<TextBlock Text="Policy Enforcement Mode" Style="{StaticResource FieldLabelStyle}" />
 							<ComboBox Style="{StaticResource ImpactColorModeComboBoxStyle}"
 									  ItemsSource="{Binding AvailableModes}"
 									  SelectedItem="{Binding Mode}" />
 
-							<Border Background="#0F172A" BorderBrush="{StaticResource BorderBrushDark}" BorderThickness="1" CornerRadius="10" Padding="12" Margin="0,0,0,12">
+							<Border Background="{DynamicResource {x:Static vsshell:VsBrushes.WindowKey}}" BorderBrush="{DynamicResource {x:Static vsshell:VsBrushes.PanelBorderKey}}" BorderThickness="1" CornerRadius="10" Padding="12" Margin="0,0,0,12">
 								<StackPanel>
-									<CheckBox IsChecked="{Binding BaselineRequired}" Foreground="{StaticResource PrimaryTextBrush}" FontWeight="SemiBold" Content="Require Trusted Baseline" />
-									<TextBlock Text="Block/warn on any new findings missing from baseline.json" Foreground="{StaticResource SecondaryTextBrush}" Margin="20,2,0,0" />
+									<CheckBox IsChecked="{Binding BaselineRequired}" Foreground="{DynamicResource {x:Static vsshell:VsBrushes.WindowTextKey}}" FontWeight="SemiBold" Content="Require Trusted Baseline" />
+									<TextBlock Text="Block/warn on any new findings missing from baseline.json" Foreground="{DynamicResource {x:Static vsshell:VsBrushes.GrayTextKey}}" Margin="20,2,0,0" />
 								</StackPanel>
 							</Border>
 
-							<Border Background="#0F172A" BorderBrush="{StaticResource BorderBrushDark}" BorderThickness="1" CornerRadius="10" Padding="12" Margin="0,0,0,0">
+							<Border Background="{DynamicResource {x:Static vsshell:VsBrushes.WindowKey}}" BorderBrush="{DynamicResource {x:Static vsshell:VsBrushes.PanelBorderKey}}" BorderThickness="1" CornerRadius="10" Padding="12" Margin="0,0,0,0">
 								<StackPanel>
-									<CheckBox IsChecked="{Binding StrictMode}" Foreground="{StaticResource PrimaryTextBrush}" FontWeight="SemiBold" Content="Enable strict analysis" />
-									<TextBlock Text="Escalate severity if validation signatures are missing" Foreground="{StaticResource SecondaryTextBrush}" Margin="20,2,0,0" />
+									<CheckBox IsChecked="{Binding StrictMode}" Foreground="{DynamicResource {x:Static vsshell:VsBrushes.WindowTextKey}}" FontWeight="SemiBold" Content="Enable strict analysis" />
+									<TextBlock Text="Escalate severity if validation signatures are missing" Foreground="{DynamicResource {x:Static vsshell:VsBrushes.GrayTextKey}}" Margin="20,2,0,0" />
 								</StackPanel>
 							</Border>
 						</StackPanel>
@@ -466,8 +448,8 @@
 
 					<Border Grid.Column="2" Style="{StaticResource CardBorderStyle}">
 						<StackPanel>
-							<TextBlock Text="🛠 Build-Time Actions" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,12" Foreground="{StaticResource PrimaryTextBrush}"/>
-							<Separator Background="{StaticResource BorderBrushDark}" Margin="0,0,0,12" />
+							<TextBlock Text="🛠 Build-Time Actions" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,12" Foreground="{DynamicResource {x:Static vsshell:VsBrushes.ToolWindowTextKey}}"/>
+							<Separator Background="{DynamicResource {x:Static vsshell:VsBrushes.PanelBorderKey}}" Margin="0,0,0,12" />
 
 							<TextBlock Text="Incomplete Analysis Behavior" Style="{StaticResource FieldLabelStyle}" />
 							<ComboBox Style="{StaticResource ImpactColorComboBoxStyle}"
@@ -485,53 +467,53 @@
 				<Border Style="{StaticResource CardBorderStyle}" Margin="0,0,0,12">
 					<StackPanel>
 						<TextBlock Text="📊 Minimum Enforcement Action by Severity" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,12" />
-						<Separator Background="{StaticResource BorderBrushDark}" Margin="0,0,0,14" />
+						<Separator Background="{DynamicResource {x:Static vsshell:VsBrushes.PanelBorderKey}}" Margin="0,0,0,14" />
 
 						<UniformGrid Columns="5" Rows="1" Name="SeverityUniformGrid">
-							<Border Background="#0F172A" BorderBrush="{StaticResource BorderBrushDark}" BorderThickness="1" CornerRadius="10" Padding="10" Margin="4,0">
+							<Border Background="{DynamicResource {x:Static vsshell:VsBrushes.WindowKey}}" BorderBrush="{DynamicResource {x:Static vsshell:VsBrushes.PanelBorderKey}}" BorderThickness="1" CornerRadius="10" Padding="10" Margin="4,0">
 								<StackPanel>
-									<Border Height="3" Background="#EF4444" CornerRadius="2" Margin="0,-10,-10,8" HorizontalAlignment="Stretch" />
-									<TextBlock Text="CRITICAL" Foreground="#EF4444" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,8" />
+									<Border Height="3" Background="{DynamicResource {x:Static platformUi:EnvironmentColors.VizSurfaceRedMediumBrushKey}}" CornerRadius="2" Margin="0,-10,-10,8" HorizontalAlignment="Stretch" />
+									<TextBlock Text="CRITICAL" Foreground="{DynamicResource {x:Static platformUi:EnvironmentColors.VizSurfaceRedMediumBrushKey}}" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,8" />
 									<ComboBox Style="{StaticResource ImpactColorComboBoxStyle}" Margin="0"
 											  ItemsSource="{Binding AvailableActions}"
 											  SelectedItem="{Binding CriticalAction}" />
 								</StackPanel>
 							</Border>
 
-							<Border Background="#0F172A" BorderBrush="{StaticResource BorderBrushDark}" BorderThickness="1" CornerRadius="10" Padding="10" Margin="4,0">
+							<Border Background="{DynamicResource {x:Static vsshell:VsBrushes.WindowKey}}" BorderBrush="{DynamicResource {x:Static vsshell:VsBrushes.PanelBorderKey}}" BorderThickness="1" CornerRadius="10" Padding="10" Margin="4,0">
 								<StackPanel>
-									<Border Height="3" Background="#F97316" CornerRadius="2" Margin="0,-10,-10,8" HorizontalAlignment="Stretch" />
-									<TextBlock Text="HIGH" Foreground="#F97316" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,8" />
+									<Border Height="3" Background="{DynamicResource {x:Static platformUi:EnvironmentColors.VizSurfaceDarkGoldMediumBrushKey}}" CornerRadius="2" Margin="0,-10,-10,8" HorizontalAlignment="Stretch" />
+									<TextBlock Text="HIGH" Foreground="{DynamicResource {x:Static platformUi:EnvironmentColors.VizSurfaceDarkGoldMediumBrushKey}}" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,8" />
 									<ComboBox Style="{StaticResource ImpactColorComboBoxStyle}" Margin="0"
 											  ItemsSource="{Binding AvailableActions}"
 											  SelectedItem="{Binding HighAction}" />
 								</StackPanel>
 							</Border>
 
-							<Border Background="#0F172A" BorderBrush="{StaticResource BorderBrushDark}" BorderThickness="1" CornerRadius="10" Padding="10" Margin="4,0">
+							<Border Background="{DynamicResource {x:Static vsshell:VsBrushes.WindowKey}}" BorderBrush="{DynamicResource {x:Static vsshell:VsBrushes.PanelBorderKey}}" BorderThickness="1" CornerRadius="10" Padding="10" Margin="4,0">
 								<StackPanel>
-									<Border Height="3" Background="#EAB308" CornerRadius="2" Margin="0,-10,-10,8" HorizontalAlignment="Stretch" />
-									<TextBlock Text="MEDIUM" Foreground="#EAB308" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,8" />
+									<Border Height="3" Background="{DynamicResource {x:Static platformUi:EnvironmentColors.VizSurfaceGoldMediumBrushKey}}" CornerRadius="2" Margin="0,-10,-10,8" HorizontalAlignment="Stretch" />
+									<TextBlock Text="MEDIUM" Foreground="{DynamicResource {x:Static platformUi:EnvironmentColors.VizSurfaceGoldMediumBrushKey}}" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,8" />
 									<ComboBox Style="{StaticResource ImpactColorComboBoxStyle}" Margin="0"
 											  ItemsSource="{Binding AvailableActions}"
 											  SelectedItem="{Binding MediumAction}" />
 								</StackPanel>
 							</Border>
 
-							<Border Background="#0F172A" BorderBrush="{StaticResource BorderBrushDark}" BorderThickness="1" CornerRadius="10" Padding="10" Margin="4,0">
+							<Border Background="{DynamicResource {x:Static vsshell:VsBrushes.WindowKey}}" BorderBrush="{DynamicResource {x:Static vsshell:VsBrushes.PanelBorderKey}}" BorderThickness="1" CornerRadius="10" Padding="10" Margin="4,0">
 								<StackPanel>
-									<Border Height="3" Background="#3B82F6" CornerRadius="2" Margin="0,-10,-10,8" HorizontalAlignment="Stretch" />
-									<TextBlock Text="LOW" Foreground="#3B82F6" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,8" />
+									<Border Height="3" Background="{DynamicResource {x:Static platformUi:EnvironmentColors.VizSurfaceSteelBlueMediumBrushKey}}" CornerRadius="2" Margin="0,-10,-10,8" HorizontalAlignment="Stretch" />
+									<TextBlock Text="LOW" Foreground="{DynamicResource {x:Static platformUi:EnvironmentColors.VizSurfaceSteelBlueMediumBrushKey}}" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,8" />
 									<ComboBox Style="{StaticResource ImpactColorComboBoxStyle}" Margin="0"
 											  ItemsSource="{Binding AvailableActions}"
 											  SelectedItem="{Binding LowAction}" />
 								</StackPanel>
 							</Border>
 
-							<Border Background="#0F172A" BorderBrush="{StaticResource BorderBrushDark}" BorderThickness="1" CornerRadius="10" Padding="10" Margin="4,0">
+							<Border Background="{DynamicResource {x:Static vsshell:VsBrushes.WindowKey}}" BorderBrush="{DynamicResource {x:Static vsshell:VsBrushes.PanelBorderKey}}" BorderThickness="1" CornerRadius="10" Padding="10" Margin="4,0">
 								<StackPanel>
-									<Border Height="3" Background="#10B981" CornerRadius="2" Margin="0,-10,-10,8" HorizontalAlignment="Stretch" />
-									<TextBlock Text="INFO" Foreground="#10B981" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,8" />
+									<Border Height="3" Background="{DynamicResource {x:Static platformUi:EnvironmentColors.VizSurfaceGreenMediumBrushKey}}" CornerRadius="2" Margin="0,-10,-10,8" HorizontalAlignment="Stretch" />
+									<TextBlock Text="INFO" Foreground="{DynamicResource {x:Static platformUi:EnvironmentColors.VizSurfaceGreenMediumBrushKey}}" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,8" />
 									<ComboBox Style="{StaticResource ImpactColorComboBoxStyle}" Margin="0"
 											  ItemsSource="{Binding AvailableActions}"
 											  SelectedItem="{Binding InfoAction}" />
@@ -552,9 +534,9 @@
 				</Grid.ColumnDefinitions>
 
 				<StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-					<Ellipse Width="10" Height="10" Fill="{StaticResource SuccessBrush}" Margin="0,0,10,0" />
+					<Ellipse Width="10" Height="10" Fill="{DynamicResource {x:Static platformUi:EnvironmentColors.VizSurfaceGreenMediumBrushKey}}" Margin="0,0,10,0" />
 					<TextBlock Text="{Binding StatusMessage}"
-							   Foreground="{StaticResource SuccessBrush}"
+							   Foreground="{DynamicResource {x:Static platformUi:EnvironmentColors.VizSurfaceGreenMediumBrushKey}}"
 							   TextTrimming="CharacterEllipsis"
 							   VerticalAlignment="Center" />
 				</StackPanel>
@@ -562,8 +544,8 @@
 				<Button Grid.Column="1"
 						Content="💾 Save &amp; Sign Policy"
 						Click="OnSaveClick"
-						Foreground="#FFFFFF"
-						Background="{StaticResource SaveButtonBrush}"
+						Foreground="{DynamicResource {x:Static vsshell:VsBrushes.HighlightTextKey}}"
+						Background="{DynamicResource {x:Static platformUi:EnvironmentColors.VizSurfaceGreenMediumBrushKey}}"
 						BorderThickness="0"
 						Padding="24,10"
 						FontSize="16"
@@ -581,5 +563,3 @@
 		</Border>
 	</Grid>
 </UserControl>
-
-

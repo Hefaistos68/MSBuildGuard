@@ -142,6 +142,10 @@ export class TrustStorePanel {
         }
     }
 
+    public updateWorkerClient(workerClient: WorkerClient) {
+        this._workerClient = workerClient;
+    }
+
     public dispose() {
         TrustStorePanel.currentPanel = undefined;
         this._panel.dispose();
@@ -160,6 +164,7 @@ export class TrustStorePanel {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MSBuild Guard Trust Store Manager</title>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'unsafe-inline';">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
 

@@ -35,7 +35,9 @@ namespace MSBuildGuard.VisualStudio.Services
 				return false;
 			}
 
-			return viewModel.RiskScore >= 50;
+			return viewModel.RiskScore >= 50 ||
+				string.Equals(viewModel.RecommendedAction, RecommendedAction.RequireApproval.ToString(), System.StringComparison.OrdinalIgnoreCase) ||
+				string.Equals(viewModel.RecommendedAction, RecommendedAction.Block.ToString(), System.StringComparison.OrdinalIgnoreCase);
 		}
 
 		/// <summary>

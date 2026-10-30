@@ -103,21 +103,41 @@ namespace MSBuildGuard.VisualStudio.ToolWindows.Tests
 
 				var model2 = new BuildBlockDialogViewModel(report, this.tempDir);
 
-				model2.RiskScore.ShouldBe(0);
-				model2.RecommendedAction.ShouldBe(RecommendedAction.Allow.ToString());
-			}
-			finally
+			model2.RiskScore.ShouldBe(0);
+			model2.RiskLevel.ShouldBe("Low");
+			model2.RecommendedAction.ShouldBe(RecommendedAction.Allow.ToString());
+		}
+
+		/// <summary>
+		/// Verifies that <see cref="BuildBlockDialogViewModel.RiskLevel"/> maps risk score thresholds to the expected level strings.
+		/// </summary>
+		/// <param name="severity">The finding severity to evaluate.</param>
+		/// <param name="expectedLevel">The expected risk level label.</param>
+		[TestCase(FindingSeverity.Low, "Low")]
+		[TestCase(FindingSeverity.Medium, "Medium")]
+		[TestCase(FindingSeverity.Critical, "High")]
+		public void RiskLevel_WhenEvaluatedFromSeverity_ReturnsExpectedLevel(FindingSeverity severity, string expectedLevel)
+		{
+			var report = new ScanReport();
+
+			report.Target.TargetPath = Path.Combine(this.tempDir, "TestSolution.sln");
+			report.Target.TargetKind = TargetKind.Solution;
+
+			var finding = new Finding
 			{
-				// Restore the original user trust store to not pollute the host.
-				userTrustStore.Decisions.Clear();
+				Id          = "MBG001",
+				Title       = "Test Finding",
+				Severity    = severity,
+				FilePath    = Path.Combine(this.tempDir, "TestProj.csproj"),
+				Fingerprint = "fingerprint-level"
+			};
 
-				foreach (var d in originalDecisions)
-				{
-					userTrustStore.Decisions.Add(d);
-				}
+			report.Findings.Add(finding);
 
-				trustStoreService.Save(userTrustPath, userTrustStore);
-			}
+			var userTrustPath = Path.Combine(this.tempDir, "user-trust-level.json");
+			var model         = new BuildBlockDialogViewModel(report, report.Target.TargetPath, null, userTrustPath);
+
+			model.RiskLevel.ShouldBe(expectedLevel);
 		}
 	}
 }

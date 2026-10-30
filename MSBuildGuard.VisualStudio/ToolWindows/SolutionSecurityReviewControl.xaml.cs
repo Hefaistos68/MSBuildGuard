@@ -284,7 +284,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				WindowStartupLocation = System.Windows.WindowStartupLocation.CenterOwner
 			};
 
-			dialog.ShowDialog();
+			dialog.ShowModal();
 		}
 
 

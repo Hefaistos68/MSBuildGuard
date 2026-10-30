@@ -743,7 +743,18 @@ namespace MSBuildGuard.Core.Trust
 
 			var userHome = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
-			var packageDir = Path.Combine(userHome, ".nuget", "packages", packageId.ToLowerInvariant(), packageVersion.ToLowerInvariant());
+			if (packageId.IndexOfAny(new[] { '/', '\\', ':' }) >= 0 || packageVersion.IndexOfAny(new[] { '/', '\\', ':' }) >= 0 || packageId.Contains("..") || packageVersion.Contains(".."))
+			{
+				return false;
+			}
+
+			var packagesRoot = Path.GetFullPath(Path.Combine(userHome, ".nuget", "packages"));
+			var packageDir   = Path.GetFullPath(Path.Combine(packagesRoot, packageId.ToLowerInvariant(), packageVersion.ToLowerInvariant()));
+
+			if (!packageDir.StartsWith(packagesRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+			{
+				return false;
+			}
 
 			if (!Directory.Exists(packageDir))
 			{
@@ -1581,7 +1592,12 @@ namespace MSBuildGuard.Core.Trust
 					var chain = new X509Chain();
 
 					chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
-					chain.Build(matches[0]);
+					chain.ChainPolicy.VerificationFlags = X509VerificationFlags.AllowUnknownCertificateAuthority;
+
+					if (!chain.Build(matches[0]))
+					{
+						throw new InvalidDataException($"The verification certificate is not issued by the trusted Root CA '{normalizedPinnedCa}'.");
+					}
 
 					var isChainValid = false;
 
@@ -1618,6 +1634,25 @@ namespace MSBuildGuard.Core.Trust
 
 				if (matchesUser.Count > 0)
 				{
+					var pinnedCa = Environment.GetEnvironmentVariable("MSBUILDGUARD_ROOT_CA_THUMBPRINT");
+
+					if (!string.IsNullOrWhiteSpace(pinnedCa))
+					{
+						var normalizedPinnedCa              = pinnedCa!.Replace(" ", string.Empty).ToUpperInvariant();
+						using var chain                     = new X509Chain();
+						chain.ChainPolicy.RevocationMode    = X509RevocationMode.NoCheck;
+						chain.ChainPolicy.VerificationFlags = X509VerificationFlags.AllowUnknownCertificateAuthority;
+
+						var isChainValid = chain.Build(matchesUser[0]) &&
+							chain.ChainElements.Cast<X509ChainElement>().Any(element =>
+								string.Equals(element.Certificate.Thumbprint.Replace(" ", string.Empty), normalizedPinnedCa, StringComparison.OrdinalIgnoreCase));
+
+						if (!isChainValid)
+						{
+							throw new InvalidDataException($"The verification certificate is not issued by the trusted Root CA '{normalizedPinnedCa}'.");
+						}
+					}
+
 					return matchesUser[0];
 				}
 			}

@@ -410,6 +410,36 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			document.MinimumActionBySeverity[FindingSeverity.High]     = this.highAction;
 			document.MinimumActionBySeverity[FindingSeverity.Critical] = this.criticalAction;
 
+			if (this.loadedDocument != null)
+			{
+				document.Version = this.loadedDocument.Version;
+
+				foreach (var rule in this.loadedDocument.Rules)
+				{
+					document.Rules[rule.Key] = new PolicyRuleSetting { Action = rule.Value.Action };
+				}
+
+				foreach (var item in this.loadedDocument.Include)
+				{
+					document.Include.Add(item);
+				}
+
+				foreach (var item in this.loadedDocument.Exclude)
+				{
+					document.Exclude.Add(item);
+				}
+
+				foreach (var item in this.loadedDocument.AllowedPackageSources)
+				{
+					document.AllowedPackageSources.Add(item);
+				}
+
+				foreach (var item in this.loadedDocument.BlockedPackageSources)
+				{
+					document.BlockedPackageSources.Add(item);
+				}
+			}
+
 			return document;
 		}
 

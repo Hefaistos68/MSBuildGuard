@@ -253,10 +253,11 @@ export class OnboardingPanel {
                     fs.mkdirSync(trustDir, { recursive: true });
                 }
                 const trustPath = path.join(trustDir, 'trust.json');
-                fs.writeFileSync(trustPath, JSON.stringify({
+                await this._workerClient.addTrustAsync(this._solutionPath, { scope: 'InitializeEmpty', trustScope: 'solution' });
+                if (false) { fs.writeFileSync(trustPath, JSON.stringify({
                     version: "1.0",
                     decisions: []
-                }, null, 2));
+                }, null, 2)); }
             }
 
             if (doNotScan) {
@@ -280,6 +281,10 @@ export class OnboardingPanel {
         fs.writeFileSync(noscanPath, 'Scanning disabled.');
     }
 
+    public updateWorkerClient(workerClient: WorkerClient) {
+        this._workerClient = workerClient;
+    }
+
     public dispose() {
         OnboardingPanel.currentPanel = undefined;
         this._panel.dispose();
@@ -298,6 +303,7 @@ export class OnboardingPanel {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MSBuild Guard Onboarding</title>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'unsafe-inline';">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
 
@@ -627,6 +633,9 @@ export class OnboardingPanel {
     <script>
         const vscode = acquireVsCodeApi();
         let currentSuggestions = [];
+        function escapeHtml(str) {
+            return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
 
         // Request data on load
         vscode.postMessage({ command: 'requestInitialData' });
@@ -642,7 +651,7 @@ export class OnboardingPanel {
                     document.getElementById('content').style.display = 'flex';
                     break;
                 case 'statusError':
-                    document.getElementById('loading').innerHTML = '<div style="color: var(--accent-danger); font-weight: 600;">Error: ' + message.message + '</div>';
+                    document.getElementById('loading').innerHTML = '<div style="color: var(--accent-danger); font-weight: 600;">Error: ' + escapeHtml(message.message) + '</div>';
                     break;
             }
         });
@@ -675,12 +684,12 @@ export class OnboardingPanel {
                     '</div>' +
                     '<div class="suggestion-details" style="' + detailsStyle + '">' +
                         '<div class="suggestion-header">' +
-                            '<span class="badge ' + badgeClass + '">' + item.scope + '</span>' +
-                            '<span class="display-name">' + item.displayName + '</span>' +
+                            '<span class="badge ' + escapeHtml(badgeClass) + '">' + escapeHtml(item.scope) + '</span>' +
+                            '<span class="display-name">' + escapeHtml(item.displayName) + '</span>' +
                             trustedIndicator +
                         '</div>' +
-                        '<div class="reason">' + item.recommendationReason + '</div>' +
-                        '<div class="reputation">' + item.reputationSourceDescription + '</div>' +
+                        '<div class="reason">' + escapeHtml(item.recommendationReason) + '</div>' +
+                        '<div class="reputation">' + escapeHtml(item.reputationSourceDescription) + '</div>' +
                     '</div>';
                 list.appendChild(container);
             });

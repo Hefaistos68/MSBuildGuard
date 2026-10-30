@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using Microsoft.VisualStudio.Imaging;
+using Microsoft.VisualStudio.PlatformUI;
 using Microsoft.VisualStudio.Shell;
 using MSBuildGuard.Core;
 
@@ -25,38 +26,39 @@ namespace MSBuildGuard.VisualStudio.Services
 		{
 			this.package = package;
 
-			this.Margin = new Thickness(2, 0, 6, 0);
-			this.Padding = new Thickness(4, 0, 6, 0);
-			this.CornerRadius = new CornerRadius(3);
-			this.VerticalAlignment = VerticalAlignment.Center;
+			this.Margin              = new Thickness(2, 0, 6, 0);
+			this.Padding             = new Thickness(4, 0, 6, 0);
+			this.CornerRadius        = new CornerRadius(3);
+			this.VerticalAlignment   = VerticalAlignment.Center;
 			this.HorizontalAlignment = HorizontalAlignment.Right;
-			this.Background = Brushes.Transparent;
-			this.Cursor = Cursors.Hand;
-			this.ToolTip = "Open Project Security Review";
-			this.MinWidth = 50;
+			this.Background          = Brushes.Transparent;
+			this.Cursor              = Cursors.Hand;
+			this.ToolTip             = "Open Project Security Review";
+			this.MinWidth            = 50;
 
 			var panel = new StackPanel
 			{
-				Orientation = Orientation.Horizontal,
-				VerticalAlignment = VerticalAlignment.Center,
+				Orientation         = Orientation.Horizontal,
+				VerticalAlignment   = VerticalAlignment.Center,
 				HorizontalAlignment = HorizontalAlignment.Right
 			};
 
 			this.shieldImage = new CrispImage
 			{
-				Width = 16,
-				Height = 16,
-				Margin = new Thickness(0, 0, 4, 0),
+				Width             = 16,
+				Height            = 16,
+				Margin            = new Thickness(0, 0, 4, 0),
 				VerticalAlignment = VerticalAlignment.Center,
-				Moniker = KnownMonikers.UACShield
+				Moniker           = KnownMonikers.UACShield
 			};
 
 			this.severityText = new TextBlock
 			{
 				VerticalAlignment = VerticalAlignment.Center,
-				Foreground = Brushes.White,
-				Text = "Security"
+				Text              = "Security"
 			};
+
+			this.severityText.SetResourceReference(TextBlock.ForegroundProperty, EnvironmentColors.StatusBarTextBrushKey);
 
 			panel.Children.Add(this.shieldImage);
 			panel.Children.Add(this.severityText);
@@ -75,24 +77,27 @@ namespace MSBuildGuard.VisualStudio.Services
 			ThreadHelper.ThrowIfNotOnUIThread();
 
 			var hasOpenSolution = SolutionDiscoveryService.HasOpenSolution();
+
 			this.IsEnabled = hasOpenSolution;
-			this.Opacity = hasOpenSolution ? 1.0 : 0.5;
+			this.Opacity   = hasOpenSolution ? 1.0 : 0.5;
 
 			var level = GetSecurityLevel(report, effectiveRiskScore);
 
 			this.severityText.Text = level switch
 			{
-				SecurityLevel.Red => "Critical",
+				SecurityLevel.Red    => "Critical",
 				SecurityLevel.Orange => "Warning",
-				_ => "Safe"
+				_                    => "Safe"
 			};
 
-			this.Background = level switch
+			var backgroundKey = level switch
 			{
-				SecurityLevel.Red => new SolidColorBrush(Color.FromRgb(0x9B, 0x1C, 0x1C)) { Opacity = 0.85 },
-				SecurityLevel.Orange => new SolidColorBrush(Color.FromRgb(0xCC, 0x7A, 0x00)) { Opacity = 0.85 },
-				_ => new SolidColorBrush(Color.FromRgb(0x1F, 0x7A, 0x1F)) { Opacity = 0.85 }
+				SecurityLevel.Red    => EnvironmentColors.VizSurfaceRedMediumBrushKey,
+				SecurityLevel.Orange => EnvironmentColors.VizSurfaceDarkGoldMediumBrushKey,
+				_                    => EnvironmentColors.VizSurfaceGreenMediumBrushKey
 			};
+
+			this.SetResourceReference(Border.BackgroundProperty, backgroundKey);
 		}
 
 		/// <summary>

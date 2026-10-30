@@ -114,22 +114,26 @@
         "msbuildguard.enableBaselineOnboarding": {
           "type": "boolean",
           "default": true,
+          "scope": "application",
           "description": "Intelligently suggests baseline trust settings when loading a new workspace for the first time."
         },
         "msbuildguard.enforceAsymmetricSignatures": {
           "type": "boolean",
           "default": false,
+          "scope": "application",
           "description": "Strictly enforces asymmetric certificate-based signature verification for trust stores and policy documents."
         },
         "msbuildguard.trustManagement.allowSharingTrustsInRepositories": {
           "type": "boolean",
           "default": false,
+          "scope": "application",
           "description": "Allows trust settings to be shared in repository files. Only available when asymmetric certificate key management is configured."
         },
         "msbuildguard.trustManagement.keyManagementMode": {
           "type": "string",
           "default": "unconfigured",
           "enum": ["unconfigured", "dpapi", "certificates"],
+          "scope": "application",
           "description": "Specifies the mode used for signing and validating trust files. Local DPAPI uses local machine-specific keys, disabling repository sharing."
         },
         "msbuildguard.autoOpenSecurityReview": {
@@ -150,21 +154,25 @@
         "msbuildguard.fileTypesToScan": {
           "type": "string",
           "default": ".csproj;.vbproj;.fsproj;.proj;.props;.targets;.sln;.slnx",
+          "scope": "application",
           "description": "Semicolon-separated list of build and project file extensions to scan."
         },
         "msbuildguard.processCreationIndicators": {
           "type": "string",
           "default": "System.Diagnostics.Process;Process.Start(;CreateProcess(;cmd.exe;powershell;pwsh",
+          "scope": "application",
           "description": "Semicolon-separated list of risky process creation APIs and shell executables."
         },
         "msbuildguard.reflectionInteropIndicators": {
           "type": "string",
           "default": "System.Reflection;Assembly.Load;Activator.CreateInstance;GetType(;dynamic ;DllImport;Marshal.GetDelegateForFunctionPointer;LoadLibrary",
+          "scope": "application",
           "description": "Semicolon-separated list of reflection, dynamic loading, and interop indicators."
         },
         "msbuildguard.additionalBlockedAssemblies": {
           "type": "string",
           "default": "",
+          "scope": "application",
           "description": "Semicolon-separated list of additional assembly names to block in NuGet assets."
         }
       }

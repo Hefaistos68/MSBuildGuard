@@ -431,6 +431,8 @@ namespace MSBuildGuard.Worker
 			}
 			else if (string.Equals(scope, "Signer", StringComparison.OrdinalIgnoreCase))
 			{
+				ResolveSignerPayloadIfNeeded(payload);
+
 				trustStoreService.AddSignerTrust(
 					trustStorePath,
 					payload.SubjectHash ?? string.Empty,
@@ -447,7 +449,18 @@ namespace MSBuildGuard.Worker
 				var packageId = payload.AssemblyName ?? string.Empty;
 				var packageVersion = payload.AssemblyVersion ?? string.Empty;
 				var userHome = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-				var packageDir = Path.Combine(userHome, ".nuget", "packages", packageId.ToLowerInvariant(), packageVersion.ToLowerInvariant());
+				if (string.IsNullOrWhiteSpace(packageId) || string.IsNullOrWhiteSpace(packageVersion) || packageId.IndexOfAny(new[] { '/', '\\', ':' }) >= 0 || packageVersion.IndexOfAny(new[] { '/', '\\', ':' }) >= 0 || packageId.Contains("..") || packageVersion.Contains(".."))
+				{
+					return CreateErrorResponse(id, WorkerErrorCodes.InvalidArgument, "Invalid NuGet package identifier or version.");
+				}
+
+				var packagesRoot = Path.GetFullPath(Path.Combine(userHome, ".nuget", "packages"));
+				var packageDir   = Path.GetFullPath(Path.Combine(packagesRoot, packageId.ToLowerInvariant(), packageVersion.ToLowerInvariant()));
+
+				if (!packageDir.StartsWith(packagesRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+				{
+					return CreateErrorResponse(id, WorkerErrorCodes.InvalidArgument, "Invalid NuGet package directory path.");
+				}
 
 				if (!Directory.Exists(packageDir))
 				{
@@ -472,6 +485,13 @@ namespace MSBuildGuard.Worker
 			}
 			else
 			{
+				if (string.Equals(scope, "InitializeEmpty", StringComparison.OrdinalIgnoreCase))
+				{
+					trustStoreService.Save(trustStorePath, new TrustStoreDocument());
+
+					return WorkerResponse.SuccessResponse(id, new { Message = "Empty trust store initialized.", Path = trustStorePath });
+				}
+
 				return CreateErrorResponse(id, WorkerErrorCodes.InvalidArgument, $"Unsupported trust scope kind '{scope}'.");
 			}
 
@@ -780,14 +800,16 @@ namespace MSBuildGuard.Worker
 			var trustStoreService = new TrustStoreService();
 			var signatureService  = new AssemblySignatureService();
 			var signatureCache    = new Dictionary<string, AssemblySignatureInfo>(StringComparer.OrdinalIgnoreCase);
-			var activeRiskScore   = 0;
+			var activeRiskScore     = 0;
+			var highestPolicyAction = PolicyAction.Allow;
 
 			foreach (var finding in report.Findings)
 			{
 				var fileRecord = report.FilesScanned.FirstOrDefault(item => string.Equals(item.Path, finding.FilePath, StringComparison.OrdinalIgnoreCase));
 				var isFingerprintTrusted = !string.IsNullOrWhiteSpace(finding.Fingerprint) &&
 					fileRecord != null &&
-					trustStoreService.IsFindingApproved(trustStore, finding.Fingerprint, fileRecord.NormalizedSha256, report.Target.TrustContext, report.PolicyProfile);
+					(trustStoreService.IsFindingApproved(trustStore, finding.Fingerprint, fileRecord.NormalizedSha256, report.Target.TrustContext, report.PolicyProfile) ||
+					 GetMatchingProjectTrustStores(finding, projectTrustStores).Any(projStore => trustStoreService.IsFindingApproved(projStore, finding.Fingerprint, fileRecord.NormalizedSha256, report.Target.TrustContext, report.PolicyProfile)));
 
 				var isApprovedByAssembly = false;
 
@@ -800,7 +822,7 @@ namespace MSBuildGuard.Worker
 					}
 					else
 					{
-						foreach (var projStore in projectTrustStores.Values)
+						foreach (var projStore in GetMatchingProjectTrustStores(finding, projectTrustStores))
 						{
 							if (trustStoreService.IsFindingApprovedByAssembly(projStore, finding.PackageId, finding.PackageVersion))
 							{
@@ -834,7 +856,7 @@ namespace MSBuildGuard.Worker
 							}
 							else
 							{
-								foreach (var projStore in projectTrustStores.Values)
+								foreach (var projStore in GetMatchingProjectTrustStores(finding, projectTrustStores))
 								{
 									if (trustStoreService.IsSignerTrusted(projStore, signature.Thumbprint, signature.Subject, signature.Issuer, signature.SerialNumber))
 									{
@@ -858,7 +880,7 @@ namespace MSBuildGuard.Worker
 					}
 					else
 					{
-						foreach (var projStore in projectTrustStores.Values)
+						foreach (var projStore in GetMatchingProjectTrustStores(finding, projectTrustStores))
 						{
 							if (trustStoreService.IsFindingApprovedByPackage(projStore, finding.PackageId, finding.PackageVersion))
 							{
@@ -876,11 +898,16 @@ namespace MSBuildGuard.Worker
 				if (!isEffectivelyTrusted)
 				{
 					activeRiskScore += GetSeverityRisk(finding.Severity);
+
+					if ((int)finding.PolicyEvaluatedAction > (int)highestPolicyAction)
+					{
+						highestPolicyAction = finding.PolicyEvaluatedAction;
+					}
 				}
 			}
 
 			report.RiskScore = Math.Max(0, activeRiskScore);
-			report.RecommendedAction = MapRecommendedAction(activeRiskScore);
+			report.RecommendedAction = (RecommendedAction)Math.Max((int)MapRecommendedAction(activeRiskScore), (int)MapPolicyActionToRecommended(highestPolicyAction));
 		}
 
 		private static int GetSeverityRisk(FindingSeverity severity)
@@ -921,6 +948,103 @@ namespace MSBuildGuard.Worker
 			}
 
 			return RecommendedAction.Allow;
+		}
+
+		private static void ResolveSignerPayloadIfNeeded(RequestPayload payload)
+		{
+			var subjectHash = payload.SubjectHash ?? string.Empty;
+
+			if (!string.IsNullOrWhiteSpace(subjectHash) &&
+				!string.Equals(subjectHash, "Signed", StringComparison.OrdinalIgnoreCase) &&
+				!string.Equals(subjectHash, "Valid", StringComparison.OrdinalIgnoreCase) &&
+				!string.Equals(subjectHash, "Unsigned", StringComparison.OrdinalIgnoreCase) &&
+				!string.Equals(subjectHash, "Invalid", StringComparison.OrdinalIgnoreCase))
+			{
+				return;
+			}
+
+			if (string.IsNullOrWhiteSpace(payload.AssemblyName) || string.IsNullOrWhiteSpace(payload.AssemblyVersion))
+			{
+				return;
+			}
+
+			var dllPath = AssemblySignatureService.ResolveAssemblyFilePathFromPackageId(payload.AssemblyName!, payload.AssemblyVersion!);
+
+			if (string.IsNullOrWhiteSpace(dllPath) || !File.Exists(dllPath))
+			{
+				return;
+			}
+
+			var sigInfo = new AssemblySignatureService().ReadSignature(dllPath);
+
+			if (!string.IsNullOrWhiteSpace(sigInfo.Thumbprint) || !string.IsNullOrWhiteSpace(sigInfo.Subject))
+			{
+				payload.SubjectHash          = sigInfo.Thumbprint;
+				payload.AssemblySubject      = sigInfo.Subject;
+				payload.AssemblySigner       = !string.IsNullOrWhiteSpace(sigInfo.Signer) ? sigInfo.Signer : payload.AssemblySigner;
+				payload.AssemblyIssuer       = sigInfo.Issuer;
+				payload.AssemblySerialNumber = sigInfo.SerialNumber;
+			}
+		}
+
+		private static IEnumerable<TrustStoreDocument> GetMatchingProjectTrustStores(
+			Finding finding,
+			Dictionary<string, TrustStoreDocument> projectTrustStores)
+		{
+			if (projectTrustStores.Count == 0)
+			{
+				yield break;
+			}
+
+			if (!string.IsNullOrWhiteSpace(finding.IntroducedViaProject) &&
+				projectTrustStores.TryGetValue(finding.IntroducedViaProject, out var byIntroducedProject))
+			{
+				yield return byIntroducedProject;
+
+				yield break;
+			}
+
+			if (string.IsNullOrWhiteSpace(finding.FilePath))
+			{
+				yield break;
+			}
+
+			if (projectTrustStores.TryGetValue(finding.FilePath, out var byDirectPath))
+			{
+				yield return byDirectPath;
+
+				yield break;
+			}
+
+			foreach (var pair in projectTrustStores)
+			{
+				var projDir = Path.GetDirectoryName(pair.Key);
+
+				if (!string.IsNullOrWhiteSpace(projDir))
+				{
+					var normalizedDir = projDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+
+					if (finding.FilePath.StartsWith(normalizedDir, StringComparison.OrdinalIgnoreCase))
+					{
+						yield return pair.Value;
+					}
+				}
+			}
+		}
+
+		private static RecommendedAction MapPolicyActionToRecommended(PolicyAction action)
+		{
+			switch (action)
+			{
+				case PolicyAction.Block:
+					return RecommendedAction.Block;
+				case PolicyAction.RequireApproval:
+					return RecommendedAction.RequireApproval;
+				case PolicyAction.Warn:
+					return RecommendedAction.Warn;
+				default:
+					return RecommendedAction.Allow;
+			}
 		}
 	}
 }

@@ -10,51 +10,32 @@
 			 d:DesignWidth="800">
 	<UserControl.Resources>
 		<ResourceDictionary>
-			<SolidColorBrush x:Key="EditorBackgroundBrush" Color="#0B0F19" />
-			<SolidColorBrush x:Key="HeaderStartBrush" Color="#1E293B" />
-			<SolidColorBrush x:Key="HeaderEndBrush" Color="#0F172A" />
-			<SolidColorBrush x:Key="CardBackgroundBrush" Color="#111827" />
-			<SolidColorBrush x:Key="BorderBrushDark" Color="#2A3447" />
-			<SolidColorBrush x:Key="PrimaryTextBrush" Color="#F1F5F9" />
-			<SolidColorBrush x:Key="SecondaryTextBrush" Color="#94A3B8" />
-			<SolidColorBrush x:Key="AccentBrush" Color="#3B82F6" />
-
-			<LinearGradientBrush x:Key="HeaderBackgroundBrush" StartPoint="0,0" EndPoint="1,1">
-				<GradientStop Color="{Binding Color, Source={StaticResource HeaderStartBrush}}" Offset="0" />
-				<GradientStop Color="{Binding Color, Source={StaticResource HeaderEndBrush}}" Offset="1" />
-			</LinearGradientBrush>
-
-			<LinearGradientBrush x:Key="PrimaryButtonBrush" StartPoint="0,0" EndPoint="1,1">
-				<GradientStop Color="#10B981" Offset="0" />
-				<GradientStop Color="#059669" Offset="1" />
-			</LinearGradientBrush>
-
 			<Style TargetType="TextBlock">
-				<Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
+				<Setter Property="Foreground" Value="{DynamicResource {x:Static vsshell:VsBrushes.ToolWindowTextKey}}" />
 			</Style>
 
 			<Style x:Key="CardBorderStyle" TargetType="Border">
-				<Setter Property="Background" Value="{StaticResource CardBackgroundBrush}" />
-				<Setter Property="BorderBrush" Value="{StaticResource BorderBrushDark}" />
+				<Setter Property="Background" Value="{DynamicResource {x:Static vsshell:VsBrushes.GridHeadingBackgroundKey}}" />
+				<Setter Property="BorderBrush" Value="{DynamicResource {x:Static vsshell:VsBrushes.PanelBorderKey}}" />
 				<Setter Property="BorderThickness" Value="1" />
 				<Setter Property="CornerRadius" Value="16" />
 				<Setter Property="Padding" Value="16" />
 			</Style>
 
 			<Style x:Key="FieldLabelStyle" TargetType="TextBlock">
-				<Setter Property="Foreground" Value="{StaticResource SecondaryTextBrush}" />
+				<Setter Property="Foreground" Value="{DynamicResource {x:Static vsshell:VsBrushes.GrayTextKey}}" />
 				<Setter Property="FontSize" Value="12" />
 				<Setter Property="FontWeight" Value="SemiBold" />
 			</Style>
 
-            <Style x:Key="SectionTitleStyle" TargetType="TextBlock">
-                <Setter Property="Foreground" Value="{StaticResource SecondaryTextBrush}" />
-                <Setter Property="FontSize" Value="28" />
-                <Setter Property="FontWeight" Value="SemiBold" />
-                <Setter Property="Margin" Value="0,0,0,8" />
-            </Style>
+			<Style x:Key="SectionTitleStyle" TargetType="TextBlock">
+				<Setter Property="Foreground" Value="{DynamicResource {x:Static vsshell:VsBrushes.ToolWindowTextKey}}" />
+				<Setter Property="FontSize" Value="28" />
+				<Setter Property="FontWeight" Value="SemiBold" />
+				<Setter Property="Margin" Value="0,0,0,8" />
+			</Style>
 
-            <Style x:Key="EditorComboToggleStyle" TargetType="ToggleButton">
+			<Style x:Key="EditorComboToggleStyle" TargetType="ToggleButton">
 				<Setter Property="Focusable" Value="False" />
 				<Setter Property="Background" Value="Transparent" />
 				<Setter Property="BorderThickness" Value="0" />
@@ -68,8 +49,8 @@
 			</Style>
 
 			<Style x:Key="EditorComboItemStyle" TargetType="ComboBoxItem">
-				<Setter Property="Background" Value="#0F172A" />
-				<Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
+				<Setter Property="Background" Value="{DynamicResource {x:Static vsshell:VsBrushes.ComboBoxBackgroundKey}}" />
+				<Setter Property="Foreground" Value="{DynamicResource {x:Static vsshell:VsBrushes.WindowTextKey}}" />
 				<Setter Property="BorderBrush" Value="Transparent" />
 				<Setter Property="BorderThickness" Value="0" />
 				<Setter Property="Padding" Value="8,4" />
@@ -82,12 +63,12 @@
 							</Border>
 							<ControlTemplate.Triggers>
 								<Trigger Property="IsHighlighted" Value="True">
-									<Setter TargetName="Bd" Property="Background" Value="#1E293B" />
-									<Setter Property="Foreground" Value="#FFFFFF" />
+									<Setter TargetName="Bd" Property="Background" Value="{DynamicResource {x:Static vsshell:VsBrushes.HighlightKey}}" />
+									<Setter Property="Foreground" Value="{DynamicResource {x:Static vsshell:VsBrushes.HighlightTextKey}}" />
 								</Trigger>
 								<Trigger Property="IsSelected" Value="True">
-									<Setter TargetName="Bd" Property="Background" Value="#1E293B" />
-									<Setter Property="Foreground" Value="#FFFFFF" />
+									<Setter TargetName="Bd" Property="Background" Value="{DynamicResource {x:Static vsshell:VsBrushes.HighlightKey}}" />
+									<Setter Property="Foreground" Value="{DynamicResource {x:Static vsshell:VsBrushes.HighlightTextKey}}" />
 								</Trigger>
 							</ControlTemplate.Triggers>
 						</ControlTemplate>
@@ -98,9 +79,9 @@
 			<Style x:Key="EditorComboStyle" TargetType="ComboBox">
 				<Setter Property="SnapsToDevicePixels" Value="True" />
 				<Setter Property="OverridesDefaultStyle" Value="True" />
-				<Setter Property="Background" Value="#0F172A" />
-				<Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
-				<Setter Property="BorderBrush" Value="{StaticResource BorderBrushDark}" />
+				<Setter Property="Background" Value="{DynamicResource {x:Static vsshell:VsBrushes.ComboBoxBackgroundKey}}" />
+				<Setter Property="Foreground" Value="{DynamicResource {x:Static vsshell:VsBrushes.WindowTextKey}}" />
+				<Setter Property="BorderBrush" Value="{DynamicResource {x:Static vsshell:VsBrushes.ComboBoxBorderKey}}" />
 				<Setter Property="BorderThickness" Value="1" />
 				<Setter Property="Padding" Value="8,4" />
 				<Setter Property="MinHeight" Value="34" />
@@ -115,8 +96,8 @@
 								<Path Data="M 0 0 L 4 4 L 8 0" Stroke="{TemplateBinding Foreground}" StrokeThickness="1.5" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,12,0" IsHitTestVisible="False" />
 								<ToggleButton x:Name="ToggleButton" Focusable="False" IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}" ClickMode="Press" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Style="{DynamicResource EditorComboToggleStyle}" Background="Transparent" BorderThickness="0" Panel.ZIndex="10" />
 								<Popup x:Name="PART_Popup" Placement="Bottom" IsOpen="{TemplateBinding IsDropDownOpen}" AllowsTransparency="True" Focusable="False" PlacementTarget="{Binding ElementName=ToggleButton}">
-									<Border x:Name="DropDownBorder" Background="#0F172A" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="8" MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}" MaxHeight="260">
-										<ScrollViewer Background="#0F172A" SnapsToDevicePixels="True" CanContentScroll="True">
+									<Border x:Name="DropDownBorder" Background="{DynamicResource {x:Static vsshell:VsBrushes.ComboBoxBackgroundKey}}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="8" MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}" MaxHeight="260">
+										<ScrollViewer Background="{DynamicResource {x:Static vsshell:VsBrushes.ComboBoxBackgroundKey}}" SnapsToDevicePixels="True" CanContentScroll="True">
 											<StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Contained" />
 										</ScrollViewer>
 									</Border>
@@ -124,7 +105,7 @@
 							</Grid>
 							<ControlTemplate.Triggers>
 								<Trigger Property="IsDropDownOpen" Value="True">
-									<Setter TargetName="ClosedStateBorder" Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+									<Setter TargetName="ClosedStateBorder" Property="BorderBrush" Value="{DynamicResource {x:Static vsshell:VsBrushes.AccentMediumKey}}" />
 								</Trigger>
 							</ControlTemplate.Triggers>
 						</ControlTemplate>
@@ -133,9 +114,9 @@
 			</Style>
 
 			<Style x:Key="SecondaryActionButtonStyle" TargetType="Button">
-				<Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
-				<Setter Property="Background" Value="#1E293B" />
-				<Setter Property="BorderBrush" Value="{StaticResource BorderBrushDark}" />
+				<Setter Property="Foreground" Value="{DynamicResource {x:Static vsshell:VsBrushes.ButtonTextKey}}" />
+				<Setter Property="Background" Value="{DynamicResource {x:Static vsshell:VsBrushes.ButtonFaceKey}}" />
+				<Setter Property="BorderBrush" Value="{DynamicResource {x:Static vsshell:VsBrushes.PanelBorderKey}}" />
 				<Setter Property="BorderThickness" Value="1" />
 				<Setter Property="Padding" Value="16,8" />
 				<Setter Property="FontWeight" Value="SemiBold" />
@@ -152,53 +133,54 @@
 			</Style>
 
 			<Style x:Key="PrimaryActionButtonStyle" TargetType="Button" BasedOn="{StaticResource SecondaryActionButtonStyle}">
-				<Setter Property="Background" Value="{StaticResource PrimaryButtonBrush}" />
+				<Setter Property="Foreground" Value="{DynamicResource {x:Static vsshell:VsBrushes.HighlightTextKey}}" />
+				<Setter Property="Background" Value="{DynamicResource {x:Static platformUi:EnvironmentColors.VizSurfaceGreenMediumBrushKey}}" />
 				<Setter Property="BorderBrush" Value="Transparent" />
 			</Style>
 
 			<Style x:Key="RiskIndicatorStyle" TargetType="TextBlock">
 				<Style.Triggers>
 					<DataTrigger Binding="{Binding Summary.RiskLevel}" Value="High">
-						<Setter Property="Foreground" Value="#EF4444" />
+						<Setter Property="Foreground" Value="{DynamicResource {x:Static platformUi:EnvironmentColors.VizSurfaceRedMediumBrushKey}}" />
 					</DataTrigger>
 					<DataTrigger Binding="{Binding Summary.RiskLevel}" Value="Medium">
-						<Setter Property="Foreground" Value="#EAB308" />
+						<Setter Property="Foreground" Value="{DynamicResource {x:Static platformUi:EnvironmentColors.VizSurfaceGoldMediumBrushKey}}" />
 					</DataTrigger>
 					<DataTrigger Binding="{Binding Summary.RiskLevel}" Value="Low">
-						<Setter Property="Foreground" Value="#10B981" />
+						<Setter Property="Foreground" Value="{DynamicResource {x:Static platformUi:EnvironmentColors.VizSurfaceGreenMediumBrushKey}}" />
 					</DataTrigger>
 				</Style.Triggers>
 			</Style>
 			<Style TargetType="CheckBox" BasedOn="{StaticResource {x:Static vsshell:VsResourceKeys.CheckBoxStyleKey}}" />
 			<Style TargetType="ContextMenu" BasedOn="{StaticResource {x:Static vsshell:VsResourceKeys.ContextMenuStyleKey}}" />
 			<Style TargetType="DataGrid">
-				<Setter Property="Background" Value="#0F172A" />
-				<Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
-				<Setter Property="BorderBrush" Value="{StaticResource BorderBrushDark}" />
-				<Setter Property="HorizontalGridLinesBrush" Value="{StaticResource BorderBrushDark}" />
-				<Setter Property="VerticalGridLinesBrush" Value="{StaticResource BorderBrushDark}" />
-				<Setter Property="RowBackground" Value="#0F172A" />
-				<Setter Property="AlternatingRowBackground" Value="#111827" />
+				<Setter Property="Background" Value="{DynamicResource {x:Static vsshell:VsBrushes.WindowKey}}" />
+				<Setter Property="Foreground" Value="{DynamicResource {x:Static vsshell:VsBrushes.WindowTextKey}}" />
+				<Setter Property="BorderBrush" Value="{DynamicResource {x:Static vsshell:VsBrushes.PanelBorderKey}}" />
+				<Setter Property="HorizontalGridLinesBrush" Value="{DynamicResource {x:Static vsshell:VsBrushes.PanelBorderKey}}" />
+				<Setter Property="VerticalGridLinesBrush" Value="{DynamicResource {x:Static vsshell:VsBrushes.PanelBorderKey}}" />
+				<Setter Property="RowBackground" Value="{DynamicResource {x:Static vsshell:VsBrushes.WindowKey}}" />
+				<Setter Property="AlternatingRowBackground" Value="{DynamicResource {x:Static vsshell:VsBrushes.WindowKey}}" />
 				<Setter Property="HeadersVisibility" Value="Column" />
 			</Style>
 			<Style TargetType="DataGridColumnHeader">
-				<Setter Property="Background" Value="#1E293B" />
-				<Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
-				<Setter Property="BorderBrush" Value="{StaticResource BorderBrushDark}" />
+				<Setter Property="Background" Value="{DynamicResource {x:Static vsshell:VsBrushes.GridHeadingBackgroundKey}}" />
+				<Setter Property="Foreground" Value="{DynamicResource {x:Static vsshell:VsBrushes.GridHeadingTextKey}}" />
+				<Setter Property="BorderBrush" Value="{DynamicResource {x:Static vsshell:VsBrushes.PanelBorderKey}}" />
 				<Setter Property="BorderThickness" Value="0,0,1,1" />
 				<Setter Property="Padding" Value="6,4" />
 			</Style>
 			<Style TargetType="DataGridRow">
-				<Setter Property="Background" Value="#0F172A" />
-				<Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
+				<Setter Property="Background" Value="{DynamicResource {x:Static vsshell:VsBrushes.WindowKey}}" />
+				<Setter Property="Foreground" Value="{DynamicResource {x:Static vsshell:VsBrushes.WindowTextKey}}" />
 			</Style>
 			<Style TargetType="DataGridCell">
 				<Setter Property="Background" Value="Transparent" />
-				<Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
+				<Setter Property="Foreground" Value="{DynamicResource {x:Static vsshell:VsBrushes.WindowTextKey}}" />
 				<Style.Triggers>
 					<Trigger Property="IsSelected" Value="True">
-						<Setter Property="Background" Value="#1E293B" />
-						<Setter Property="Foreground" Value="#FFFFFF" />
+						<Setter Property="Background" Value="{DynamicResource {x:Static vsshell:VsBrushes.HighlightKey}}" />
+						<Setter Property="Foreground" Value="{DynamicResource {x:Static vsshell:VsBrushes.HighlightTextKey}}" />
 					</Trigger>
 				</Style.Triggers>
 			</Style>
@@ -213,7 +195,7 @@
 			<RowDefinition Height="*" MinHeight="60" />
 		</Grid.RowDefinitions>
 
-		<Border Style="{StaticResource CardBorderStyle}" Background="{StaticResource HeaderBackgroundBrush}">
+		<Border Style="{StaticResource CardBorderStyle}">
 			<Grid>
 			<Grid.ColumnDefinitions>
 				<ColumnDefinition Width="*" />
@@ -269,13 +251,13 @@
 											<Style TargetType="Ellipse">
 												<Style.Triggers>
 													<DataTrigger Binding="{Binding RiskLevel}" Value="High">
-														<Setter Property="Fill" Value="#EF4444" />
+														<Setter Property="Fill" Value="{DynamicResource {x:Static platformUi:EnvironmentColors.VizSurfaceRedMediumBrushKey}}" />
 													</DataTrigger>
 													<DataTrigger Binding="{Binding RiskLevel}" Value="Medium">
-														<Setter Property="Fill" Value="#EAB308" />
+														<Setter Property="Fill" Value="{DynamicResource {x:Static platformUi:EnvironmentColors.VizSurfaceGoldMediumBrushKey}}" />
 													</DataTrigger>
 													<DataTrigger Binding="{Binding RiskLevel}" Value="Low">
-														<Setter Property="Fill" Value="#10B981" />
+														<Setter Property="Fill" Value="{DynamicResource {x:Static platformUi:EnvironmentColors.VizSurfaceGreenMediumBrushKey}}" />
 													</DataTrigger>
 												</Style.Triggers>
 											</Style>
@@ -428,9 +410,9 @@
 					 HorizontalScrollBarVisibility="Disabled"
 					 FontFamily="Consolas"
 					 FontSize="11"
-					 Background="#0F172A"
-					 Foreground="{StaticResource PrimaryTextBrush}"
-					 BorderBrush="{StaticResource BorderBrushDark}"
+					 Background="{DynamicResource {x:Static vsshell:VsBrushes.WindowKey}}"
+					 Foreground="{DynamicResource {x:Static vsshell:VsBrushes.WindowTextKey}}"
+					 BorderBrush="{DynamicResource {x:Static vsshell:VsBrushes.PanelBorderKey}}"
 					 BorderThickness="1"
 					 Margin="0" />
 			</Grid>

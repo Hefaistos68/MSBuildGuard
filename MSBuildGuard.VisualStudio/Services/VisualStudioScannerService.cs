@@ -5,10 +5,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.Shell;
 using MSBuildGuard.Core;
-using MSBuildGuard.VisualStudio.Options;
+using MSBuildGuard.Core.Baseline;
 using MSBuildGuard.Core.Policy;
 using MSBuildGuard.Core.Scanning;
 using MSBuildGuard.Core.Trust;
+using MSBuildGuard.VisualStudio.Options;
 
 namespace MSBuildGuard.VisualStudio.Services
 {
@@ -145,13 +146,43 @@ namespace MSBuildGuard.VisualStudio.Services
 		private static void ApplyPolicyEvaluation(ScanReport report, string solutionPath)
 		{
 			var repositoryRoot = Path.GetDirectoryName(Path.GetFullPath(solutionPath));
-			var policy = new PolicyStatusService().GetEffectivePolicy(repositoryRoot, solutionPath);
+			BaselineDocument? baseline = null;
+
+			if (!string.IsNullOrWhiteSpace(repositoryRoot))
+			{
+				var baselinePath = Path.Combine(repositoryRoot!, ".msbuildguard", "baseline.json");
+
+				if (File.Exists(baselinePath))
+				{
+					try
+					{
+						baseline = new BaselineService().Load(baselinePath);
+						new BaselineComparer().Compare(report, baseline);
+					}
+					catch
+					{
+						// Ignore baseline load errors during scan so findings are still reported.
+					}
+				}
+			}
+
+			var policy       = new PolicyStatusService().GetEffectivePolicy(repositoryRoot, solutionPath);
 			var trustService = new TrustStoreService();
-			var trustPath = trustService.GetDefaultUserTrustPath();
-			var trustStore = trustService.Load(trustPath);
+			var trustPath    = trustService.GetDefaultUserTrustPath();
+			TrustStoreDocument trustStore;
+
+			try
+			{
+				trustStore = trustService.LoadMergedTrustStore(trustPath, solutionPath, null);
+			}
+			catch
+			{
+				trustStore = new TrustStoreDocument();
+			}
+
 			var evaluator = new PolicyDecisionEvaluator();
 
-			evaluator.Apply(report, policy, null, trustStore);
+			evaluator.Apply(report, policy, baseline, trustStore);
 		}
 	}
 }

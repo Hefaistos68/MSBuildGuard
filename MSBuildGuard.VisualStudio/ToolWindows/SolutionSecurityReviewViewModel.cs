@@ -383,7 +383,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 
 				var isApprovedBySigner = false;
 
-				if (hasSignerTrusts && !string.IsNullOrWhiteSpace(packageId) && !string.IsNullOrWhiteSpace(packageVersion))
+				if ((hasSignerTrusts || (projectTrustStore != null && projectTrustStore.Decisions.Any(d => d.ScopeKind == TrustDecisionScopeKind.Signer))) && !string.IsNullOrWhiteSpace(packageId) && !string.IsNullOrWhiteSpace(packageVersion))
 				{
 					var cacheKey = $"{packageId}@{packageVersion}";
 
@@ -1234,7 +1234,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				ProjectPath           = currentProjectPath
 			};
 
-			var result = dialog.ShowDialog();
+			var result = dialog.ShowModal();
 
 			if (result != true)
 			{

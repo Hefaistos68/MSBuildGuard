@@ -155,6 +155,10 @@ export class PolicyEditorPanel {
         }
     }
 
+    public updateWorkerClient(workerClient: WorkerClient) {
+        this._workerClient = workerClient;
+    }
+
     public dispose() {
         PolicyEditorPanel.currentPanel = undefined;
         this._panel.dispose();
@@ -173,6 +177,7 @@ export class PolicyEditorPanel {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MSBuild Guard Policy Editor</title>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'unsafe-inline';">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
 
@@ -905,7 +910,9 @@ export class PolicyEditorPanel {
                 },
                 rules: currentPolicy.rules || {},
                 include: currentPolicy.include || [],
-                exclude: currentPolicy.exclude || []
+                exclude: currentPolicy.exclude || [],
+                allowedPackageSources: currentPolicy.allowedPackageSources || [],
+                blockedPackageSources: currentPolicy.blockedPackageSources || []
             };
 
             vscode.postMessage({

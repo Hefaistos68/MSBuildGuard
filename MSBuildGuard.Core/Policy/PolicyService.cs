@@ -164,10 +164,32 @@ namespace MSBuildGuard.Core.Policy
 				Directory.CreateDirectory(directory);
 			}
 
-			var json = JsonSerializer.Serialize(policy, SerializerOptions);
+			var hasAsymmetricSignature = TryReadSignatureRecord(path, out var signatureRecord);
+			string? signingThumbprint  = null;
+
+			if (hasAsymmetricSignature)
+			{
+				signingThumbprint = signatureRecord.SigningCertificateThumbprint;
+			}
+			else if (CoreSettings.EnforceAsymmetricSignatures)
+			{
+				var configuredThumbprint = GetConfiguredSigningCertificateThumbprint();
+
+				if (!string.IsNullOrWhiteSpace(configuredThumbprint))
+				{
+					signingThumbprint = NormalizeThumbprint(configuredThumbprint!);
+				}
+			}
+
+			var json          = JsonSerializer.Serialize(policy, SerializerOptions);
 			var signedPayload = new JsonSignatureService().CreateSignedEnvelopeJson(json, PolicyEnvelopeSigningKey);
 
 			File.WriteAllText(path, signedPayload);
+
+			if (!string.IsNullOrWhiteSpace(signingThumbprint))
+			{
+				Sign(path, signingThumbprint);
+			}
 		}
 
 		/// <summary>
@@ -488,32 +510,44 @@ namespace MSBuildGuard.Core.Policy
 				};
 			}
 
-			target.Include.Clear();
-
-			foreach (var pattern in source.Include)
+			if (source.Include.Count > 0)
 			{
-				target.Include.Add(pattern);
+				target.Include.Clear();
+
+				foreach (var pattern in source.Include)
+				{
+					target.Include.Add(pattern);
+				}
 			}
 
-			target.Exclude.Clear();
-
-			foreach (var pattern in source.Exclude)
+			if (source.Exclude.Count > 0)
 			{
-				target.Exclude.Add(pattern);
+				target.Exclude.Clear();
+
+				foreach (var pattern in source.Exclude)
+				{
+					target.Exclude.Add(pattern);
+				}
 			}
 
-			target.AllowedPackageSources.Clear();
-
-			foreach (var packageSource in source.AllowedPackageSources)
+			if (source.AllowedPackageSources.Count > 0)
 			{
-				target.AllowedPackageSources.Add(packageSource);
+				target.AllowedPackageSources.Clear();
+
+				foreach (var packageSource in source.AllowedPackageSources)
+				{
+					target.AllowedPackageSources.Add(packageSource);
+				}
 			}
 
-			target.BlockedPackageSources.Clear();
-
-			foreach (var packageSource in source.BlockedPackageSources)
+			if (source.BlockedPackageSources.Count > 0)
 			{
-				target.BlockedPackageSources.Add(packageSource);
+				target.BlockedPackageSources.Clear();
+
+				foreach (var packageSource in source.BlockedPackageSources)
+				{
+					target.BlockedPackageSources.Add(packageSource);
+				}
 			}
 		}
 
@@ -686,22 +720,26 @@ namespace MSBuildGuard.Core.Policy
 			if (!string.IsNullOrWhiteSpace(pinnedCa))
 			{
 				var normalizedPinnedCa = pinnedCa!.Replace(" ", string.Empty).ToUpperInvariant();
-				var chain = new X509Chain();
+				using var chain        = new X509Chain();
 
-				chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
-				chain.Build(certificate);
+				chain.ChainPolicy.RevocationMode    = X509RevocationMode.NoCheck;
+				chain.ChainPolicy.VerificationFlags = X509VerificationFlags.AllowUnknownCertificateAuthority;
 
+				var chainBuilt   = chain.Build(certificate);
 				var isChainValid = false;
 
-				foreach (var element in chain.ChainElements)
+				if (chainBuilt)
 				{
-					var elementThumb = element.Certificate.Thumbprint.Replace(" ", string.Empty).ToUpperInvariant();
-
-					if (string.Equals(elementThumb, normalizedPinnedCa, StringComparison.OrdinalIgnoreCase))
+					foreach (var element in chain.ChainElements)
 					{
-						isChainValid = true;
+						var elementThumb = element.Certificate.Thumbprint.Replace(" ", string.Empty).ToUpperInvariant();
 
-						break;
+						if (string.Equals(elementThumb, normalizedPinnedCa, StringComparison.OrdinalIgnoreCase))
+						{
+							isChainValid = true;
+
+							break;
+						}
 					}
 				}
 
