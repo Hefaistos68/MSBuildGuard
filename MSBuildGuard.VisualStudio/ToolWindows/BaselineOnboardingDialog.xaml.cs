@@ -16,6 +16,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		public BaselineOnboardingDialog(BaselineOnboardingViewModel viewModel)
 		{
 			this.InitializeComponent();
+			MSBuildGuard.VisualStudio.Services.ThemeHelper.ApplyTitleBarTheme(this);
 
 			this.DataContext = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
 		}

@@ -31,22 +31,51 @@ namespace MSBuildGuard.VisualStudio.Services
 
 			// Hook SourceInitialized or apply immediately if handle is already created.
 			var helper = new WindowInteropHelper(window);
-			var hwnd = helper.Handle;
+			var hwnd   = helper.Handle;
 
 			if (hwnd == IntPtr.Zero)
 			{
-				window.SourceInitialized += (s, e) =>
-				{
-					var handle = new WindowInteropHelper(window).Handle;
-					if (handle != IntPtr.Zero)
-					{
-						ApplyThemeToHandle(handle);
-					}
-				};
+				window.SourceInitialized += OnWindowSourceInitialized;
 			}
 			else
 			{
 				ApplyThemeToHandle(hwnd);
+			}
+
+			ThemeChangedEventHandler themeChangedHandler = e =>
+			{
+				var currentHwnd = new WindowInteropHelper(window).Handle;
+
+				if (currentHwnd != IntPtr.Zero)
+				{
+					ApplyThemeToHandle(currentHwnd);
+				}
+			};
+
+			VSColorTheme.ThemeChanged += themeChangedHandler;
+
+			window.Closed += (s, e) =>
+			{
+				VSColorTheme.ThemeChanged -= themeChangedHandler;
+				window.SourceInitialized  -= OnWindowSourceInitialized;
+			};
+		}
+
+		/// <summary>
+		/// Handles <see cref="Window.SourceInitialized"/> by applying the current theme to the window handle.
+		/// </summary>
+		/// <param name="sender">The window whose source was initialized.</param>
+		/// <param name="e">The event arguments.</param>
+		private static void OnWindowSourceInitialized(object sender, EventArgs e)
+		{
+			if (sender is Window window)
+			{
+				var handle = new WindowInteropHelper(window).Handle;
+
+				if (handle != IntPtr.Zero)
+				{
+					ApplyThemeToHandle(handle);
+				}
 			}
 		}
 
@@ -63,12 +92,12 @@ namespace MSBuildGuard.VisualStudio.Services
 
 				// Calculate perceived brightness (standard formula: R * 0.299 + G * 0.587 + B * 0.114)
 				double brightness = (vsBgColor.R * 0.299) + (vsBgColor.G * 0.587) + (vsBgColor.B * 0.114);
-				bool isDark = brightness < 128;
-
-				int darkMode = isDark ? 1 : 0;
+				bool isDark       = brightness < 128;
+				int darkMode      = isDark ? 1 : 0;
 
 				// Try modern Windows 10/11 immersive dark mode attribute first (20)
 				int result = DwmSetWindowAttribute(hwnd, DwmwaUseImmersiveDarkMode, ref darkMode, sizeof(int));
+
 				if (result != 0)
 				{
 					// Fallback to pre-20H1 attribute (19)

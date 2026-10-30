@@ -56,7 +56,7 @@
                                         <TextBlock Text="{Binding ScopeName}" FontSize="10" FontWeight="Bold" VerticalAlignment="Center"/>
                                     </Border>
                                     <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" VerticalAlignment="Center" FontSize="12"/>
-                                    <TextBlock Text="✓ Already Trusted" Foreground="#10B981" FontWeight="Bold" Margin="8,0,0,0" VerticalAlignment="Center" FontSize="11" Visibility="{Binding AlreadyTrustedVisibility}"/>
+                                    <TextBlock Text="✓ Already Trusted" Foreground="{DynamicResource {x:Static platformUi:EnvironmentColors.VizSurfaceGreenMediumBrushKey}}" FontWeight="Bold" Margin="8,0,0,0" VerticalAlignment="Center" FontSize="11" Visibility="{Binding AlreadyTrustedVisibility}"/>
                                 </StackPanel>
                                 <TextBlock Text="{Binding RecommendationReason}" TextWrapping="Wrap" FontSize="11" Opacity="0.8"/>
                                 <TextBlock Text="{Binding ReputationSourceDescription}" FontSize="10" Opacity="0.5" FontStyle="Italic" Margin="0,2,0,0"/>

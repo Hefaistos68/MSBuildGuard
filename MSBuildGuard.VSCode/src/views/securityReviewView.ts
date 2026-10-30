@@ -124,7 +124,16 @@ export class SecurityReviewViewProvider implements vscode.WebviewViewProvider {
             const reason = data.reason || 'Approved via security review';
             const finding = data.finding as Finding;
 
-            const targetPath = report.target.targetPath;
+            let targetPath = report.target.targetPath;
+            if (trustScope === 'project') {
+                if (finding.introducedViaProject) {
+                    targetPath = path.isAbsolute(finding.introducedViaProject)
+                        ? finding.introducedViaProject
+                        : path.resolve(path.dirname(report.target.targetPath), finding.introducedViaProject);
+                } else if (finding.filePath && (finding.filePath.endsWith('.csproj') || finding.filePath.endsWith('.fsproj') || finding.filePath.endsWith('.vbproj'))) {
+                    targetPath = finding.filePath;
+                }
+            }
 
             if (scope === 'Finding') {
                 await workerClient.addTrustAsync(targetPath, {
@@ -167,6 +176,8 @@ export class SecurityReviewViewProvider implements vscode.WebviewViewProvider {
                     trustScope,
                     subjectHash: finding.packageSignatureState,
                     assemblySigner: finding.packageSignatureState,
+                    assemblyName: finding.packageId || '',
+                    assemblyVersion: finding.packageVersion || '',
                     reason
                 });
             } else if (scope === 'Package') {
@@ -198,6 +209,7 @@ export class SecurityReviewViewProvider implements vscode.WebviewViewProvider {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'unsafe-inline';">
     <title>MSBuild Guard Review</title>
     <style>
         :root {
@@ -685,6 +697,9 @@ export class SecurityReviewViewProvider implements vscode.WebviewViewProvider {
 
             let activeScore = 0;
             let trustedScore = 0;
+            let highestPolicyRank = 0;
+            const rankToAction = ['Allow', 'Warn', 'RequireApproval', 'Block'];
+            const actionToRank = { allow: 0, warn: 1, requireapproval: 2, block: 3 };
             filtered.forEach(f => {
                 const isTrusted = f.isTrusted || f.policyAction.toLowerCase() === 'allow';
                 const risk = getSeverityRisk(f.severity);
@@ -692,6 +707,8 @@ export class SecurityReviewViewProvider implements vscode.WebviewViewProvider {
                     trustedScore += risk;
                 } else {
                     activeScore += risk;
+                    const pRank = actionToRank[(f.policyAction || '').toLowerCase()] || 0;
+                    if (pRank > highestPolicyRank) { highestPolicyRank = pRank; }
                 }
             });
 
@@ -702,7 +719,9 @@ export class SecurityReviewViewProvider implements vscode.WebviewViewProvider {
                 widgetScoreEl.innerText = activeScore;
             }
 
-            const activeAction = mapRecommendedAction(activeScore);
+            const riskAction = mapRecommendedAction(activeScore);
+            const riskRank = actionToRank[riskAction.toLowerCase()] || 0;
+            const activeAction = rankToAction[Math.max(riskRank, highestPolicyRank)];
             const badge = document.getElementById('riskBadge');
             badge.innerText = activeAction;
 
@@ -757,16 +776,16 @@ export class SecurityReviewViewProvider implements vscode.WebviewViewProvider {
                     statusBadge = '<span class="status-badge status-trusted">🛡️ Trusted</span>';
                 } else {
                     const actionClass = 'status-' + finding.policyAction.toLowerCase();
-                    statusBadge = \`<span class="status-badge \${actionClass}">\${finding.policyAction}</span>\`;
+                    statusBadge = \`<span class="status-badge \${escapeHtml(actionClass)}">\${escapeHtml(finding.policyAction)}</span>\`;
                 }
 
                 item.innerHTML = \`
                     <div class="finding-header">
-                        <span class="finding-id">\${finding.id}</span>
+                        <span class="finding-id">\${escapeHtml(finding.id)}</span>
                         \${statusBadge}
                     </div>
-                    <div class="finding-title">\${finding.title}</div>
-                    <div class="finding-path">📍 \${basename}:L\${finding.startLine}</div>
+                    <div class="finding-title">\${escapeHtml(finding.title)}</div>
+                    <div class="finding-path">📍 \${escapeHtml(basename)}:L\${finding.startLine}</div>
                 \`;
 
                 item.addEventListener('click', () => {
@@ -825,7 +844,7 @@ export class SecurityReviewViewProvider implements vscode.WebviewViewProvider {
                         </div>
                         <div style="font-size: 0.72rem; color: var(--text-primary); line-height: 1.4;">
                             This finding is approved under the active policy.<br/>
-                            <span style="font-style: italic; color: var(--text-secondary);">Reason: \${finding.policyActionReason || 'No reason specified'}</span>
+                            <span style="font-style: italic; color: var(--text-secondary);">Reason: \${escapeHtml(finding.policyActionReason || 'No reason specified')}</span>
                         </div>
                     </div>
                 \`;
@@ -878,20 +897,20 @@ export class SecurityReviewViewProvider implements vscode.WebviewViewProvider {
             pane.innerHTML = \`
                 <div style="text-align: left; padding: 2px;">
                     <div style="font-weight: 700; font-size: 0.85rem; color: var(--accent-color); margin-bottom: 6px;">
-                        Rule \${finding.id} — \${finding.title}
+                        Rule \${escapeHtml(finding.id)} — \${escapeHtml(finding.title)}
                     </div>
                     
                     <div id="fileLink" style="font-size: 0.7rem; color: var(--text-secondary); cursor: pointer; text-decoration: underline; margin-bottom: 8px; display: inline-block;">
-                        📍 \${basename}:L\${finding.startLine}
+                        📍 \${escapeHtml(basename)}:L\${finding.startLine}
                     </div>
 
                     <div style="margin-bottom: 10px; line-height: 1.4; color: var(--text-primary); font-size: 0.75rem;">
-                        \${finding.description}
+                        \${escapeHtml(finding.description)}
                     </div>
 
                     \${finding.recommendation ? \`
                     <div style="font-weight: 700; font-size: 0.68rem; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 2px;">Recommendation</div>
-                    <div style="margin-bottom: 10px; color: var(--text-primary); font-size: 0.73rem;">\${finding.recommendation}</div>
+                    <div style="margin-bottom: 10px; color: var(--text-primary); font-size: 0.73rem;">\${escapeHtml(finding.recommendation)}</div>
                     \` : ''}
 
                     \${finding.evidence ? \`
@@ -902,18 +921,18 @@ export class SecurityReviewViewProvider implements vscode.WebviewViewProvider {
                     \${finding.packageId ? \`
                     <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--glass-border); padding: 8px; border-radius: 6px; margin-bottom: 10px; font-size: 0.7rem;">
                         <div style="font-weight: 700; color: var(--accent-color); margin-bottom: 4px;">NuGet Package Context</div>
-                        <div style="color: var(--text-primary); margin-bottom: 2px;">📦 <strong>\${finding.packageId} \${finding.packageVersion}</strong></div>
-                        \${finding.packageSource ? \`<div style="color: var(--text-secondary); margin-bottom: 2px;">Source: \${finding.packageSource} \${finding.isPackageSourceInferred ? '(inferred)' : ''}</div>\` : ''}
-                        \${finding.packageSignatureState ? \`<div style="color: var(--text-secondary); margin-bottom: 2px;">Signature: \${finding.packageSignatureState}</div>\` : ''}
-                        \${finding.introducedViaProject ? \`<div style="color: var(--text-secondary);">Via Project: \${finding.introducedViaProject}</div>\` : ''}
+                        <div style="color: var(--text-primary); margin-bottom: 2px;">📦 <strong>\${escapeHtml(finding.packageId)} \${escapeHtml(finding.packageVersion || '')}</strong></div>
+                        \${finding.packageSource ? \`<div style="color: var(--text-secondary); margin-bottom: 2px;">Source: \${escapeHtml(finding.packageSource)} \${finding.isPackageSourceInferred ? '(inferred)' : ''}</div>\` : ''}
+                        \${finding.packageSignatureState ? \`<div style="color: var(--text-secondary); margin-bottom: 2px;">Signature: \${escapeHtml(finding.packageSignatureState)}</div>\` : ''}
+                        \${finding.introducedViaProject ? \`<div style="color: var(--text-secondary);">Via Project: \${escapeHtml(finding.introducedViaProject)}</div>\` : ''}
                     </div>
                     \` : ''}
 
                     <div style="border-top: 1px solid var(--glass-border); padding-top: 8px; margin-bottom: 12px; font-size: 0.68rem; color: var(--text-secondary);">
                         <div style="font-weight: 700; text-transform: uppercase; margin-bottom: 4px; color: var(--text-secondary);">Policy Evaluation</div>
-                        <div>Default scanner action: <span style="color: var(--text-primary);">\${finding.scannerPolicyAction || 'Allow'}</span></div>
-                        <div>Effective policy action: <span style="color: var(--accent-color); font-weight: 600;">\${finding.policyAction}</span></div>
-                        \${finding.policyActionReason ? \`<div style="margin-top: 2px; font-style: italic;">Reason: \${finding.policyActionReason}</div>\` : ''}
+                        <div>Default scanner action: <span style="color: var(--text-primary);">\${escapeHtml(finding.scannerPolicyAction || 'Allow')}</span></div>
+                        <div>Effective policy action: <span style="color: var(--accent-color); font-weight: 600;">\${escapeHtml(finding.policyAction)}</span></div>
+                        \${finding.policyActionReason ? \`<div style="margin-top: 2px; font-style: italic;">Reason: \${escapeHtml(finding.policyActionReason)}</div>\` : ''}
                     </div>
 
                     \${trustManagementSection}
@@ -957,7 +976,14 @@ function hasPackageAssembly(packageId: string, packageVersion: string): boolean 
 
     try {
         const userHome = os.homedir();
-        const nugetCache = path.join(userHome, '.nuget', 'packages', packageId.toLowerCase(), packageVersion.toLowerCase());
+        if (/[\/\\:]/.test(packageId) || /[\/\\:]/.test(packageVersion) || packageId.includes('..') || packageVersion.includes('..')) {
+            return false;
+        }
+        const packagesRoot = path.resolve(userHome, '.nuget', 'packages');
+        const nugetCache = path.resolve(packagesRoot, packageId.toLowerCase(), packageVersion.toLowerCase());
+        if (!nugetCache.startsWith(packagesRoot + path.sep)) {
+            return false;
+        }
 
         if (!fs.existsSync(nugetCache)) {
             return false;
@@ -974,7 +1000,10 @@ function scanForAssemblies(dir: string): boolean {
         const files = fs.readdirSync(dir);
         for (const file of files) {
             const fullPath = path.join(dir, file);
-            const stat = fs.statSync(fullPath);
+            const stat = fs.lstatSync(fullPath);
+            if (stat.isSymbolicLink()) {
+                continue;
+            }
             if (stat.isDirectory()) {
                 if (scanForAssemblies(fullPath)) {
                     return true;

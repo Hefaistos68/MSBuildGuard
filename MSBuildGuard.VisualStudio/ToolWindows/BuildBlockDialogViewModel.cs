@@ -73,8 +73,16 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		{
 			get
 			{
-				if (this.RiskScore >= 100) return "High";
-				if (this.RiskScore >= 20) return "Medium";
+				if (this.RiskScore >= 100)
+				{
+					return "High";
+				}
+
+				if (this.RiskScore >= 20)
+				{
+					return "Medium";
+				}
+
 				return "Low";
 			}
 		}
@@ -159,6 +167,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			var activeRiskScore        = 0;
 			var trustedRiskScore       = 0;
 			var findings               = new List<FindingRow>();
+			var highestPolicyAction    = PolicyAction.Allow;
 
 			foreach (var finding in report.Findings)
 			{
@@ -205,6 +214,11 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 
 				activeRiskScore += risk;
 
+				if ((int)finding.PolicyEvaluatedAction > (int)highestPolicyAction)
+				{
+					highestPolicyAction = finding.PolicyEvaluatedAction;
+				}
+
 				if (finding.PolicyEvaluatedAction == PolicyAction.Allow)
 				{
 					continue;
@@ -224,7 +238,8 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 
 			this.RiskScore         = activeRiskScore;
 			this.TrustedRiskScore  = trustedRiskScore;
-			this.RecommendedAction = MapRecommendedAction(activeRiskScore).ToString();
+			var effectiveAction    = (MSBuildGuard.Core.RecommendedAction)Math.Max((int)MapRecommendedAction(activeRiskScore), (int)MapPolicyActionToRecommended(highestPolicyAction));
+			this.RecommendedAction = effectiveAction.ToString();
 			this.Findings          = findings;
 		}
 
@@ -447,6 +462,21 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 			}
 
 			return MSBuildGuard.Core.RecommendedAction.Allow;
+		}
+
+		private static MSBuildGuard.Core.RecommendedAction MapPolicyActionToRecommended(PolicyAction action)
+		{
+			switch (action)
+			{
+				case PolicyAction.Block:
+					return MSBuildGuard.Core.RecommendedAction.Block;
+				case PolicyAction.RequireApproval:
+					return MSBuildGuard.Core.RecommendedAction.RequireApproval;
+				case PolicyAction.Warn:
+					return MSBuildGuard.Core.RecommendedAction.Warn;
+				default:
+					return MSBuildGuard.Core.RecommendedAction.Allow;
+			}
 		}
 	}
 }

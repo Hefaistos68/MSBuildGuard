@@ -217,7 +217,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				WindowStartupLocation = WindowStartupLocation.CenterOwner
 			};
 
-			var result = trustDialog.ShowDialog();
+			var result = trustDialog.ShowModal();
 
 			if (result != true)
 			{

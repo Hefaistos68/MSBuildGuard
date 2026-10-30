@@ -2,7 +2,6 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
 using System.Runtime.CompilerServices;
-using System.Windows.Media;
 using MSBuildGuard.Core.Extensions;
 using MSBuildGuard.VisualStudio.Services;
 
@@ -94,7 +93,6 @@ namespace MSBuildGuard.VisualStudio.Models
 				if (this.SetProperty(ref this.riskScore, value))
 				{
 					this.OnPropertyChanged(nameof(this.RiskIndicator));
-					this.OnPropertyChanged(nameof(this.RiskIndicatorBrush));
 					this.OnPropertyChanged(nameof(this.RiskLevel));
 					this.OnPropertyChanged(nameof(this.RiskScoreDisplay));
 				}
@@ -161,27 +159,6 @@ namespace MSBuildGuard.VisualStudio.Models
 				}
 
 				return "Low";
-			}
-		}
-		
-		/// <summary>
-		/// Gets the brush used to color the risk indicator glyph.
-		/// </summary>
-		public Brush RiskIndicatorBrush
-		{
-			get
-			{
-				if (this.RiskScore >= 100)
-				{
-					return Brushes.Red;
-				}
-
-				if (this.RiskScore >= 20)
-				{
-					return Brushes.Orange;
-				}
-
-				return Brushes.Green;
 			}
 		}
 

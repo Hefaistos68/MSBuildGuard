@@ -12,8 +12,6 @@
         ResizeMode="CanResizeWithGrip"
         Background="{DynamicResource {x:Static vsshell:VsBrushes.WindowKey}}"
         Foreground="{DynamicResource {x:Static vsshell:VsBrushes.WindowTextKey}}"
-        BorderBrush="Red"
-        BorderThickness="3"
         platformUi:ThemedDialogStyleLoader.UseDefaultThemedDialogStyles="True">
     <platformUi:DialogWindow.Resources>
         <ResourceDictionary>
@@ -39,7 +37,7 @@
                 <Setter Property="Foreground" Value="{DynamicResource {x:Static vsshell:VsBrushes.WindowTextKey}}"/>
                 <Setter Property="BorderBrush" Value="{DynamicResource {x:Static vsshell:VsBrushes.PanelBorderKey}}"/>
                 <Setter Property="HorizontalGridLinesBrush" Value="{DynamicResource {x:Static vsshell:VsBrushes.PanelBorderKey}}"/>
-				<Setter Property="VerticalGridLinesBrush" Value="{DynamicResource {x:Static vsshell:VsBrushes.PanelBorderKey}}"/>
+                <Setter Property="VerticalGridLinesBrush" Value="{DynamicResource {x:Static vsshell:VsBrushes.PanelBorderKey}}"/>
                 <Setter Property="RowBackground" Value="{DynamicResource {x:Static vsshell:VsBrushes.WindowKey}}"/>
                 <Setter Property="AlternatingRowBackground" Value="{DynamicResource {x:Static vsshell:VsBrushes.WindowKey}}"/>
                 <Setter Property="HeadersVisibility" Value="Column"/>
@@ -67,7 +65,7 @@
             </Style>
         </ResourceDictionary>
     </platformUi:DialogWindow.Resources>
-    <Border BorderBrush="Red" BorderThickness="3">
+    <Border BorderBrush="{DynamicResource {x:Static platformUi:EnvironmentColors.VizSurfaceRedMediumBrushKey}}" BorderThickness="3">
         <Grid Margin="16">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />

@@ -61,14 +61,25 @@ namespace MSBuildGuard.Core.Trust
 				return string.Empty;
 			}
 
-			var nugetCache = Path.Combine(
+			if (packageId.IndexOfAny(new[] { '/', '\\', ':' }) >= 0 ||
+				packageVersion.IndexOfAny(new[] { '/', '\\', ':' }) >= 0 ||
+				packageId.Contains("..") ||
+				packageVersion.Contains(".."))
+			{
+				return string.Empty;
+			}
+
+			var packagesRoot = Path.GetFullPath(Path.Combine(
 				Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
 				".nuget",
-				"packages",
+				"packages"));
+			var nugetCache = Path.GetFullPath(Path.Combine(
+				packagesRoot,
 				packageId.ToLowerInvariant(),
-				packageVersion.ToLowerInvariant());
+				packageVersion.ToLowerInvariant()));
 
-			if (!Directory.Exists(nugetCache))
+			if (!nugetCache.StartsWith(packagesRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ||
+				!Directory.Exists(nugetCache))
 			{
 				return string.Empty;
 			}
@@ -178,10 +189,10 @@ namespace MSBuildGuard.Core.Trust
 				RevocationChecks   = WinTrustRevocationChecksNone,
 				UnionChoice        = WinTrustDataChoiceFile,
 				FileInfoPointer    = IntPtr.Zero,
-				StateAction        = WinTrustStateActionNone,
+				StateAction        = WinTrustStateActionVerify,
 				StateData          = IntPtr.Zero,
 				UrlReference       = null,
-				ProvFlags          = WinTrustProvFlagsHashOnly,
+				ProvFlags          = 0,
 				UiContext          = 0,
 				SignatureSettings  = IntPtr.Zero
 			};
@@ -204,6 +215,12 @@ namespace MSBuildGuard.Core.Trust
 			}
 			finally
 			{
+				if (data.StateData != IntPtr.Zero)
+				{
+					data.StateAction = WinTrustStateActionClose;
+					WinVerifyTrust(IntPtr.Zero, WinTrustActionGenericVerifyV2, ref data);
+				}
+
 				if (fileInfoPointer != IntPtr.Zero)
 				{
 					Marshal.DestroyStructure<WinTrustFileInfo>(fileInfoPointer);
@@ -225,11 +242,11 @@ namespace MSBuildGuard.Core.Trust
 
 		private static readonly Guid WinTrustActionGenericVerifyV2 = new Guid("00AAC56B-CD44-11d0-8CC2-00C04FC295EE");
 
-		private const uint WinTrustDataChoiceFile     = 1;
-		private const uint WinTrustUiChoiceNone      = 2;
+		private const uint WinTrustDataChoiceFile       = 1;
+		private const uint WinTrustUiChoiceNone         = 2;
 		private const uint WinTrustRevocationChecksNone = 0;
-		private const uint WinTrustStateActionNone    = 0;
-		private const uint WinTrustProvFlagsHashOnly  = 0x00000200;
+		private const uint WinTrustStateActionVerify    = 1;
+		private const uint WinTrustStateActionClose     = 2;
 
 		[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
 		private struct WinTrustFileInfo

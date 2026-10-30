@@ -145,7 +145,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				WindowStartupLocation = WindowStartupLocation.CenterOwner
 			};
 
-			if (trustDialog.ShowDialog() != true)
+			if (trustDialog.ShowModal() != true)
 			{
 				return;
 			}
@@ -207,7 +207,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 				WindowStartupLocation = WindowStartupLocation.CenterOwner
 			};
 
-			if (trustDialog.ShowDialog() != true)
+			if (trustDialog.ShowModal() != true)
 			{
 				return;
 			}

@@ -37,7 +37,7 @@
     <RootNamespace>MSBuildGuard.VisualStudio</RootNamespace>
     <Product>MSBuildGuard</Product>
     <Title>MSBuildGuard</Title>
-    <Version>0.3.2</Version>
+    <Version>0.3.3</Version>
     <SignAssembly>False</SignAssembly>
     <Authors>Hefaistos68</Authors>
     <Company>Hefaistos68.dev</Company>
@@ -58,6 +58,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\MSBuildGuard.Core\MSBuildGuard.Core.csproj" />
+    <InternalsVisibleTo Include="MSBuildGuard.VisualStudio.Tests" />
   </ItemGroup>
   <ItemGroup>
     <VSCTCompile Include="Menus.vsct">

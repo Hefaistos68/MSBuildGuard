@@ -114,6 +114,10 @@ export function activate(context: vscode.ExtensionContext) {
 
     const config = vscode.workspace.getConfiguration('msbuildguard');
     const currentEnforce = config.get<boolean>('enforceAsymmetricSignatures', false);
+    const previousEnforce = context.globalState.get<boolean>('lastEnforceAsymmetricSignatures', false);
+    if (previousEnforce === true && currentEnforce === false) {
+        void purgeAllTrusts(context);
+    }
     void context.globalState.update('lastEnforceAsymmetricSignatures', currentEnforce);
 
     const keyMode = config.get<string>('trustManagement.keyManagementMode', 'unconfigured');
@@ -618,7 +622,7 @@ function getRecentWorkspaces(): string[] {
 }
 
 function purgeTrustFilesInDir(dir: string, depth: number = 0): void {
-    if (depth > 25) {
+    if (depth > 5) {
         return;
     }
     try {
@@ -642,7 +646,10 @@ function purgeTrustFilesInDir(dir: string, depth: number = 0): void {
                 }
             } else {
                 try {
-                    const stat = fs.statSync(fullPath);
+                    const stat = fs.lstatSync(fullPath);
+                    if (stat.isSymbolicLink()) {
+                        continue;
+                    }
                     if (stat.isDirectory()) {
                         if (file !== 'node_modules' && file !== '.git' && file !== 'bin' && file !== 'obj') {
                             purgeTrustFilesInDir(fullPath, depth + 1);
@@ -708,6 +715,10 @@ function restartWorkerClient(): void {
     if (extensionContext) {
         try {
             workerClient = new WorkerClient(extensionContext);
+            extensionContext.subscriptions.push(workerClient);
+            PolicyEditorPanel.currentPanel?.updateWorkerClient(workerClient);
+            TrustStorePanel.currentPanel?.updateWorkerClient(workerClient);
+            OnboardingPanel.currentPanel?.updateWorkerClient(workerClient);
             outputChannel?.appendLine('MSBuild Guard C# background worker restarted.');
         } catch (err: any) {
             outputChannel?.appendLine(`Failed to launch background worker: ${err.message}`);
@@ -868,7 +879,10 @@ async function removeAllProjectTrusts(): Promise<void> {
                     }
                 } else {
                     try {
-                        const stat = fs.statSync(fullPath);
+                        const stat = fs.lstatSync(fullPath);
+                    if (stat.isSymbolicLink()) {
+                        continue;
+                    }
                         if (stat.isDirectory()) {
                             if (file !== 'node_modules' && file !== '.git' && file !== 'bin' && file !== 'obj') {
                                 purgeProjectTrusts(fullPath, solutionDir, depth + 1);

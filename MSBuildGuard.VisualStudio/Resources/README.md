@@ -6,7 +6,7 @@ MSBuild Guard for Visual Studio provides inline project risk visibility and trus
 
 ## What's New in This Version
 
-- **Themed Key Management Onboarding**: Replaced standard OS message boxes with a beautiful, fully-themed Visual Studio key management choice window (supporting Light, Dark, and Blue color schemes).
+- **Themed Key Management Onboarding**: Replaced standard OS message boxes with a fully-themed Visual Studio key management choice window (supporting Light, Dark, and Blue color schemes).
 - **Onboarding Start Page Suppression**: Prevents onboarding prompts from displaying while Visual Studio is sitting on the Start Page, automatically deferring them until the main window has been fully restored.
 - **WPF Review Control Fixes**: Fixed binding for the "Remove All Project Trusts" button inside the Solution Security Review control to correctly trigger its confirmation dialog and purge trusts at runtime.
 - **Root CA Chain Pinning**: Enforces strict X509 Root CA thumbprint pinning via environment variable configuration to secure signed policies against unauthorized/untrusted authorities.
