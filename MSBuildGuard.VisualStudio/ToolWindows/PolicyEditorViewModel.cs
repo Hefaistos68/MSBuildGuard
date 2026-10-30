@@ -396,12 +396,12 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		{
 			var document = new PolicyDocument
 			{
-				Mode                        = this.mode,
-				BaselineRequired            = this.baselineRequired,
-				StrictMode                  = this.strictMode,
-				IncompleteAnalysisAction    = this.incompleteAnalysisAction,
+				Mode                          = this.mode,
+				BaselineRequired              = this.baselineRequired,
+				StrictMode                    = this.strictMode,
+				IncompleteAnalysisAction      = this.incompleteAnalysisAction,
 				UnapprovedPackageSourceAction = this.unapprovedPackageSourceAction,
-				Version                     = 1
+				Version                       = 1
 			};
 
 			document.MinimumActionBySeverity[FindingSeverity.Info]     = this.infoAction;
@@ -449,10 +449,10 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		/// <param name="document">The policy document to apply.</param>
 		private void ApplyDocument(PolicyDocument document)
 		{
-			this.mode                         = document.Mode;
-			this.baselineRequired             = document.BaselineRequired;
-			this.strictMode                   = document.StrictMode;
-			this.incompleteAnalysisAction     = document.IncompleteAnalysisAction;
+			this.mode                          = document.Mode;
+			this.baselineRequired              = document.BaselineRequired;
+			this.strictMode                    = document.StrictMode;
+			this.incompleteAnalysisAction      = document.IncompleteAnalysisAction;
 			this.unapprovedPackageSourceAction = document.UnapprovedPackageSourceAction;
 
 			this.infoAction     = GetSeverityAction(document, FindingSeverity.Info,     PolicyAction.Allow);
@@ -684,19 +684,47 @@ namespace MSBuildGuard.VisualStudio.ToolWindows
 		{
 			var clone = new PolicyDocument
 			{
-				Version = source.Version,
-				Mode = source.Mode,
-				BaselineRequired = source.BaselineRequired,
-				StrictMode = source.StrictMode,
-				IncompleteAnalysisAction = source.IncompleteAnalysisAction,
+				Version                       = source.Version,
+				Mode                          = source.Mode,
+				BaselineRequired              = source.BaselineRequired,
+				StrictMode                    = source.StrictMode,
+				IncompleteAnalysisAction      = source.IncompleteAnalysisAction,
 				UnapprovedPackageSourceAction = source.UnapprovedPackageSourceAction
 			};
 
-			clone.MinimumActionBySeverity[FindingSeverity.Info] = GetSeverityAction(source, FindingSeverity.Info, PolicyAction.Allow);
-			clone.MinimumActionBySeverity[FindingSeverity.Low] = GetSeverityAction(source, FindingSeverity.Low, PolicyAction.Warn);
-			clone.MinimumActionBySeverity[FindingSeverity.Medium] = GetSeverityAction(source, FindingSeverity.Medium, PolicyAction.RequireApproval);
-			clone.MinimumActionBySeverity[FindingSeverity.High] = GetSeverityAction(source, FindingSeverity.High, PolicyAction.Block);
+			clone.MinimumActionBySeverity[FindingSeverity.Info]     = GetSeverityAction(source, FindingSeverity.Info, PolicyAction.Allow);
+			clone.MinimumActionBySeverity[FindingSeverity.Low]      = GetSeverityAction(source, FindingSeverity.Low, PolicyAction.Warn);
+			clone.MinimumActionBySeverity[FindingSeverity.Medium]   = GetSeverityAction(source, FindingSeverity.Medium, PolicyAction.RequireApproval);
+			clone.MinimumActionBySeverity[FindingSeverity.High]     = GetSeverityAction(source, FindingSeverity.High, PolicyAction.Block);
 			clone.MinimumActionBySeverity[FindingSeverity.Critical] = GetSeverityAction(source, FindingSeverity.Critical, PolicyAction.Block);
+
+			foreach (var rule in source.Rules)
+			{
+				clone.Rules[rule.Key] = new PolicyRuleSetting
+				{
+					Action = rule.Value.Action
+				};
+			}
+
+			foreach (var item in source.Include)
+			{
+				clone.Include.Add(item);
+			}
+
+			foreach (var item in source.Exclude)
+			{
+				clone.Exclude.Add(item);
+			}
+
+			foreach (var item in source.AllowedPackageSources)
+			{
+				clone.AllowedPackageSources.Add(item);
+			}
+
+			foreach (var item in source.BlockedPackageSources)
+			{
+				clone.BlockedPackageSources.Add(item);
+			}
 
 			return clone;
 		}

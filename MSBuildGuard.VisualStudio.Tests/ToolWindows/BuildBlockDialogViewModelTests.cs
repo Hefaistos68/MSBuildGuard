@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using MSBuildGuard.Core;
 using MSBuildGuard.Core.Trust;
@@ -88,35 +87,20 @@ namespace MSBuildGuard.VisualStudio.ToolWindows.Tests
 
 			trustStoreService.AddDecision(userTrustPath, new TrustDecisionEntry
 			{
-				trustStoreService.AddDecision(userTrustPath, new TrustDecisionEntry
-				{
-					DecisionId   = Guid.NewGuid().ToString("N"),
-					Scope        = "Finding",
-					SubjectHash  = "fingerprint-1",
-					Decision     = "Trust",
-					Reason       = "Test trust",
-					UserSid      = "TestSid",
-					CreatedAtUtc = DateTimeOffset.UtcNow
-				});
+				DecisionId   = Guid.NewGuid().ToString("N"),
+				Scope        = "Finding",
+				SubjectHash  = "fingerprint-1",
+				Decision     = "Trust",
+				Reason       = "Test trust",
+				UserSid      = "TestSid",
+				CreatedAtUtc = DateTimeOffset.UtcNow
+			});
 
-				var model2 = new BuildBlockDialogViewModel(report, this.tempDir);
+			var model2 = new BuildBlockDialogViewModel(report, report.Target.TargetPath, null, userTrustPath);
 
-				model2.RiskScore.ShouldBe(0);
-				model2.RiskLevel.ShouldBe("Low");
-				model2.RecommendedAction.ShouldBe(RecommendedAction.Allow.ToString());
-			}
-			finally
-			{
-				// Restore the original user trust store to not pollute the host.
-				userTrustStore.Decisions.Clear();
-
-				foreach (var d in originalDecisions)
-				{
-					userTrustStore.Decisions.Add(d);
-				}
-
-				trustStoreService.Save(userTrustPath, userTrustStore);
-			}
+			model2.RiskScore.ShouldBe(0);
+			model2.RiskLevel.ShouldBe("Low");
+			model2.RecommendedAction.ShouldBe(RecommendedAction.Allow.ToString());
 		}
 
 		/// <summary>
@@ -145,9 +129,89 @@ namespace MSBuildGuard.VisualStudio.ToolWindows.Tests
 
 			report.Findings.Add(finding);
 
-			var model = new BuildBlockDialogViewModel(report, this.tempDir);
+			var userTrustPath = Path.Combine(this.tempDir, "user-trust-level.json");
+			var model         = new BuildBlockDialogViewModel(report, report.Target.TargetPath, null, userTrustPath);
 
 			model.RiskLevel.ShouldBe(expectedLevel);
+		}
+
+		/// <summary>
+		/// Verifies that <see cref="BuildBlockDialogViewModel.RecommendedAction"/> escalates to match the highest finding policy action even when the numeric risk score is low.
+		/// </summary>
+		/// <param name="policyAction">The policy action evaluated for the finding.</param>
+		/// <param name="expectedAction">The expected recommended action string.</param>
+		[TestCase(PolicyAction.Warn, "Warn")]
+		[TestCase(PolicyAction.RequireApproval, "RequireApproval")]
+		[TestCase(PolicyAction.Block, "Block")]
+		public void RecommendedAction_WhenPolicyEvaluatedActionExceedsRiskScore_EscalatesRecommendedAction(PolicyAction policyAction, string expectedAction)
+		{
+			var report = new ScanReport();
+
+			report.Target.TargetPath = Path.Combine(this.tempDir, "TestSolution.sln");
+			report.Target.TargetKind = TargetKind.Solution;
+
+			var finding = new Finding
+			{
+				Id                    = "MBG001",
+				Title                 = "Low Severity Policy Escalated Finding",
+				Severity              = FindingSeverity.Low,
+				PolicyEvaluatedAction = policyAction,
+				FilePath              = Path.Combine(this.tempDir, "TestProj.csproj"),
+				Fingerprint           = "fingerprint-policy-escalation"
+			};
+
+			report.Findings.Add(finding);
+
+			var userTrustPath = Path.Combine(this.tempDir, "user-trust-policy.json");
+			var model         = new BuildBlockDialogViewModel(report, report.Target.TargetPath, null, userTrustPath);
+
+			model.RiskScore.ShouldBe(5);
+			model.RiskLevel.ShouldBe("Low");
+			model.RecommendedAction.ShouldBe(expectedAction);
+			model.Findings.Count.ShouldBe(1);
+			model.Findings[0].Action.ShouldBe(policyAction.ToString());
+		}
+
+		/// <summary>
+		/// Verifies that findings with <see cref="PolicyAction.Allow"/> contribute to the active risk score but are omitted from actionable finding rows.
+		/// </summary>
+		[Test]
+		public void Findings_WhenPolicyEvaluatedActionIsAllow_ExcludesFindingFromActionableRows()
+		{
+			var report = new ScanReport();
+
+			report.Target.TargetPath = Path.Combine(this.tempDir, "TestSolution.sln");
+			report.Target.TargetKind = TargetKind.Solution;
+
+			var allowedFinding = new Finding
+			{
+				Id                    = "MBG001",
+				Title                 = "Allowed Finding",
+				Severity              = FindingSeverity.Medium,
+				PolicyEvaluatedAction = PolicyAction.Allow,
+				FilePath              = Path.Combine(this.tempDir, "TestProj.csproj"),
+				Fingerprint           = "fingerprint-allowed"
+			};
+
+			var blockedFinding = new Finding
+			{
+				Id                    = "MBG002",
+				Title                 = "Blocked Finding",
+				Severity              = FindingSeverity.Low,
+				PolicyEvaluatedAction = PolicyAction.Block,
+				FilePath              = Path.Combine(this.tempDir, "TestProj.csproj"),
+				Fingerprint           = "fingerprint-blocked"
+			};
+
+			report.Findings.Add(allowedFinding);
+			report.Findings.Add(blockedFinding);
+
+			var userTrustPath = Path.Combine(this.tempDir, "user-trust-filter.json");
+			var model         = new BuildBlockDialogViewModel(report, report.Target.TargetPath, null, userTrustPath);
+
+			model.RiskScore.ShouldBe(25);
+			model.Findings.Count.ShouldBe(1);
+			model.Findings[0].RuleId.ShouldBe("MBG002");
 		}
 	}
 }

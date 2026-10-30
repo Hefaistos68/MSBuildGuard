@@ -58,6 +58,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\MSBuildGuard.Core\MSBuildGuard.Core.csproj" />
+    <InternalsVisibleTo Include="MSBuildGuard.VisualStudio.Tests" />
   </ItemGroup>
   <ItemGroup>
     <VSCTCompile Include="Menus.vsct">
