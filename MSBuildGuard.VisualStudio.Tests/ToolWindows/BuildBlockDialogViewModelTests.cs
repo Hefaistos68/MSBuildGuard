@@ -77,18 +77,16 @@ namespace MSBuildGuard.VisualStudio.ToolWindows.Tests
 
 			report.FilesScanned.Add(fileRecord);
 
-			var userTrustPath = new TrustStoreService().GetDefaultUserTrustPath();
-			var model         = new BuildBlockDialogViewModel(report, this.tempDir);
+			var userTrustPath = Path.Combine(this.tempDir, "user-trust.json");
+			var model         = new BuildBlockDialogViewModel(report, report.Target.TargetPath, null, userTrustPath);
 
 			// Initially, the finding is not trusted.
 			model.RiskScore.ShouldBe(20);
 
 			// Now we write a trust entry for it.
 			var trustStoreService = new TrustStoreService();
-			var userTrustStore    = trustStoreService.Load(userTrustPath);
-			var originalDecisions = new List<TrustDecisionEntry>(userTrustStore.Decisions);
 
-			try
+			trustStoreService.AddDecision(userTrustPath, new TrustDecisionEntry
 			{
 				trustStoreService.AddDecision(userTrustPath, new TrustDecisionEntry
 				{
