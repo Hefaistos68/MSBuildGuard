@@ -103,9 +103,22 @@ namespace MSBuildGuard.VisualStudio.ToolWindows.Tests
 
 				var model2 = new BuildBlockDialogViewModel(report, this.tempDir);
 
-			model2.RiskScore.ShouldBe(0);
-			model2.RiskLevel.ShouldBe("Low");
-			model2.RecommendedAction.ShouldBe(RecommendedAction.Allow.ToString());
+				model2.RiskScore.ShouldBe(0);
+				model2.RiskLevel.ShouldBe("Low");
+				model2.RecommendedAction.ShouldBe(RecommendedAction.Allow.ToString());
+			}
+			finally
+			{
+				// Restore the original user trust store to not pollute the host.
+				userTrustStore.Decisions.Clear();
+
+				foreach (var d in originalDecisions)
+				{
+					userTrustStore.Decisions.Add(d);
+				}
+
+				trustStoreService.Save(userTrustPath, userTrustStore);
+			}
 		}
 
 		/// <summary>
@@ -134,8 +147,7 @@ namespace MSBuildGuard.VisualStudio.ToolWindows.Tests
 
 			report.Findings.Add(finding);
 
-			var userTrustPath = Path.Combine(this.tempDir, "user-trust-level.json");
-			var model         = new BuildBlockDialogViewModel(report, report.Target.TargetPath, null, userTrustPath);
+			var model = new BuildBlockDialogViewModel(report, this.tempDir);
 
 			model.RiskLevel.ShouldBe(expectedLevel);
 		}
